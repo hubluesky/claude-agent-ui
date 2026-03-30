@@ -1,8 +1,9 @@
 import type { WebSocket } from 'ws'
-import type { C2SMessage } from '@claude-agent-ui/shared'
+import type { C2SMessage, ToolApprovalDecision } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
+import type { AgentSession } from '../agent/session.js'
 
 export interface HandlerDeps {
   wsHub: WSHub
@@ -11,22 +12,23 @@ export interface HandlerDeps {
 }
 
 export function createWsHandler(deps: HandlerDeps) {
-  const { wsHub, lockManager } = deps
+  const { wsHub, lockManager, sessionManager } = deps
+
+  // requestId → sessionId mapping for tool approvals and ask-user
+  const pendingRequestMap = new Map<string, string>()
 
   return function handleConnection(ws: WebSocket) {
     const connectionId = wsHub.register(ws)
-
-    // Send init
     wsHub.sendTo(connectionId, { type: 'init', connectionId })
 
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       try {
         const msg: C2SMessage = JSON.parse(raw.toString())
-        handleMessage(connectionId, msg)
-      } catch {
+        await handleMessage(connectionId, msg)
+      } catch (err: any) {
         wsHub.sendTo(connectionId, {
           type: 'error',
-          message: 'Invalid message format',
+          message: err.message ?? 'Invalid message',
           code: 'internal',
         })
       }
@@ -38,34 +40,285 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function handleMessage(connectionId: string, msg: C2SMessage) {
+  async function handleMessage(connectionId: string, msg: C2SMessage) {
     switch (msg.type) {
       case 'join-session':
         handleJoinSession(connectionId, msg.sessionId)
         break
+      case 'send-message':
+        await handleSendMessage(connectionId, msg.sessionId, msg.prompt, msg.options)
+        break
+      case 'tool-approval-response':
+        handleToolApprovalResponse(connectionId, msg.requestId, msg.decision)
+        break
+      case 'ask-user-response':
+        handleAskUserResponse(connectionId, msg.requestId, msg.answers)
+        break
+      case 'abort':
+        await handleAbort(connectionId, msg.sessionId)
+        break
+      case 'set-mode':
+        await handleSetMode(connectionId, msg.sessionId, msg.mode)
+        break
+      case 'set-effort':
+        // Effort is applied on next send, store if needed
+        break
+      case 'reconnect':
+        handleReconnect(connectionId, msg.previousConnectionId)
+        break
       case 'leave-session':
         wsHub.leaveSession(connectionId)
         break
-      // Other handlers will be added in Task 7
-      default:
-        wsHub.sendTo(connectionId, {
-          type: 'error',
-          message: `Unknown message type: ${(msg as any).type}`,
-          code: 'internal',
-        })
     }
   }
 
   function handleJoinSession(connectionId: string, sessionId: string) {
     wsHub.joinSession(connectionId, sessionId)
     const lockHolder = lockManager.getHolder(sessionId)
+    const activeSession = sessionManager.getActive(sessionId)
     wsHub.sendTo(connectionId, {
       type: 'session-state',
       sessionId,
-      sessionStatus: 'idle',
+      sessionStatus: activeSession?.status ?? 'idle',
       lockStatus: lockManager.getStatus(sessionId),
       lockHolderId: lockHolder ?? undefined,
       isLockHolder: lockHolder === connectionId,
     })
+  }
+
+  async function handleSendMessage(
+    connectionId: string,
+    sessionId: string | null,
+    prompt: string,
+    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string }
+  ) {
+    let effectiveSessionId = sessionId
+    let session: AgentSession
+
+    if (!effectiveSessionId) {
+      if (!options?.cwd) {
+        wsHub.sendTo(connectionId, { type: 'error', message: 'cwd is required for new sessions', code: 'internal' })
+        return
+      }
+      session = sessionManager.createSession(options.cwd)
+      effectiveSessionId = `pending-${connectionId}`
+    } else {
+      const lockResult = lockManager.acquire(effectiveSessionId, connectionId)
+      if (!lockResult.success) {
+        wsHub.sendTo(connectionId, {
+          type: 'error',
+          message: 'Session is locked by another client',
+          code: 'session_locked',
+        })
+        return
+      }
+
+      session = sessionManager.getActive(effectiveSessionId) ?? await sessionManager.resumeSession(effectiveSessionId)
+    }
+
+    if (effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
+      lockManager.acquire(effectiveSessionId, connectionId)
+      wsHub.broadcast(effectiveSessionId, {
+        type: 'lock-status',
+        sessionId: effectiveSessionId,
+        status: 'locked',
+        holderId: connectionId,
+      })
+    }
+
+    bindSessionEvents(session, effectiveSessionId, connectionId)
+
+    if (effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
+      wsHub.broadcastExcept(effectiveSessionId, connectionId, {
+        type: 'agent-message',
+        sessionId: effectiveSessionId,
+        message: { type: 'user', message: { role: 'user', content: prompt } } as any,
+      })
+    }
+
+    session.send(prompt, {
+      cwd: options?.cwd,
+      effort: options?.effort as any,
+      thinkingMode: options?.thinkingMode as any,
+    })
+  }
+
+  function bindSessionEvents(session: AgentSession, sessionId: string, connectionId: string) {
+    let realSessionId = sessionId
+
+    session.on('message', (msg: any) => {
+      if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
+        const newId = msg.session_id
+        if (realSessionId.startsWith('pending-')) {
+          sessionManager.registerActive(newId, session)
+          lockManager.acquire(newId, connectionId)
+          wsHub.joinSession(connectionId, newId)
+          wsHub.broadcast(newId, {
+            type: 'lock-status',
+            sessionId: newId,
+            status: 'locked',
+            holderId: connectionId,
+          })
+          realSessionId = newId
+        } else if (realSessionId !== newId) {
+          sessionManager.registerActive(newId, session)
+          realSessionId = newId
+        }
+      }
+
+      wsHub.broadcast(realSessionId, {
+        type: 'agent-message',
+        sessionId: realSessionId,
+        message: msg,
+      })
+    })
+
+    session.on('tool-approval', (req) => {
+      pendingRequestMap.set(req.requestId, realSessionId)
+      wsHub.sendTo(connectionId, {
+        type: 'tool-approval-request',
+        ...req,
+        readonly: false,
+      })
+      wsHub.broadcastExcept(realSessionId, connectionId, {
+        type: 'tool-approval-request',
+        ...req,
+        readonly: true,
+      })
+    })
+
+    session.on('ask-user', (req) => {
+      pendingRequestMap.set(req.requestId, realSessionId)
+      wsHub.sendTo(connectionId, {
+        type: 'ask-user-request',
+        ...req,
+        readonly: false,
+      })
+      wsHub.broadcastExcept(realSessionId, connectionId, {
+        type: 'ask-user-request',
+        ...req,
+        readonly: true,
+      })
+    })
+
+    session.on('state-change', (state) => {
+      wsHub.broadcast(realSessionId, {
+        type: 'session-state-change',
+        sessionId: realSessionId,
+        state,
+      })
+    })
+
+    session.on('complete', (result) => {
+      lockManager.release(realSessionId)
+      wsHub.broadcast(realSessionId, {
+        type: 'session-complete',
+        sessionId: realSessionId,
+        result,
+      })
+      wsHub.broadcast(realSessionId, {
+        type: 'lock-status',
+        sessionId: realSessionId,
+        status: 'idle',
+      })
+    })
+
+    session.on('error', (err) => {
+      lockManager.release(realSessionId)
+      wsHub.broadcast(realSessionId, {
+        type: 'error',
+        message: err.message,
+        code: 'internal',
+      })
+      wsHub.broadcast(realSessionId, {
+        type: 'lock-status',
+        sessionId: realSessionId,
+        status: 'idle',
+      })
+    })
+  }
+
+  function handleToolApprovalResponse(connectionId: string, requestId: string, decision: ToolApprovalDecision) {
+    const sessionId = pendingRequestMap.get(requestId)
+    if (!sessionId) return
+
+    if (!lockManager.isHolder(sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+
+    const session = sessionManager.getActive(sessionId)
+    if (!session) return
+
+    session.resolveToolApproval(requestId, decision)
+    pendingRequestMap.delete(requestId)
+
+    wsHub.broadcastExcept(sessionId, connectionId, {
+      type: 'tool-approval-resolved',
+      requestId,
+      decision: { behavior: decision.behavior, message: decision.behavior === 'deny' ? decision.message : undefined },
+    })
+  }
+
+  function handleAskUserResponse(connectionId: string, requestId: string, answers: Record<string, string>) {
+    const sessionId = pendingRequestMap.get(requestId)
+    if (!sessionId) return
+
+    if (!lockManager.isHolder(sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+
+    const session = sessionManager.getActive(sessionId)
+    if (!session) return
+
+    session.resolveAskUser(requestId, { answers })
+    pendingRequestMap.delete(requestId)
+
+    wsHub.broadcastExcept(sessionId, connectionId, {
+      type: 'ask-user-resolved',
+      requestId,
+      answers,
+    })
+  }
+
+  async function handleAbort(connectionId: string, sessionId: string) {
+    if (!lockManager.isHolder(sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+
+    const session = sessionManager.getActive(sessionId)
+    if (!session) return
+
+    await session.abort()
+    lockManager.release(sessionId)
+
+    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId })
+    wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
+  }
+
+  async function handleSetMode(connectionId: string, sessionId: string, mode: string) {
+    const isIdle = lockManager.getStatus(sessionId) === 'idle'
+    const isHolder = lockManager.isHolder(sessionId, connectionId)
+
+    if (!isIdle && !isHolder) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Cannot change mode', code: 'not_lock_holder' })
+      return
+    }
+
+    const session = sessionManager.getActive(sessionId)
+    if (session) {
+      await session.setPermissionMode(mode as any)
+    }
+  }
+
+  function handleReconnect(connectionId: string, previousConnectionId: string) {
+    lockManager.onReconnect(previousConnectionId, connectionId)
+
+    const oldClient = wsHub.getClient(previousConnectionId)
+    if (oldClient?.sessionId) {
+      wsHub.joinSession(connectionId, oldClient.sessionId)
+    }
   }
 }
