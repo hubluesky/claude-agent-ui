@@ -1,4 +1,5 @@
 import { AppLayout } from './components/layout/AppLayout'
+import { ChatInterface } from './components/chat/ChatInterface'
 import { useSessionStore } from './stores/sessionStore'
 
 export function App() {
@@ -7,9 +8,7 @@ export function App() {
   return (
     <AppLayout>
       {currentSessionId ? (
-        <div className="flex-1 flex items-center justify-center text-[#7c7872]">
-          Chat for {currentSessionId} (coming in Task 9)
-        </div>
+        <ChatInterface />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <div className="w-16 h-16 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center">
