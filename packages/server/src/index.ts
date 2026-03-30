@@ -8,6 +8,9 @@ import { WSHub } from './ws/hub.js'
 import { LockManager } from './ws/lock.js'
 import { createWsHandler } from './ws/handler.js'
 import { healthRoutes } from './routes/health.js'
+import { SessionManager } from './agent/manager.js'
+import { sessionRoutes } from './routes/sessions.js'
+import { settingsRoutes } from './routes/settings.js'
 
 const config = loadConfig()
 const server = Fastify({ logger: true })
@@ -29,11 +32,16 @@ const lockManager = new LockManager((sessionId) => {
   wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
 })
 
+// Session manager
+const sessionManager = new SessionManager()
+
 // Routes
 await server.register(healthRoutes)
+await server.register(sessionRoutes(sessionManager))
+await server.register(settingsRoutes(db))
 
 // WebSocket
-const handleWs = createWsHandler({ wsHub, lockManager })
+const handleWs = createWsHandler({ wsHub, lockManager, sessionManager })
 server.register(async (app) => {
   app.get('/ws', { websocket: true }, (socket) => {
     handleWs(socket)

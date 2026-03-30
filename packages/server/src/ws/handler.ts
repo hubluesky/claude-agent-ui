@@ -2,10 +2,12 @@ import type { WebSocket } from 'ws'
 import type { C2SMessage } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
+import type { SessionManager } from '../agent/manager.js'
 
 export interface HandlerDeps {
   wsHub: WSHub
   lockManager: LockManager
+  sessionManager: SessionManager
 }
 
 export function createWsHandler(deps: HandlerDeps) {
