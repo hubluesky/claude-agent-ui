@@ -23,8 +23,13 @@ if (config.staticDir) {
   await server.register(fastifyStatic, { root: config.staticDir })
 }
 
-// Database
-const db = createDb(config.dbPath)
+// Database (optional — better-sqlite3 may not be compiled on all platforms)
+let db: ReturnType<typeof createDb> | null = null
+try {
+  db = createDb(config.dbPath)
+} catch (err) {
+  server.log.warn('Database unavailable (better-sqlite3 not compiled), settings API disabled')
+}
 
 // Singletons
 const wsHub = new WSHub()
@@ -38,7 +43,9 @@ const sessionManager = new SessionManager()
 // Routes
 await server.register(healthRoutes)
 await server.register(sessionRoutes(sessionManager))
-await server.register(settingsRoutes(db))
+if (db) {
+  await server.register(settingsRoutes(db))
+}
 
 // WebSocket
 const handleWs = createWsHandler({ wsHub, lockManager, sessionManager })
