@@ -191,5 +191,5 @@ export function useWebSocket() {
     return () => disconnect()
   }, [])
 
-  return { sendMessage, joinSession, respondToolApproval, respondAskUser, abort, disconnect }
+  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, abort, disconnect }
 }
