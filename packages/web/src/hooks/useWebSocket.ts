@@ -87,7 +87,11 @@ export function useWebSocket() {
         } else {
           if (msg.message.type === 'assistant') {
             const current = useMessageStore.getState().messages
-            const cleaned = current.filter((m: any) => m.type !== '_streaming_block')
+            // Remove streaming blocks and any existing message with same uuid
+            const msgUuid = (msg.message as any).uuid
+            const cleaned = current.filter((m: any) =>
+              m.type !== '_streaming_block' && (!msgUuid || (m as any).uuid !== msgUuid)
+            )
             useMessageStore.setState({ messages: [...cleaned, msg.message] })
           } else {
             msgs.appendMessage(msg.message)
