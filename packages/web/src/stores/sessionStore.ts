@@ -21,6 +21,7 @@ interface SessionActions {
   goBackToProjects(): void
   setSearchQuery(query: string): void
   setCurrentSessionId(id: string | null): void
+  renameSession(sessionId: string, title: string): Promise<void>
 }
 
 export const useSessionStore = create<SessionState & SessionActions>((set, get) => ({
@@ -76,6 +77,23 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   setSearchQuery(query: string) {
     set({ searchQuery: query })
+  },
+
+  async renameSession(sessionId: string, title: string) {
+    try {
+      await fetch(`/api/sessions/${sessionId}/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+      // Update local cache
+      const sessions = new Map(get().sessions)
+      for (const [cwd, list] of sessions) {
+        const updated = list.map((s) => s.sessionId === sessionId ? { ...s, title } : s)
+        sessions.set(cwd, updated)
+      }
+      set({ sessions })
+    } catch { /* ignore */ }
   },
 
   setCurrentSessionId(id: string | null) {

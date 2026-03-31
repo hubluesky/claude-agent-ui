@@ -4,11 +4,11 @@ import { SearchBox } from './SearchBox'
 import { ProjectCard } from './ProjectCard'
 import { SessionCard } from './SessionCard'
 
-export function SessionList() {
+export function SessionList({ onSessionSelect }: { onSessionSelect?: () => void } = {}) {
   const {
     projects, projectsLoading, sessions, sidebarScreen,
     currentProjectCwd, currentSessionId, searchQuery,
-    loadProjects, selectProject, selectSession, goBackToProjects, setSearchQuery,
+    loadProjects, selectProject, selectSession, goBackToProjects, setSearchQuery, renameSession,
   } = useSessionStore()
 
   useEffect(() => { loadProjects() }, [])
@@ -58,7 +58,8 @@ export function SessionList() {
                 key={s.sessionId}
                 session={s}
                 isSelected={currentSessionId === s.sessionId}
-                onClick={() => selectSession(s.sessionId, currentProjectCwd)}
+                onClick={() => { selectSession(s.sessionId, currentProjectCwd); onSessionSelect?.() }}
+                onRename={(title) => renameSession(s.sessionId, title)}
               />
             ))
           )}

@@ -144,7 +144,67 @@ export function MessageComponent({ message }: MessageComponentProps) {
         </div>
       )
     }
+    if (sub === 'status' && (message as any).status === 'compacting') {
+      return (
+        <div className="flex items-center gap-2 text-xs text-[#7c7872] bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+          <svg className="w-3.5 h-3.5 text-[#0ea5e9] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+          </svg>
+          Compacting context...
+        </div>
+      )
+    }
+    if (sub === 'task_started') {
+      return (
+        <div className="flex items-center gap-2 text-xs text-[#a855f7] bg-[#a855f70a] border border-[#a855f726] rounded-md px-3 py-2 ml-10">
+          <svg className="w-3.5 h-3.5 text-[#a855f7]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197" />
+          </svg>
+          Agent: {(message as any).agent_name ?? (message as any).task_id ?? 'subagent'}
+          <span className="text-[#a855f780] bg-[#a855f71a] px-1.5 py-0.5 rounded text-[10px]">running</span>
+        </div>
+      )
+    }
+    if (sub === 'task_progress') {
+      const content = (message as any).content ?? (message as any).message ?? ''
+      if (!content) return null
+      return (
+        <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10 pl-5 border-l-2 border-[#a855f726]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#a855f7]" />
+          <span className="truncate">{typeof content === 'string' ? content.slice(0, 120) : JSON.stringify(content).slice(0, 120)}</span>
+        </div>
+      )
+    }
+    if (sub === 'task_notification') {
+      const status = (message as any).status ?? 'completed'
+      const isError = status === 'error' || status === 'failed'
+      return (
+        <div className={`flex items-center gap-2 text-xs ml-10 px-3 py-2 rounded-md ${
+          isError ? 'text-[#f87171] bg-[#f871710a] border border-[#f8717126]'
+            : 'text-[#a3e635] bg-[#a3e6350a] border border-[#a3e63526]'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isError ? 'bg-[#f87171]' : 'bg-[#a3e635]'}`} />
+          {(message as any).agent_name ?? 'subagent'} {status}
+          {(message as any).duration_ms ? ` — ${((message as any).duration_ms / 1000).toFixed(1)}s` : ''}
+          {(message as any).tool_count ? `, ${(message as any).tool_count} tools` : ''}
+        </div>
+      )
+    }
     return null
+  }
+
+  // tool_progress
+  if (message.type === 'tool_progress') {
+    const content = (message as any).content ?? ''
+    if (!content) return null
+    return (
+      <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10">
+        <svg className="w-3 h-3 text-[#059669] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+        </svg>
+        <span className="truncate">{typeof content === 'string' ? content : JSON.stringify(content).slice(0, 150)}</span>
+      </div>
+    )
   }
 
   // Rate limit event
