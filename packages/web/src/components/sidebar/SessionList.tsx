@@ -36,7 +36,15 @@ export function SessionList() {
             </svg>
           </button>
           <span className="text-[13px] font-semibold text-[#e5e2db] truncate flex-1">{projectName}</span>
-          <span className="text-[10px] text-[#7c7872] shrink-0">{currentSessions.length} 个会话</span>
+          <button
+            onClick={() => selectSession('__new__', currentProjectCwd)}
+            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-[#2b2a27] text-[#7c7872] hover:text-[#d97706] transition-colors"
+            title="新建会话"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
         </div>
 
         <SearchBox value={searchQuery} onChange={setSearchQuery} placeholder="搜索会话..." />

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 import { getToolCategory, TOOL_COLORS, type ToolCategory } from '@claude-agent-ui/shared'
+import { MarkdownRenderer } from './MarkdownRenderer'
 
 interface MessageComponentProps {
   message: AgentMessage
@@ -49,7 +51,7 @@ export function MessageComponent({ message }: MessageComponentProps) {
         <div className="flex-1 min-w-0 space-y-2">
           {contentBlocks.map((block: any, i: number) => {
             if (block.type === 'text') {
-              return <p key={i} className="text-sm text-[#e5e2db] whitespace-pre-wrap leading-relaxed">{block.text}</p>
+              return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed"><MarkdownRenderer content={block.text} /></div>
             }
             if (block.type === 'thinking') {
               return (
@@ -166,18 +168,35 @@ export function MessageComponent({ message }: MessageComponentProps) {
 
 function ToolUseBlock({ block }: { block: any }) {
   const { name, input } = block
+  const [expanded, setExpanded] = useState(false)
   const category = getToolCategory(name)
   const color = TOOL_COLORS[category]
   const summary = formatToolSummary(name, input)
 
+  // Expandable detail content based on tool type
+  const detail = getToolDetail(name, input)
+
   return (
     <div className="border border-[#3d3b37] rounded-md overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#242320]">
+      <div
+        className="flex items-center gap-2 px-3 py-2 bg-[#242320] cursor-pointer hover:bg-[#2b2a2780]"
+        onClick={() => detail && setExpanded(!expanded)}
+      >
         <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: color }} />
         <ToolIcon category={category} />
         <span className="text-xs font-mono font-semibold" style={{ color }}>{name}</span>
         <span className="text-xs font-mono text-[#7c7872] truncate flex-1">{summary}</span>
+        {detail && (
+          <svg className={`w-3 h-3 text-[#7c7872] transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
       </div>
+      {expanded && detail && (
+        <div className="border-t border-[#3d3b37] bg-[#1e1d1a] px-3 py-2.5 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+          {detail}
+        </div>
+      )}
     </div>
   )
 }
@@ -240,6 +259,56 @@ function ToolIcon({ category }: { category: ToolCategory }) {
 }
 
 // ---- Format ----
+
+function getToolDetail(toolName: string, input: any): React.ReactNode | null {
+  if (!input) return null
+  switch (toolName) {
+    case 'Bash':
+      return input.command ? (
+        <div>
+          <div className="text-[#059669] mb-1">$ {input.command}</div>
+          {input.description && <div className="text-[#7c7872] text-[10px] mb-1">{input.description}</div>}
+        </div>
+      ) : null
+    case 'Edit':
+      if (input.old_string && input.new_string) {
+        return (
+          <div>
+            <div className="text-[10px] text-[#7c7872] mb-1">{input.file_path}</div>
+            <div className="bg-[#f871710a] border-l-2 border-[#f87171] pl-2 py-1 mb-1">
+              {input.old_string.split('\n').map((line: string, i: number) => (
+                <div key={i} className="text-[#f8717199]">- {line}</div>
+              ))}
+            </div>
+            <div className="bg-[#a3e6350a] border-l-2 border-[#a3e635] pl-2 py-1">
+              {input.new_string.split('\n').map((line: string, i: number) => (
+                <div key={i} className="text-[#a3e63599]">+ {line}</div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+      return null
+    case 'Write':
+      if (input.content) {
+        const preview = input.content.length > 500 ? input.content.slice(0, 500) + '...' : input.content
+        return <div>{preview}</div>
+      }
+      return null
+    case 'Grep':
+      return (
+        <div>
+          <span className="text-[#059669]">pattern: </span>{input.pattern}
+          {input.path && <><br /><span className="text-[#059669]">path: </span>{input.path}</>}
+          {input.glob && <><br /><span className="text-[#059669]">glob: </span>{input.glob}</>}
+        </div>
+      )
+    case 'Agent':
+      return input.prompt ? <div>{input.prompt.slice(0, 500)}</div> : null
+    default:
+      return null
+  }
+}
 
 function formatToolSummary(toolName: string, input: any): string {
   if (!input) return ''
