@@ -4,6 +4,7 @@ import { ChatComposer } from './ChatComposer'
 import { StatusBar } from './StatusBar'
 import { PermissionBanner } from './PermissionBanner'
 import { AskUserPanel } from './AskUserPanel'
+import { ConnectionBanner } from './ConnectionBanner'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
 
@@ -29,6 +30,7 @@ export function ChatInterface() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <ConnectionBanner />
       <ChatMessagesPane sessionId={currentSessionId} />
       <PermissionBanner />
       <AskUserPanel />

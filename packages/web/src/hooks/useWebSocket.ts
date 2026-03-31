@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react'
 import type { S2CMessage, C2SMessage, ToolApprovalDecision } from '@claude-agent-ui/shared'
+import { useToastStore } from '../components/chat/Toast'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useMessageStore } from '../stores/messageStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -150,6 +151,7 @@ export function useWebSocket() {
 
       case 'error':
         console.error('[WS Error]', msg.message, msg.code)
+        useToastStore.getState().add(msg.message, 'error')
         break
     }
   }
