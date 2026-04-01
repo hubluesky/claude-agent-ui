@@ -1,10 +1,16 @@
+import { useEffect } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { ChatInterface } from './components/chat/ChatInterface'
 import { ToastContainer } from './components/chat/Toast'
 import { useSessionStore } from './stores/sessionStore'
+import { useCommandStore } from './stores/commandStore'
 
 export function App() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
+
+  useEffect(() => {
+    useCommandStore.getState().load()
+  }, [])
 
   return (
     <>

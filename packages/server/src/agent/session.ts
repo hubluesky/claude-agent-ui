@@ -1,11 +1,12 @@
 import { EventEmitter } from 'events'
 import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
-import type { ToolApprovalRequest, ToolApprovalDecision, AskUserRequest, AskUserResponse, SendOptions, SessionResult } from '@claude-agent-ui/shared'
+import type { ToolApprovalRequest, ToolApprovalDecision, AskUserRequest, AskUserResponse, SendOptions, SessionResult, SlashCommandInfo } from '@claude-agent-ui/shared'
 
 export interface AgentSessionEvents {
   'message': (msg: unknown) => void
   'tool-approval': (req: ToolApprovalRequest) => void
   'ask-user': (req: AskUserRequest) => void
+  'commands': (commands: SlashCommandInfo[]) => void
   'complete': (result: SessionResult) => void
   'error': (err: Error) => void
   'state-change': (state: SessionStatus) => void

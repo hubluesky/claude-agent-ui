@@ -150,6 +150,18 @@ export interface S2C_SessionAborted {
   sessionId: string
 }
 
+export interface SlashCommandInfo {
+  name: string
+  description: string
+  argumentHint?: string
+}
+
+export interface S2C_SlashCommands {
+  type: 'slash-commands'
+  sessionId: string
+  commands: SlashCommandInfo[]
+}
+
 export interface S2C_Error {
   type: 'error'
   message: string
@@ -168,4 +180,5 @@ export type S2CMessage =
   | S2C_SessionStateChange
   | S2C_SessionComplete
   | S2C_SessionAborted
+  | S2C_SlashCommands
   | S2C_Error

@@ -234,6 +234,15 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     })
 
+    session.on('commands', (commands) => {
+      sessionManager.cacheCommands(commands)
+      wsHub.broadcast(realSessionId, {
+        type: 'slash-commands',
+        sessionId: realSessionId,
+        commands,
+      })
+    })
+
     session.on('state-change', (state) => {
       wsHub.broadcast(realSessionId, {
         type: 'session-state-change',

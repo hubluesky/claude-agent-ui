@@ -101,6 +101,8 @@ export class V1QuerySession extends AgentSession {
         // Capture session ID from init message
         if ((msg as any).type === 'system' && (msg as any).subtype === 'init') {
           this.sessionId = (msg as any).session_id
+          // Fetch available slash commands after init
+          this.fetchCommands()
         }
 
         // Detect synthetic error responses from CLI (e.g. "Not logged in")
@@ -140,6 +142,19 @@ export class V1QuerySession extends AgentSession {
       this.queryInstance = null
       this.abortController = null
     }
+  }
+
+  private fetchCommands(): void {
+    if (!this.queryInstance) return
+    this.queryInstance.supportedCommands().then((commands) => {
+      this.emit('commands', commands.map((c: any) => ({
+        name: c.name,
+        description: c.description ?? '',
+        argumentHint: c.argumentHint,
+      })))
+    }).catch(() => {
+      // Non-critical — ignore if commands can't be fetched
+    })
   }
 
   private async handleCanUseTool(

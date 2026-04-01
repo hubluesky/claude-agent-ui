@@ -4,6 +4,7 @@ import { useToastStore } from '../components/chat/Toast'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useMessageStore } from '../stores/messageStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useCommandStore } from '../stores/commandStore'
 
 const CONNECTION_ID_KEY = 'claude-agent-ui-connection-id'
 
@@ -157,6 +158,10 @@ function handleServerMessage(msg: S2CMessage) {
 
     case 'session-state-change':
       conn.setSessionStatus(msg.state)
+      break
+
+    case 'slash-commands':
+      useCommandStore.getState().setCommands(msg.commands)
       break
 
     case 'session-complete':

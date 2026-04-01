@@ -8,6 +8,7 @@ import { ConnectionBanner } from './ConnectionBanner'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useMessageStore } from '../../stores/messageStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 export function ChatInterface() {
   const { sendMessage, joinSession, abort } = useWebSocket()
@@ -34,7 +35,8 @@ export function ChatInterface() {
 
     // For new sessions, send with null sessionId — server will create one
     const sessionId = isNewSession ? null : currentSessionId
-    sendMessage(prompt, sessionId, { cwd: currentProjectCwd ?? undefined })
+    const { thinkingMode, effort } = useSettingsStore.getState()
+    sendMessage(prompt, sessionId, { cwd: currentProjectCwd ?? undefined, thinkingMode, effort })
   }, [currentSessionId, currentProjectCwd, sendMessage, isNewSession])
 
   const handleAbort = useCallback(() => {

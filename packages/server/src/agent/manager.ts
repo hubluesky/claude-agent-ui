@@ -1,11 +1,14 @@
-import { listSessions, getSessionInfo, getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
-import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
+import { listSessions, getSessionInfo, getSessionMessages, query } from '@anthropic-ai/claude-agent-sdk'
+import type { ProjectInfo, SessionSummary, SlashCommandInfo } from '@claude-agent-ui/shared'
 import { V1QuerySession } from './v1-session.js'
 import { AgentSession } from './session.js'
 import { basename } from 'path'
+import { scanSkills } from './skills.js'
 
 export class SessionManager {
   private activeSessions = new Map<string, AgentSession>()
+  private _cachedCommands: SlashCommandInfo[] | null = null
+  private _fetchingCommands = false
 
   async listProjects(): Promise<ProjectInfo[]> {
     const sessions = await listSessions()
@@ -111,5 +114,51 @@ export class SessionManager {
 
   removeActive(sessionId: string): void {
     this.activeSessions.delete(sessionId)
+  }
+
+  /** Cache commands pushed by an active session */
+  cacheCommands(commands: SlashCommandInfo[]): void {
+    this._cachedCommands = commands
+  }
+
+  /** Get cached commands, or fetch from a temporary query if not yet cached */
+  async getCommands(cwd?: string): Promise<SlashCommandInfo[]> {
+    if (this._cachedCommands) return this._cachedCommands
+    if (this._fetchingCommands) return []
+
+    this._fetchingCommands = true
+    try {
+      const effectiveCwd = cwd ?? process.cwd()
+      const q = query({ prompt: '', options: { cwd: effectiveCwd } as any })
+      // Wait for initialization to complete so plugins/skills are loaded
+      const initResult = await q.initializationResult()
+      const sdkCommands = (initResult.commands ?? await q.supportedCommands()).map((c: any) => ({
+        name: c.name,
+        description: c.description ?? '',
+        argumentHint: c.argumentHint,
+      }))
+      q.close?.()
+
+      // Scan filesystem for skills from enabled plugins
+      const skills = scanSkills()
+
+      // Merge: SDK commands first, then skills (deduplicate by name)
+      const seen = new Set(sdkCommands.map((c: SlashCommandInfo) => c.name))
+      const merged = [...sdkCommands, ...skills.filter((s) => !seen.has(s.name))]
+      this._cachedCommands = merged
+      return this._cachedCommands
+    } catch {
+      // If SDK fails, still try to return skills from filesystem
+      try {
+        const skills = scanSkills()
+        if (skills.length) {
+          this._cachedCommands = skills
+          return skills
+        }
+      } catch { /* ignore */ }
+      return []
+    } finally {
+      this._fetchingCommands = false
+    }
   }
 }
