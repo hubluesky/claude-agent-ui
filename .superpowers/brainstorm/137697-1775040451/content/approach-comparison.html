@@ -1,0 +1,67 @@
+<h2>@ 文件引用 — 两种交互方案</h2>
+<p class="subtitle">对比弹出列表的触发和展示方式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>内联弹出列表（推荐）</h3>
+      <p>与现有 SlashCommand 弹窗复用同一交互模式。输入 <code>@</code> 后在输入框上方弹出文件列表，继续输入文字做模糊搜索过滤，上下键选择，Enter/点击确认。选中后在输入框中插入 <code>@path/to/file</code> 标记。</p>
+      <div style="margin-top: 12px; padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+        <div style="font-size: 11px; color: #7c7872; padding: 4px 8px; border-bottom: 1px solid #3d3b37; margin-bottom: 8px;">Files</div>
+        <div style="padding: 4px 8px; background: #2563eb; border-radius: 4px; margin-bottom: 4px;">
+          <span style="font-family: monospace; font-size: 13px; color: white;">📄 src/components/ChatComposer.tsx</span>
+        </div>
+        <div style="padding: 4px 8px; margin-bottom: 4px;">
+          <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">📄 src/components/ChatInterface.tsx</span>
+        </div>
+        <div style="padding: 4px 8px; margin-bottom: 4px;">
+          <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">📁 src/components/chat/</span>
+        </div>
+        <div style="margin-top: 12px; padding: 10px; background: #242320; border: 1px solid #3d3b37; border-radius: 8px;">
+          <span style="color: #7c7872; font-size: 13px;">输入 @ — 文件引用  </span>
+          <span style="color: #d97706;">@Chat</span><span style="color: #7c7872; animation: blink 1s infinite;">|</span>
+        </div>
+      </div>
+      <div style="margin-top: 12px;">
+        <span style="font-size: 12px; color: #22c55e;">✓ 复用现有 SlashCommand 模式</span><br>
+        <span style="font-size: 12px; color: #22c55e;">✓ 用户无学习成本</span><br>
+        <span style="font-size: 12px; color: #22c55e;">✓ 键盘友好</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>独立文件浏览面板</h3>
+      <p>输入 <code>@</code> 后弹出一个更大的面板，展示文件树结构，支持展开/折叠目录，搜索框在面板顶部。选中后同样插入 <code>@path</code> 标记。</p>
+      <div style="margin-top: 12px; padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+        <div style="padding: 8px; border-bottom: 1px solid #3d3b37; margin-bottom: 8px;">
+          <input type="text" disabled value="搜索文件..." style="width: 100%; background: #242320; border: 1px solid #3d3b37; border-radius: 6px; padding: 6px 10px; color: #7c7872; font-size: 13px;">
+        </div>
+        <div style="padding: 4px 8px;">
+          <span style="color: #d97706;">▼</span> <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">src/</span>
+        </div>
+        <div style="padding: 4px 8px 4px 24px;">
+          <span style="color: #d97706;">▼</span> <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">components/</span>
+        </div>
+        <div style="padding: 4px 8px 4px 44px; background: #2563eb; border-radius: 4px; margin-bottom: 2px;">
+          <span style="font-family: monospace; font-size: 13px; color: white;">📄 ChatComposer.tsx</span>
+        </div>
+        <div style="padding: 4px 8px 4px 44px; margin-bottom: 2px;">
+          <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">📄 ChatInterface.tsx</span>
+        </div>
+        <div style="padding: 4px 8px 4px 24px;">
+          <span style="color: #7c7872;">▶</span> <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">stores/</span>
+        </div>
+      </div>
+      <div style="margin-top: 12px;">
+        <span style="font-size: 12px; color: #22c55e;">✓ 可视化文件结构</span><br>
+        <span style="font-size: 12px; color: #22c55e;">✓ 适合大项目浏览</span><br>
+        <span style="font-size: 12px; color: #f97316;">⚠ 实现复杂度更高</span><br>
+        <span style="font-size: 12px; color: #f97316;">⚠ 与现有 UI 风格有落差</span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,88 @@
+<h2>@ 文件引用 — 交互流程</h2>
+<p class="subtitle">从触发到插入的完整流程</p>
+
+<div class="section">
+  <h3>触发条件</h3>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;">
+    <div style="flex: 1; min-width: 280px; padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+      <div class="label">1. 触发弹窗</div>
+      <p style="font-size: 13px; color: #c4c0b8; margin-top: 8px;">输入 <code>@</code> 即触发（可在文本任意位置，不限行首）</p>
+      <div style="margin-top: 12px; padding: 10px; background: #242320; border: 1px solid #3d3b37; border-radius: 8px;">
+        <span style="color: #c4c0b8; font-size: 13px;">请帮我看看 </span><span style="color: #d97706;">@</span><span style="color: #7c7872; animation: blink 1s infinite;">|</span>
+      </div>
+    </div>
+    <div style="flex: 1; min-width: 280px; padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+      <div class="label">2. 搜索过滤</div>
+      <p style="font-size: 13px; color: #c4c0b8; margin-top: 8px;">继续输入文字做模糊搜索，弹窗实时更新</p>
+      <div style="margin-top: 12px; padding: 10px; background: #242320; border: 1px solid #3d3b37; border-radius: 8px;">
+        <span style="color: #c4c0b8; font-size: 13px;">请帮我看看 </span><span style="color: #d97706;">@compo</span><span style="color: #7c7872; animation: blink 1s infinite;">|</span>
+      </div>
+    </div>
+  </div>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px;">
+    <div style="flex: 1; min-width: 280px; padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+      <div class="label">3. 选中插入</div>
+      <p style="font-size: 13px; color: #c4c0b8; margin-top: 8px;">Enter/点击选中后，替换 <code>@query</code> 为完整路径</p>
+      <div style="margin-top: 12px; padding: 10px; background: #242320; border: 1px solid #3d3b37; border-radius: 8px;">
+        <span style="color: #c4c0b8; font-size: 13px;">请帮我看看 </span><span style="color: #d97706; background: #d9770620; padding: 2px 4px; border-radius: 3px;">@src/components/ChatComposer.tsx</span><span style="color: #c4c0b8;"> </span><span style="color: #7c7872; animation: blink 1s infinite;">|</span>
+      </div>
+    </div>
+    <div style="flex: 1; min-width: 280px; padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+      <div class="label">4. 多文件引用</div>
+      <p style="font-size: 13px; color: #c4c0b8; margin-top: 8px;">可继续输入 <code>@</code> 引用更多文件</p>
+      <div style="margin-top: 12px; padding: 10px; background: #242320; border: 1px solid #3d3b37; border-radius: 8px;">
+        <span style="color: #c4c0b8; font-size: 13px;">对比 </span><span style="color: #d97706; background: #d9770620; padding: 2px 4px; border-radius: 3px;">@src/A.tsx</span><span style="color: #c4c0b8;"> 和 </span><span style="color: #d97706; background: #d9770620; padding: 2px 4px; border-radius: 3px;">@src/B.tsx</span><span style="color: #7c7872; animation: blink 1s infinite;">|</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>弹窗样式</h3>
+  <div style="margin-top: 12px; max-width: 500px;">
+    <div style="padding: 16px; background: #1a1918; border-radius: 8px; border: 1px solid #3d3b37;">
+      <div style="font-size: 11px; color: #7c7872; padding: 4px 0; border-bottom: 1px solid #3d3b37; margin-bottom: 8px;">Files</div>
+      <div style="padding: 6px 8px; background: #2563eb; border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 13px;">📄</span>
+        <span style="font-family: monospace; font-size: 13px; color: white;">assets/scripts/GameManager.ts</span>
+      </div>
+      <div style="padding: 6px 8px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 13px;">📄</span>
+        <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">assets/scripts/GameConfig.ts</span>
+      </div>
+      <div style="padding: 6px 8px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 13px;">📁</span>
+        <span style="font-family: monospace; font-size: 13px; color: #c4c0b8;">assets/scripts/game/</span>
+      </div>
+      <div style="padding: 4px 0; border-top: 1px solid #3d3b37; margin-top: 4px;">
+        <span style="font-size: 11px; color: #7c7872;">↑↓ 导航 · Enter 选择 · Esc 取消</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>键盘操作</h3>
+  <table style="width: 100%; font-size: 13px; color: #c4c0b8; border-collapse: collapse;">
+    <tr style="border-bottom: 1px solid #3d3b37;">
+      <td style="padding: 8px; font-family: monospace; color: #d97706;">↑ / ↓</td>
+      <td style="padding: 8px;">上下移动选中项</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #3d3b37;">
+      <td style="padding: 8px; font-family: monospace; color: #d97706;">Enter</td>
+      <td style="padding: 8px;">确认选择，插入文件路径</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #3d3b37;">
+      <td style="padding: 8px; font-family: monospace; color: #d97706;">Esc</td>
+      <td style="padding: 8px;">关闭弹窗，保留已输入的 @query 文本</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #3d3b37;">
+      <td style="padding: 8px; font-family: monospace; color: #d97706;">Tab</td>
+      <td style="padding: 8px;">自动补全选中项路径</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; font-family: monospace; color: #d97706;">Space / 继续输入</td>
+      <td style="padding: 8px;">关闭弹窗（空格表示不是文件引用）</td>
+    </tr>
+  </table>
+</div>
