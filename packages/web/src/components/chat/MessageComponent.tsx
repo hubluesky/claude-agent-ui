@@ -8,6 +8,8 @@ interface MessageComponentProps {
 }
 
 export function MessageComponent({ message }: MessageComponentProps) {
+  const isOptimistic = (message as any)._optimistic
+
   // User message
   if (message.type === 'user') {
     const content = (message as any).message?.content
@@ -19,8 +21,9 @@ export function MessageComponent({ message }: MessageComponentProps) {
             if (block.type === 'text') {
               return (
                 <div key={i} className="flex justify-end">
-                  <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]">
+                  <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
                     <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{block.text}</p>
+                    {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
                   </div>
                 </div>
               )
@@ -33,8 +36,9 @@ export function MessageComponent({ message }: MessageComponentProps) {
     const text = typeof content === 'string' ? content : JSON.stringify(content)
     return (
       <div className="flex justify-end">
-        <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]">
+        <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
           <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{text}</p>
+          {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
         </div>
       </div>
     )
@@ -90,19 +94,8 @@ export function MessageComponent({ message }: MessageComponentProps) {
         </div>
       )
     }
-    if (subtype === 'success') {
-      const resultText = (message as any).result
-      if (resultText) {
-        return (
-          <div className="flex gap-3 items-start">
-            <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
-            </div>
-            <p className="text-sm text-[#e5e2db] whitespace-pre-wrap leading-relaxed flex-1">{resultText}</p>
-          </div>
-        )
-      }
-    }
+    // Success results: don't render result text — the assistant message already shows it.
+    // Only render if there was no assistant message (e.g. empty conversation).
     return null
   }
 

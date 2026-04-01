@@ -1,5 +1,26 @@
 import { randomUUID } from 'crypto'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { homedir } from 'os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * Read env overrides from ~/.claude/settings.json so the SDK child process
+ * inherits auth tokens (ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL, etc.)
+ * that Claude Code injects at runtime but a standalone server lacks.
+ */
+function loadClaudeEnv(): Record<string, string> {
+  try {
+    const settingsPath = join(homedir(), '.claude', 'settings.json')
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+    if (settings.env && typeof settings.env === 'object') {
+      return settings.env
+    }
+  } catch { /* settings file missing or unreadable — OK */ }
+  return {}
+}
+
+const claudeEnv = loadClaudeEnv()
 import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
 import type { ToolApprovalDecision, AskUserRequest, AskUserResponse, SendOptions, SessionResult } from '@claude-agent-ui/shared'
 import { AgentSession } from './session.js'
@@ -47,9 +68,9 @@ export class V1QuerySession extends AgentSession {
 
     const queryOptions: Record<string, unknown> = {
       cwd: this._projectCwd,
-      includePartialMessages: true,
       abortController: this.abortController,
       canUseTool: this.handleCanUseTool.bind(this),
+      env: { ...process.env, ...claudeEnv },
     }
 
     // Resume existing session or use previously captured ID
@@ -80,6 +101,14 @@ export class V1QuerySession extends AgentSession {
         // Capture session ID from init message
         if ((msg as any).type === 'system' && (msg as any).subtype === 'init') {
           this.sessionId = (msg as any).session_id
+        }
+
+        // Detect synthetic error responses from CLI (e.g. "Not logged in")
+        if ((msg as any).type === 'assistant' && (msg as any).message?.model === '<synthetic>') {
+          const text = (msg as any).message?.content?.[0]?.text ?? 'Unknown CLI error'
+          this.setStatus('idle')
+          this.emit('error', new Error(text))
+          return
         }
 
         // Forward all messages

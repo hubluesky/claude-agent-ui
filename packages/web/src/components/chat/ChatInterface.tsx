@@ -25,6 +25,13 @@ export function ChatInterface() {
   }, [currentSessionId, joinSession, isNewSession])
 
   const handleSend = useCallback((prompt: string) => {
+    // Optimistically add user message — shows immediately with sending indicator
+    useMessageStore.getState().appendMessage({
+      type: 'user',
+      _optimistic: true,
+      message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+    } as any)
+
     // For new sessions, send with null sessionId — server will create one
     const sessionId = isNewSession ? null : currentSessionId
     sendMessage(prompt, sessionId, { cwd: currentProjectCwd ?? undefined })

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import type { WebSocket } from 'ws'
 import type { C2SMessage, ToolApprovalDecision } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
@@ -126,14 +127,23 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     }
 
-    bindSessionEvents(session, effectiveSessionId, connectionId)
+    bindSessionEvents(session, effectiveSessionId, connectionId, prompt)
 
+    // Broadcast user message to ALL clients (including sender).
+    // The SDK does NOT echo user messages, so this is the only way observers see them.
+    // Sender has an optimistic insert which will be matched and replaced by this broadcast.
+    // For pending (new) sessions, the broadcast is deferred until session init in bindSessionEvents.
+    const userMsgUuid = randomUUID()
     if (effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
-      wsHub.broadcastExcept(effectiveSessionId, connectionId, {
+      wsHub.broadcast(effectiveSessionId, {
         type: 'agent-message',
         sessionId: effectiveSessionId,
-        message: { type: 'user', message: { role: 'user', content: prompt } } as any,
-      })
+        message: {
+          type: 'user',
+          uuid: userMsgUuid,
+          message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+        },
+      } as any)
     }
 
     session.send(prompt, {
@@ -143,8 +153,13 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function bindSessionEvents(session: AgentSession, sessionId: string, connectionId: string) {
+  function bindSessionEvents(session: AgentSession, sessionId: string, connectionId: string, prompt?: string) {
+    // Remove ALL previous listeners to prevent accumulation across multiple sends,
+    // and to ensure the latest connectionId is captured in closures.
+    session.removeAllListeners()
+
     let realSessionId = sessionId
+    let pendingUserPrompt = sessionId.startsWith('pending-') ? prompt : undefined
 
     session.on('message', (msg: any) => {
       if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
@@ -160,12 +175,30 @@ export function createWsHandler(deps: HandlerDeps) {
             holderId: connectionId,
           })
           realSessionId = newId
+
+          // Broadcast the deferred user message now that we have a real session ID
+          if (pendingUserPrompt) {
+            wsHub.broadcast(newId, {
+              type: 'agent-message',
+              sessionId: newId,
+              message: {
+                type: 'user',
+                uuid: randomUUID(),
+                message: { role: 'user', content: [{ type: 'text', text: pendingUserPrompt }] },
+              },
+            } as any)
+            pendingUserPrompt = undefined
+          }
         } else if (realSessionId !== newId) {
           sessionManager.registerActive(newId, session)
           realSessionId = newId
         }
       }
 
+      // Skip user messages from SDK — we already broadcast them in handleSendMessage.
+      if (msg.type === 'user') return
+
+      // Broadcast all other messages to ALL clients.
       wsHub.broadcast(realSessionId, {
         type: 'agent-message',
         sessionId: realSessionId,

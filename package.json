@@ -11,6 +11,9 @@
     "typescript": "^5.7.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  }
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "packageManager": "pnpm@10.30.3"
 }
