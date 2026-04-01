@@ -21,7 +21,7 @@ await server.register(fastifyCors, { origin: config.corsOrigin })
 await server.register(fastifyWebsocket)
 
 if (config.staticDir) {
-  await server.register(fastifyStatic, { root: config.staticDir })
+  await server.register(fastifyStatic, { root: config.staticDir, index: ['index.html'] })
 }
 
 // Database (optional — better-sqlite3 may not be compiled on all platforms)
@@ -56,6 +56,17 @@ server.register(async (app) => {
     handleWs(socket)
   })
 })
+
+// SPA fallback: serve index.html for non-API routes (client-side routing)
+if (config.staticDir) {
+  server.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/api/') || request.url.startsWith('/ws')) {
+      reply.status(404).send({ error: 'Not Found' })
+    } else {
+      reply.sendFile('index.html')
+    }
+  })
+}
 
 // Start
 server.listen({ port: config.port, host: config.host }, (err) => {
