@@ -23,7 +23,7 @@ function loadClaudeEnv(): Record<string, string> {
 const claudeEnv = loadClaudeEnv()
 import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
 import { TOOL_CATEGORIES } from '@claude-agent-ui/shared'
-import type { ToolApprovalDecision, AskUserRequest, AskUserResponse, SendOptions, SessionResult } from '@claude-agent-ui/shared'
+import type { ToolApprovalDecision, AskUserRequest, AskUserResponse, PlanApprovalDecision, SendOptions, SessionResult } from '@claude-agent-ui/shared'
 import { AgentSession } from './session.js'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
@@ -48,6 +48,11 @@ interface PendingAskUser {
   timeout: ReturnType<typeof setTimeout>
 }
 
+interface PendingPlanApproval {
+  resolve: (decision: PlanApprovalDecision) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
 const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 export class V1QuerySession extends AgentSession {
@@ -57,6 +62,7 @@ export class V1QuerySession extends AgentSession {
   private _status: SessionStatus = 'idle'
   private pendingApprovals = new Map<string, PendingApproval>()
   private pendingAskUser = new Map<string, PendingAskUser>()
+  private pendingPlanApprovals = new Map<string, PendingPlanApproval>()
   private _projectCwd: string
   private resumeSessionId: string | null
   private _permissionMode: PermissionMode = 'default'
@@ -206,6 +212,11 @@ export class V1QuerySession extends AgentSession {
       return this.handleAskUserTool(input)
     }
 
+    // ExitPlanMode must always go to user approval, even in plan mode
+    if (toolName === 'ExitPlanMode') {
+      return this.handleExitPlanMode(input)
+    }
+
     // Check if current mode auto-resolves this tool call
     const autoDecision = this.getAutoDecision(toolName)
     if (autoDecision) return { ...autoDecision, updatedInput: input }
@@ -296,6 +307,48 @@ export class V1QuerySession extends AgentSession {
     }
   }
 
+  /** Handle ExitPlanMode — read plan file and present to user for approval */
+  private async handleExitPlanMode(
+    input: Record<string, unknown>
+  ): Promise<{ behavior: string; updatedInput?: Record<string, unknown>; message?: string }> {
+    this.setStatus('awaiting_approval')
+    const requestId = randomUUID()
+
+    // Read plan file content
+    let planContent = ''
+    const planFilePath = (input as any).planFilePath as string || ''
+    if (planFilePath) {
+      try {
+        planContent = readFileSync(planFilePath, 'utf-8')
+      } catch {
+        planContent = ''
+      }
+    }
+
+    const decision = await new Promise<PlanApprovalDecision>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.pendingPlanApprovals.delete(requestId)
+        resolve({ decision: 'feedback', feedback: 'Approval timed out' })
+      }, APPROVAL_TIMEOUT_MS)
+
+      this.pendingPlanApprovals.set(requestId, { resolve, timeout })
+      this.emit('plan-approval', {
+        requestId,
+        planContent,
+        planFilePath,
+        allowedPrompts: ((input as any).allowedPrompts as { tool: string; prompt: string }[]) || [],
+      })
+    })
+
+    this.setStatus('running')
+
+    if (decision.decision === 'feedback') {
+      return { behavior: 'deny', message: decision.feedback || 'User requested changes' }
+    }
+
+    return { behavior: 'allow', updatedInput: input }
+  }
+
   resolveToolApproval(requestId: string, decision: ToolApprovalDecision): void {
     const pending = this.pendingApprovals.get(requestId)
     if (pending) {
@@ -311,6 +364,15 @@ export class V1QuerySession extends AgentSession {
       clearTimeout(pending.timeout)
       pending.resolve(response)
       this.pendingAskUser.delete(requestId)
+    }
+  }
+
+  resolvePlanApproval(requestId: string, decision: PlanApprovalDecision): void {
+    const pending = this.pendingPlanApprovals.get(requestId)
+    if (pending) {
+      clearTimeout(pending.timeout)
+      pending.resolve(decision)
+      this.pendingPlanApprovals.delete(requestId)
     }
   }
 
@@ -332,6 +394,11 @@ export class V1QuerySession extends AgentSession {
       pending.resolve({ answers: {} })
     }
     this.pendingAskUser.clear()
+    for (const [, pending] of this.pendingPlanApprovals) {
+      clearTimeout(pending.timeout)
+      pending.resolve({ decision: 'feedback', feedback: 'Session aborted' })
+    }
+    this.pendingPlanApprovals.clear()
     this.setStatus('idle')
   }
 
@@ -348,7 +415,7 @@ export class V1QuerySession extends AgentSession {
   }
 
   private resolvePendingForMode(mode: PermissionMode): void {
-    if (this.pendingApprovals.size === 0) return
+    if (this.pendingApprovals.size === 0 && this.pendingPlanApprovals.size === 0) return
 
     for (const [requestId, pending] of this.pendingApprovals) {
       let decision: ToolApprovalDecision | null = null
@@ -382,6 +449,19 @@ export class V1QuerySession extends AgentSession {
         clearTimeout(pending.timeout)
         pending.resolve(decision)
         this.pendingApprovals.delete(requestId)
+      }
+    }
+
+    // Also resolve pending plan approvals when switching modes
+    for (const [requestId, pending] of this.pendingPlanApprovals) {
+      if (mode === 'auto' || mode === 'bypassPermissions') {
+        clearTimeout(pending.timeout)
+        pending.resolve({ decision: 'auto-accept' })
+        this.pendingPlanApprovals.delete(requestId)
+      } else if (mode === 'dontAsk') {
+        clearTimeout(pending.timeout)
+        pending.resolve({ decision: 'feedback', feedback: `Denied by ${mode} mode` })
+        this.pendingPlanApprovals.delete(requestId)
       }
     }
   }
