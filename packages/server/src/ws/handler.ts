@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto'
 import type { WebSocket } from 'ws'
-import type { C2SMessage, ToolApprovalDecision, PermissionMode } from '@claude-agent-ui/shared'
+import type { C2SMessage, ToolApprovalDecision, PermissionMode, PlanApprovalDecision } from '@claude-agent-ui/shared'
 import { TOOL_CATEGORIES } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
+import { V1QuerySession } from '../agent/v1-session.js'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 
@@ -18,8 +19,15 @@ export interface HandlerDeps {
 export function createWsHandler(deps: HandlerDeps) {
   const { wsHub, lockManager, sessionManager } = deps
 
-  // requestId → { sessionId, toolName } mapping for tool approvals and ask-user
-  const pendingRequestMap = new Map<string, { sessionId: string; toolName?: string }>()
+  // requestId → full pending request data (for re-sending on client join/reconnect)
+  interface PendingRequest {
+    sessionId: string
+    type: 'tool-approval' | 'ask-user' | 'plan-approval'
+    toolName?: string
+    // Full payload so we can re-send to joining clients
+    payload: Record<string, unknown>
+  }
+  const pendingRequestMap = new Map<string, PendingRequest>()
 
   return function handleConnection(ws: WebSocket) {
     const connectionId = wsHub.register(ws)
@@ -73,6 +81,9 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'leave-session':
         wsHub.leaveSession(connectionId)
         break
+      case 'resolve-plan-approval':
+        await handleResolvePlanApproval(connectionId, msg.sessionId, msg.requestId, msg.decision, msg.feedback)
+        break
     }
   }
 
@@ -80,14 +91,40 @@ export function createWsHandler(deps: HandlerDeps) {
     wsHub.joinSession(connectionId, sessionId)
     const lockHolder = lockManager.getHolder(sessionId)
     const activeSession = sessionManager.getActive(sessionId)
+    const isLockHolder = lockHolder === connectionId
     wsHub.sendTo(connectionId, {
       type: 'session-state',
       sessionId,
       sessionStatus: activeSession?.status ?? 'idle',
       lockStatus: lockManager.getStatus(sessionId),
       lockHolderId: lockHolder ?? undefined,
-      isLockHolder: lockHolder === connectionId,
+      isLockHolder,
     })
+
+    // Re-send any pending tool-approval or ask-user requests for this session
+    for (const [, entry] of pendingRequestMap) {
+      if (entry.sessionId !== sessionId) continue
+      if (entry.type === 'tool-approval') {
+        wsHub.sendTo(connectionId, {
+          type: 'tool-approval-request',
+          ...entry.payload,
+          readonly: !isLockHolder,
+        } as any)
+      } else if (entry.type === 'ask-user') {
+        wsHub.sendTo(connectionId, {
+          type: 'ask-user-request',
+          ...entry.payload,
+          readonly: !isLockHolder,
+        } as any)
+      } else if (entry.type === 'plan-approval') {
+        wsHub.sendTo(connectionId, {
+          type: 'plan-approval',
+          sessionId: entry.sessionId,
+          ...entry.payload,
+          readonly: !isLockHolder,
+        } as any)
+      }
+    }
   }
 
   async function handleSendMessage(
@@ -224,7 +261,12 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('tool-approval', (req) => {
-      pendingRequestMap.set(req.requestId, { sessionId: realSessionId, toolName: req.toolName })
+      pendingRequestMap.set(req.requestId, {
+        sessionId: realSessionId,
+        type: 'tool-approval',
+        toolName: req.toolName,
+        payload: req,
+      })
       wsHub.sendTo(connectionId, {
         type: 'tool-approval-request',
         ...req,
@@ -238,7 +280,12 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('ask-user', (req) => {
-      pendingRequestMap.set(req.requestId, { sessionId: realSessionId })
+      console.log('[ask-user] received event, connectionId=%s, sessionId=%s, questions=%d', connectionId, realSessionId, req.questions?.length ?? 0)
+      pendingRequestMap.set(req.requestId, {
+        sessionId: realSessionId,
+        type: 'ask-user',
+        payload: req,
+      })
       wsHub.sendTo(connectionId, {
         type: 'ask-user-request',
         ...req,
@@ -246,6 +293,26 @@ export function createWsHandler(deps: HandlerDeps) {
       })
       wsHub.broadcastExcept(realSessionId, connectionId, {
         type: 'ask-user-request',
+        ...req,
+        readonly: true,
+      })
+    })
+
+    session.on('plan-approval', (req) => {
+      pendingRequestMap.set(req.requestId, {
+        sessionId: realSessionId,
+        type: 'plan-approval',
+        payload: req,
+      })
+      wsHub.sendTo(connectionId, {
+        type: 'plan-approval',
+        sessionId: realSessionId,
+        ...req,
+        readonly: false,
+      })
+      wsHub.broadcastExcept(realSessionId, connectionId, {
+        type: 'plan-approval',
+        sessionId: realSessionId,
         ...req,
         readonly: true,
       })
@@ -341,6 +408,61 @@ export function createWsHandler(deps: HandlerDeps) {
       requestId,
       answers,
     })
+  }
+
+  async function handleResolvePlanApproval(
+    connectionId: string,
+    sessionId: string,
+    requestId: string,
+    decision: PlanApprovalDecision['decision'],
+    feedback?: string
+  ) {
+    const entry = pendingRequestMap.get(requestId)
+    if (!entry) return
+
+    if (!lockManager.isHolder(entry.sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+
+    const session = sessionManager.getActive(entry.sessionId)
+    if (!session || !(session instanceof V1QuerySession)) return
+
+    // 1. Resolve the plan approval promise
+    session.resolvePlanApproval(requestId, { decision, feedback })
+    pendingRequestMap.delete(requestId)
+
+    // 2. Switch permission mode based on decision
+    try {
+      switch (decision) {
+        case 'clear-and-accept':
+        case 'auto-accept':
+          await session.setPermissionMode('acceptEdits')
+          break
+        case 'manual':
+          await session.setPermissionMode('default')
+          break
+        // 'feedback': keep plan mode, don't change
+      }
+    } catch {
+      // Silently ignore mode change errors
+    }
+
+    // 3. Broadcast resolved to all clients
+    wsHub.broadcast(entry.sessionId, {
+      type: 'plan-approval-resolved',
+      requestId,
+    })
+
+    // 4. For clear-and-accept: send /compact to clear context after tool completes
+    if (decision === 'clear-and-accept') {
+      setTimeout(() => {
+        const activeSession = sessionManager.getActive(entry.sessionId)
+        if (activeSession) {
+          activeSession.send('/compact')
+        }
+      }, 500)
+    }
   }
 
   async function handleAbort(connectionId: string, sessionId: string) {
