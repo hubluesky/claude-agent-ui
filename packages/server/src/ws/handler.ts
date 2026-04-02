@@ -128,6 +128,33 @@ export function createWsHandler(deps: HandlerDeps) {
         } as any)
       }
     }
+
+    if (!lockHolder) {
+      let hasPending = false
+      for (const [, entry] of pendingRequestMap) {
+        if (entry.sessionId === sessionId) { hasPending = true; break }
+      }
+      if (hasPending) {
+        lockManager.acquire(sessionId, connectionId)
+        wsHub.broadcast(sessionId, {
+          type: 'lock-status',
+          sessionId,
+          status: 'locked',
+          holderId: connectionId,
+        })
+        // Re-send pending requests as non-readonly since this client now holds lock
+        for (const [, entry] of pendingRequestMap) {
+          if (entry.sessionId !== sessionId) continue
+          if (entry.type === 'tool-approval') {
+            wsHub.sendTo(connectionId, { type: 'tool-approval-request', ...entry.payload, readonly: false } as any)
+          } else if (entry.type === 'ask-user') {
+            wsHub.sendTo(connectionId, { type: 'ask-user-request', ...entry.payload, readonly: false } as any)
+          } else if (entry.type === 'plan-approval') {
+            wsHub.sendTo(connectionId, { type: 'plan-approval', sessionId, ...entry.payload, readonly: false } as any)
+          }
+        }
+      }
+    }
   }
 
   async function handleSendMessage(
@@ -423,12 +450,8 @@ export function createWsHandler(deps: HandlerDeps) {
     const session = sessionManager.getActive(entry.sessionId)
     if (!session || !(session instanceof V1QuerySession)) return
 
-    // 1. Resolve the plan approval promise
-    session.resolvePlanApproval(requestId, { decision, feedback })
-    lockManager.resetIdleTimer(entry.sessionId)
-    pendingRequestMap.delete(requestId)
-
-    // 2. Switch permission mode based on decision
+    // 1. Switch permission mode BEFORE resolving — prevents race where SDK
+    //    starts executing next tool before mode is updated
     try {
       switch (decision) {
         case 'clear-and-accept':
@@ -443,6 +466,11 @@ export function createWsHandler(deps: HandlerDeps) {
     } catch {
       // Silently ignore mode change errors
     }
+
+    // 2. Resolve the plan approval promise — SDK unblocks and uses the new mode
+    session.resolvePlanApproval(requestId, { decision, feedback })
+    lockManager.resetIdleTimer(entry.sessionId)
+    pendingRequestMap.delete(requestId)
 
     // 3. Broadcast resolved to all clients
     wsHub.broadcast(entry.sessionId, {
