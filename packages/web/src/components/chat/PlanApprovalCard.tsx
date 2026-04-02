@@ -5,34 +5,25 @@ import { useClaimLock } from '../../hooks/useClaimLock'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import type { PlanApprovalDecisionType } from '@claude-agent-ui/shared'
 
-const DECISION_LABELS: Record<string, string> = {
-  'clear-and-accept': '已批准（清除上下文）',
-  'auto-accept': '已批准（自动接受编辑）',
-  'manual': '已批准（手动审批）',
-  'feedback': '已拒绝（已提供反馈）',
-}
-
 export function PlanApprovalCard() {
-  const { pendingPlanApproval, resolvedPlanApproval, lockStatus } = useConnectionStore()
+  const { pendingPlanApproval, lockStatus } = useConnectionStore()
   const { respondPlanApproval } = useWebSocket()
   const handleClaim = useClaimLock()
   const [feedback, setFeedback] = useState('')
   const [collapsed, setCollapsed] = useState(false)
 
-  // Show pending or resolved plan
-  const plan = pendingPlanApproval ?? resolvedPlanApproval
-  if (!plan) return null
+  // Only show in Footer when pending — resolved state is part of message history
+  if (!pendingPlanApproval) return null
 
-  const isPending = !!pendingPlanApproval
-  const { planContent, planFilePath, allowedPrompts } = plan
-  const readonly = isPending ? pendingPlanApproval.readonly : true
+  const { planContent, planFilePath, allowedPrompts } = pendingPlanApproval
+  const readonly = pendingPlanApproval.readonly
   const isIdle = lockStatus === 'idle'
-  const canClaim = readonly && isIdle && isPending
-  const canInteract = (!readonly || canClaim) && isPending
+  const canClaim = readonly && isIdle
+  const canInteract = !readonly || canClaim
   const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
 
   const handleDecision = (decision: PlanApprovalDecisionType) => {
-    if (!isPending) return
+    if (!pendingPlanApproval) return
     if (canClaim) handleClaim()
     if (decision === 'feedback') {
       if (!feedback.trim()) return
@@ -52,28 +43,6 @@ export function PlanApprovalCard() {
 
   const openModal = () => {
     useConnectionStore.getState().setPlanModalOpen(true)
-  }
-
-  // Resolved state: compact summary line
-  if (!isPending) {
-    const label = DECISION_LABELS[resolvedPlanApproval!.decision] ?? '已处理'
-    return (
-      <div className="mx-4 sm:mx-10 mb-4 rounded-lg border bg-[#78787214] border-[#3d3b37]">
-        <div className="flex items-center gap-2 px-4 py-2.5">
-          <svg className="w-4 h-4 text-[#22c55e] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-[13px] text-[#a8a29e] flex-1">计划审批 — {label}</span>
-          <span className="text-[11px] text-[#7c7872] font-mono truncate max-w-[200px]">{fileName}</span>
-          <button
-            onClick={openModal}
-            className="text-[11px] text-[#0ea5e9] hover:underline shrink-0 ml-2"
-          >
-            查看计划 ↗
-          </button>
-        </div>
-      </div>
-    )
   }
 
   return (
