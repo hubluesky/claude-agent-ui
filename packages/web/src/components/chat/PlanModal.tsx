@@ -22,12 +22,20 @@ export function PlanModal() {
     return () => document.removeEventListener('keydown', handleKey)
   }, [planModalOpen])
 
-  if (!planModalOpen || !pendingPlanApproval) return null
+  const { resolvedPlanApproval } = useConnectionStore()
 
-  const { requestId, planContent, planFilePath, allowedPrompts, readonly } = pendingPlanApproval
+  // Show from pending or resolved plan
+  const plan = pendingPlanApproval ?? resolvedPlanApproval
+  if (!planModalOpen || !plan) return null
+
+  const isPending = !!pendingPlanApproval
+  const { planContent, planFilePath, allowedPrompts } = plan
+  const requestId = isPending ? pendingPlanApproval!.requestId : ''
+  const readonly = isPending ? pendingPlanApproval!.readonly : true
   const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
 
   const handleDecision = (decision: PlanApprovalDecisionType) => {
+    if (!isPending) return
     if (decision === 'feedback') {
       if (!feedback.trim()) return
       respondPlanApproval(requestId, 'feedback', feedback.trim())

@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
-import type { S2CMessage, C2SMessage, ToolApprovalDecision } from '@claude-agent-ui/shared'
+import type { S2CMessage, C2SMessage, ToolApprovalDecision, PlanApprovalDecisionType } from '@claude-agent-ui/shared'
 import { useToastStore } from '../components/chat/Toast'
 import { useConnectionStore } from '../stores/connectionStore'
-import { useMessageStore } from '../stores/messageStore'
+import { useMessageStore, flushStreamingDelta } from '../stores/messageStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useCommandStore } from '../stores/commandStore'
 
@@ -106,6 +106,8 @@ function handleServerMessage(msg: S2CMessage) {
         // Try to replace an optimistic message; if none matches, append (observer path)
         msgs.replaceOptimistic(msg.message)
       } else if (msg.message.type === 'assistant') {
+        // Flush any buffered streaming text before replacing streaming blocks
+        flushStreamingDelta()
         // Deduplicate by API message ID — partial and final share the same message.id
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
@@ -158,16 +160,44 @@ function handleServerMessage(msg: S2CMessage) {
       break
 
     case 'ask-user-request':
+      console.log('[ask-user-request] received, requestId=%s, questions=%d, readonly=%s', msg.requestId, msg.questions?.length, msg.readonly)
       conn.setPendingAskUser({
         requestId: msg.requestId,
         questions: msg.questions,
         readonly: msg.readonly,
       })
+      console.log('[ask-user-request] pendingAskUser set:', useConnectionStore.getState().pendingAskUser?.requestId)
       break
 
     case 'ask-user-resolved':
+      console.log('[ask-user-resolved] clearing pendingAskUser, requestId=%s', msg.requestId)
       conn.setPendingAskUser(null)
       break
+
+    case 'plan-approval':
+      conn.setPendingPlanApproval({
+        requestId: msg.requestId,
+        planContent: msg.planContent,
+        planFilePath: msg.planFilePath,
+        allowedPrompts: msg.allowedPrompts,
+        readonly: msg.readonly,
+      })
+      break
+
+    case 'plan-approval-resolved': {
+      // Preserve plan content for later viewing
+      const pending = conn.pendingPlanApproval
+      if (pending) {
+        useConnectionStore.getState().setResolvedPlanApproval({
+          planContent: pending.planContent,
+          planFilePath: pending.planFilePath,
+          allowedPrompts: pending.allowedPrompts,
+          decision: (msg as any).decision ?? 'approved',
+        })
+      }
+      conn.setPendingPlanApproval(null)
+      break
+    }
 
     case 'lock-status': {
       const myId = useConnectionStore.getState().connectionId
@@ -231,6 +261,16 @@ function respondAskUser(requestId: string, answers: Record<string, string>) {
   send({ type: 'ask-user-response', requestId, answers })
 }
 
+function respondPlanApproval(requestId: string, decision: PlanApprovalDecisionType, feedback?: string) {
+  send({
+    type: 'resolve-plan-approval',
+    sessionId: useSessionStore.getState().currentSessionId!,
+    requestId,
+    decision,
+    feedback,
+  })
+}
+
 function abort(sessionId: string) {
   send({ type: 'abort', sessionId })
 }
@@ -250,5 +290,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, abort, disconnect }
+  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, disconnect }
 }

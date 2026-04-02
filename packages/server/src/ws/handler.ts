@@ -78,6 +78,9 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'reconnect':
         handleReconnect(connectionId, msg.previousConnectionId)
         break
+      case 'release-lock':
+        handleReleaseLock(connectionId, msg.sessionId)
+        break
       case 'leave-session':
         wsHub.leaveSession(connectionId)
         break
@@ -336,30 +339,20 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('complete', (result) => {
-      lockManager.release(realSessionId)
+      lockManager.resetIdleTimer(realSessionId)
       wsHub.broadcast(realSessionId, {
         type: 'session-complete',
         sessionId: realSessionId,
         result,
       })
-      wsHub.broadcast(realSessionId, {
-        type: 'lock-status',
-        sessionId: realSessionId,
-        status: 'idle',
-      })
     })
 
     session.on('error', (err) => {
-      lockManager.release(realSessionId)
+      lockManager.resetIdleTimer(realSessionId)
       wsHub.broadcast(realSessionId, {
         type: 'error',
         message: err.message,
         code: 'internal',
-      })
-      wsHub.broadcast(realSessionId, {
-        type: 'lock-status',
-        sessionId: realSessionId,
-        status: 'idle',
       })
     })
   }
@@ -377,6 +370,7 @@ export function createWsHandler(deps: HandlerDeps) {
     if (!session) return
 
     session.resolveToolApproval(requestId, decision)
+    lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
     // Broadcast to ALL clients (including sender) so everyone clears pendingApproval
@@ -400,6 +394,7 @@ export function createWsHandler(deps: HandlerDeps) {
     if (!session) return
 
     session.resolveAskUser(requestId, { answers })
+    lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
     // Broadcast to ALL clients (including sender) so everyone clears pendingAskUser
@@ -430,6 +425,7 @@ export function createWsHandler(deps: HandlerDeps) {
 
     // 1. Resolve the plan approval promise
     session.resolvePlanApproval(requestId, { decision, feedback })
+    lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
     // 2. Switch permission mode based on decision
@@ -452,6 +448,7 @@ export function createWsHandler(deps: HandlerDeps) {
     wsHub.broadcast(entry.sessionId, {
       type: 'plan-approval-resolved',
       requestId,
+      decision,
     })
 
     // 4. For clear-and-accept: send /compact to clear context after tool completes
@@ -479,6 +476,14 @@ export function createWsHandler(deps: HandlerDeps) {
 
     wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId })
     wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
+  }
+
+  function handleReleaseLock(connectionId: string, sessionId: string) {
+    if (!lockManager.isHolder(sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+    lockManager.release(sessionId)
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: string) {

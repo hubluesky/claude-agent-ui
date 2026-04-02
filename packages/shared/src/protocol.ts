@@ -68,6 +68,11 @@ export interface C2S_ResolvePlanApproval {
   feedback?: string
 }
 
+export interface C2S_ReleaseLock {
+  type: 'release-lock'
+  sessionId: string
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -79,6 +84,7 @@ export type C2SMessage =
   | C2S_Reconnect
   | C2S_LeaveSession
   | C2S_ResolvePlanApproval
+  | C2S_ReleaseLock
 
 // ============ Server → Client (S2C) ============
 
@@ -184,6 +190,7 @@ export interface S2C_PlanApproval {
 export interface S2C_PlanApprovalResolved {
   type: 'plan-approval-resolved'
   requestId: string
+  decision: string
 }
 
 export interface S2C_Error {
