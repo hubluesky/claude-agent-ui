@@ -63,7 +63,7 @@ export function MessageComponent({ message }: MessageComponentProps) {
         <div className="flex-1 min-w-0 space-y-2">
           {contentBlocks.map((block: any, i: number) => {
             if (block.type === 'text') {
-              return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed"><MarkdownRenderer content={block.text} /></div>
+              return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
             }
             if (block.type === 'thinking') {
               return (

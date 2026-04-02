@@ -1,6 +1,6 @@
 export function ThinkingIndicator() {
   return (
-    <div className="flex items-center gap-3 px-10">
+    <div className="flex items-center gap-3 px-4">
       <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center">
         <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
       </div>

@@ -272,7 +272,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
       : 'border-[#3d3b37]'
 
   return (
-    <div className="px-4 sm:px-10 py-3">
+    <div className="px-4 py-3">
       <div className={`relative rounded-xl border ${borderClass} bg-[#1a1918]`}>
         {/* Image preview bar */}
         <ImagePreviewBar images={images} onRemove={removeImage} />

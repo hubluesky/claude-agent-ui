@@ -54,8 +54,8 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
   }
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
-      <div className="px-10 py-6 space-y-5">
+    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="px-4 py-6 space-y-5 min-w-0">
         <div ref={topSentinelRef} />
         {isLoadingMore && (
           <p className="text-center text-xs text-[#7c7872]">Loading earlier messages...</p>
