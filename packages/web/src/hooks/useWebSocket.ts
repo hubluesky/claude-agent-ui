@@ -82,6 +82,10 @@ function handleServerMessage(msg: S2CMessage) {
         msg.lockStatus === 'idle' ? 'idle'
           : msg.isLockHolder ? 'locked_self' : 'locked_other'
       )
+      // Sync permission mode when joining a session
+      if (msg.permissionMode) {
+        useSettingsStore.getState().setPermissionMode(msg.permissionMode)
+      }
       break
 
     case 'agent-message':
@@ -233,6 +237,10 @@ function handleServerMessage(msg: S2CMessage) {
 
     case 'session-state-change':
       conn.setSessionStatus(msg.state)
+      break
+
+    case 'mode-change':
+      useSettingsStore.getState().setPermissionMode(msg.mode)
       break
 
     case 'slash-commands':

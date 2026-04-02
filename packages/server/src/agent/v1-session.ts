@@ -76,6 +76,7 @@ export class V1QuerySession extends AgentSession {
   get id(): string | null { return this.sessionId }
   get projectCwd(): string { return this._projectCwd }
   get status(): SessionStatus { return this._status }
+  get permissionMode(): PermissionMode { return this._permissionMode }
 
   private setStatus(status: SessionStatus): void {
     this._status = status

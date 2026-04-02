@@ -100,6 +100,7 @@ export interface S2C_SessionState {
   lockStatus: LockStatus
   lockHolderId?: string
   isLockHolder: boolean
+  permissionMode?: PermissionMode
 }
 
 export interface S2C_AgentMessage {
@@ -152,6 +153,12 @@ export interface S2C_SessionStateChange {
   type: 'session-state-change'
   sessionId: string
   state: SessionStatus
+}
+
+export interface S2C_ModeChange {
+  type: 'mode-change'
+  sessionId: string
+  mode: PermissionMode
 }
 
 export interface S2C_SessionComplete {
@@ -212,6 +219,7 @@ export type S2CMessage =
   | S2C_SessionComplete
   | S2C_SessionAborted
   | S2C_SlashCommands
+  | S2C_ModeChange
   | S2C_PlanApproval
   | S2C_PlanApprovalResolved
   | S2C_Error

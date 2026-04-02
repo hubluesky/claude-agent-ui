@@ -102,6 +102,7 @@ export function createWsHandler(deps: HandlerDeps) {
       lockStatus: lockManager.getStatus(sessionId),
       lockHolderId: lockHolder ?? undefined,
       isLockHolder,
+      permissionMode: activeSession?.permissionMode,
     })
 
     // Re-send any pending tool-approval or ask-user requests for this session
@@ -534,12 +535,47 @@ export function createWsHandler(deps: HandlerDeps) {
         // Silently ignore — SDK may reject mode changes in certain states
       }
     }
+
+    // Broadcast mode change to ALL clients (including sender for confirmation,
+    // and other terminals so they stay in sync)
+    wsHub.broadcast(sessionId, {
+      type: 'mode-change',
+      sessionId,
+      mode: mode as PermissionMode,
+    })
   }
 
   function resolvePendingApprovalsForMode(sessionId: string, mode: PermissionMode) {
     for (const [requestId, entry] of pendingRequestMap) {
       if (entry.sessionId !== sessionId) continue
 
+      // Handle plan-approval entries separately
+      if (entry.type === 'plan-approval') {
+        let planDecision: string | null = null
+        if (mode === 'auto' || mode === 'bypassPermissions') {
+          planDecision = 'auto-accept'
+        } else if (mode === 'dontAsk') {
+          planDecision = 'feedback'
+        }
+        if (planDecision) {
+          const session = sessionManager.getActive(sessionId)
+          if (session instanceof V1QuerySession) {
+            session.resolvePlanApproval(requestId, {
+              decision: planDecision as any,
+              feedback: planDecision === 'feedback' ? `Denied by ${mode} mode` : undefined,
+            })
+          }
+          wsHub.broadcast(sessionId, {
+            type: 'plan-approval-resolved',
+            requestId,
+            decision: planDecision,
+          })
+          pendingRequestMap.delete(requestId)
+        }
+        continue
+      }
+
+      // Handle tool-approval and ask-user entries
       let decision: { behavior: 'allow' | 'deny'; message?: string } | null = null
 
       switch (mode) {
