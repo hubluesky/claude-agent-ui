@@ -99,7 +99,7 @@ export class V1QuerySession extends AgentSession {
     images?: { data: string; mediaType: string }[]
   ): Promise<void> {
     try {
-      // Build prompt: if images are attached, use SDKUserMessage format
+      // Build prompt: if images are attached, wrap as AsyncIterable<SDKUserMessage>
       // with multimodal content blocks; otherwise use plain string.
       let promptInput: unknown = prompt
       if (images && images.length > 0) {
@@ -110,11 +110,14 @@ export class V1QuerySession extends AgentSession {
         if (prompt) {
           content.push({ type: 'text', text: prompt })
         }
-        promptInput = {
+        const userMessage = {
           type: 'user',
           message: { role: 'user', content },
           parent_tool_use_id: null,
         }
+        // SDK expects AsyncIterable<SDKUserMessage>, not a single object
+        async function* singleMessage() { yield userMessage }
+        promptInput = singleMessage()
       }
       this.queryInstance = query({ prompt: promptInput as any, options: options as any })
 
