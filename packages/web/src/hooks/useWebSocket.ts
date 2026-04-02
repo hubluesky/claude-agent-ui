@@ -189,8 +189,8 @@ function sendMessage(
   options?: {
     cwd?: string
     images?: { data: string; mediaType: string }[]
-    thinkingMode?: string
-    effort?: string
+    thinkingMode?: 'adaptive' | 'enabled' | 'disabled'
+    effort?: 'low' | 'medium' | 'high' | 'max'
   }
 ) {
   send({ type: 'send-message', sessionId, prompt, options })
