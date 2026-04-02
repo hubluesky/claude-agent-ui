@@ -183,7 +183,16 @@ function send(msg: C2SMessage) {
   }
 }
 
-function sendMessage(prompt: string, sessionId: string | null, options?: any) {
+function sendMessage(
+  prompt: string,
+  sessionId: string | null,
+  options?: {
+    cwd?: string
+    images?: { data: string; mediaType: string }[]
+    thinkingMode?: string
+    effort?: string
+  }
+) {
   send({ type: 'send-message', sessionId, prompt, options })
 }
 

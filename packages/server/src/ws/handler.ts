@@ -148,6 +148,7 @@ export function createWsHandler(deps: HandlerDeps) {
 
     session.send(prompt, {
       cwd: options?.cwd,
+      images: options?.images,
       effort: options?.effort as any,
       thinkingMode: options?.thinkingMode as any,
     })

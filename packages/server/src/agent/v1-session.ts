@@ -90,12 +90,23 @@ export class V1QuerySession extends AgentSession {
     }
 
     // Start the query in background
-    this.runQuery(prompt, queryOptions)
+    this.runQuery(prompt, queryOptions, options?.images)
   }
 
-  private async runQuery(prompt: string, options: Record<string, unknown>): Promise<void> {
+  private async runQuery(
+    prompt: string,
+    options: Record<string, unknown>,
+    images?: { data: string; mediaType: string }[]
+  ): Promise<void> {
     try {
-      this.queryInstance = query({ prompt, options: options as any })
+      const queryInput: Record<string, unknown> = { prompt, options: options as any }
+      if (images && images.length > 0) {
+        queryInput.images = images.map((img) => ({
+          data: img.data,
+          media_type: img.mediaType,
+        }))
+      }
+      this.queryInstance = query(queryInput as any)
 
       for await (const msg of this.queryInstance) {
         // Capture session ID from init message
