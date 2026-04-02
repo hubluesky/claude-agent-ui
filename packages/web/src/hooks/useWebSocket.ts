@@ -5,6 +5,7 @@ import { useConnectionStore } from '../stores/connectionStore'
 import { useMessageStore, flushStreamingDelta } from '../stores/messageStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useCommandStore } from '../stores/commandStore'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const CONNECTION_ID_KEY = 'claude-agent-ui-connection-id'
 
@@ -98,6 +99,15 @@ function handleServerMessage(msg: S2CMessage) {
             sess.loadProjectSessions(sess.currentProjectCwd)
           }
         }
+        // Sync permission mode from SDK init
+        if ((msg.message as any).permissionMode) {
+          useSettingsStore.getState().setPermissionMode((msg.message as any).permissionMode)
+        }
+      }
+
+      // Sync permission mode when SDK reports status changes (e.g. Agent enters/exits plan mode)
+      if (msg.message.type === 'system' && (msg.message as any).subtype === 'status' && (msg.message as any).permissionMode) {
+        useSettingsStore.getState().setPermissionMode((msg.message as any).permissionMode)
       }
 
       if (msg.message.type === 'stream_event') {
@@ -192,10 +202,22 @@ function handleServerMessage(msg: S2CMessage) {
           planContent: pending.planContent,
           planFilePath: pending.planFilePath,
           allowedPrompts: pending.allowedPrompts,
-          decision: (msg as any).decision ?? 'approved',
+          decision: msg.decision ?? 'approved',
         })
       }
       conn.setPendingPlanApproval(null)
+      // Sync permission mode to match the plan approval decision
+      const settings = useSettingsStore.getState()
+      switch (msg.decision) {
+        case 'clear-and-accept':
+        case 'auto-accept':
+          settings.setPermissionMode('acceptEdits')
+          break
+        case 'manual':
+          settings.setPermissionMode('default')
+          break
+        // 'feedback': stays in plan mode, no change
+      }
       break
     }
 
@@ -219,7 +241,11 @@ function handleServerMessage(msg: S2CMessage) {
 
     case 'session-complete':
     case 'session-aborted':
-      conn.reset()
+      // Clear pending requests but preserve lock status — lock persists across queries
+      conn.setPendingApproval(null)
+      conn.setPendingAskUser(null)
+      conn.setPendingPlanApproval(null)
+      conn.setPlanModalOpen(false)
       break
 
     case 'error':
@@ -275,6 +301,10 @@ function abort(sessionId: string) {
   send({ type: 'abort', sessionId })
 }
 
+function releaseLock(sessionId: string) {
+  send({ type: 'release-lock', sessionId })
+}
+
 // ── Hook (manages singleton lifecycle via ref-counting) ─────────
 export function useWebSocket() {
   useEffect(() => {
@@ -290,5 +320,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, disconnect }
+  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, disconnect }
 }
