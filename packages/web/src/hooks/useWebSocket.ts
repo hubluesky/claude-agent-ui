@@ -126,23 +126,6 @@ function handleServerMessage(msg: S2CMessage) {
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
 
-        // ── Diagnostic logging for thinking disappearance bug ──
-        const streamingBlocks = current.filter((m: any) => m.type === '_streaming_block')
-        const thinkingBlocks = streamingBlocks.filter((m: any) => (m as any)._blockType === 'thinking')
-        const prevAssistantWithSameId = apiId ? current.filter((m: any) => m.type === 'assistant' && (m as any).message?.id === apiId) : []
-        const finalContentBlocks: any[] = (msg.message as any).message?.content ?? []
-        const finalThinkingBlocks = finalContentBlocks.filter((b: any) => b.type === 'thinking')
-        console.log('[assistant-msg] apiId=%s, streamingBlocks=%d, thinkingStreamBlocks=%d (content: %s), prevAssistantSameId=%d, finalContentBlocks=%d, finalThinkingBlocks=%d (content: %s)',
-          apiId?.slice(0, 12),
-          streamingBlocks.length,
-          thinkingBlocks.length,
-          thinkingBlocks.map((m: any) => (m as any)._content?.slice(0, 50) || '<empty>').join('; '),
-          prevAssistantWithSameId.length,
-          finalContentBlocks.length,
-          finalThinkingBlocks.length,
-          finalThinkingBlocks.map((b: any) => (b.thinking ? b.thinking.slice(0, 50) : '<empty>')).join('; '),
-        )
-
         // Collect thinking content from streaming blocks before removing them,
         // in case the final assistant message doesn't include thinking blocks.
         const streamedThinking: { type: string; thinking: string }[] = []
@@ -165,11 +148,6 @@ function handleServerMessage(msg: S2CMessage) {
         if (!hasThinking && streamedThinking.length > 0 && finalMsg.message?.content) {
           finalMsg.message.content = [...streamedThinking, ...contentBlocks]
         }
-
-        console.log('[assistant-msg] hasThinking=%s, streamedThinking=%d, finalAction=%s',
-          hasThinking, streamedThinking.length,
-          hasThinking ? 'use-final' : (streamedThinking.length > 0 ? 'prepend-streamed' : 'no-thinking'),
-        )
 
         useMessageStore.setState({ messages: [...cleaned, msg.message] })
       } else {
@@ -196,17 +174,14 @@ function handleServerMessage(msg: S2CMessage) {
       break
 
     case 'ask-user-request':
-      console.log('[ask-user-request] received, requestId=%s, questions=%d, readonly=%s', msg.requestId, msg.questions?.length, msg.readonly)
       conn.setPendingAskUser({
         requestId: msg.requestId,
         questions: msg.questions,
         readonly: msg.readonly,
       })
-      console.log('[ask-user-request] pendingAskUser set:', useConnectionStore.getState().pendingAskUser?.requestId)
       break
 
     case 'ask-user-resolved':
-      console.log('[ask-user-resolved] clearing pendingAskUser, requestId=%s', msg.requestId)
       conn.setPendingAskUser(null)
       break
 
@@ -262,6 +237,10 @@ function handleServerMessage(msg: S2CMessage) {
       }
       if (pendingApproval) {
         conn.setPendingApproval({ ...pendingApproval, readonly: !amIHolder })
+      }
+      const pendingPlan = useConnectionStore.getState().pendingPlanApproval
+      if (pendingPlan) {
+        conn.setPendingPlanApproval({ ...pendingPlan, readonly: !amIHolder })
       }
       break
     }

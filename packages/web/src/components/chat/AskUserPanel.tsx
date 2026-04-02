@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useConnectionStore } from '../../stores/connectionStore'
-import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
+import { useClaimLock } from '../../hooks/useClaimLock'
 
 export function AskUserPanel() {
   const { pendingAskUser, lockStatus } = useConnectionStore()
-  const { respondAskUser, claimLock } = useWebSocket()
+  const { respondAskUser } = useWebSocket()
+  const handleClaim = useClaimLock()
   const [otherText, setOtherText] = useState<Record<string, string>>({})
   const [showOther, setShowOther] = useState<Record<string, boolean>>({})
 
@@ -18,11 +19,6 @@ export function AskUserPanel() {
     setOtherText({})
     setShowOther({})
   }, [pendingAskUser?.requestId])
-
-  const handleClaim = useCallback(() => {
-    const sid = useSessionStore.getState().currentSessionId
-    if (sid && sid !== '__new__') claimLock(sid)
-  }, [claimLock])
 
   // Click option = claim (if needed) + submit immediately
   const handleSelect = useCallback((questionText: string, label: string) => {

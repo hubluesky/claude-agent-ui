@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useConnectionStore } from '../../stores/connectionStore'
-import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
+import { useClaimLock } from '../../hooks/useClaimLock'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import type { PlanApprovalDecisionType } from '@claude-agent-ui/shared'
 
@@ -14,14 +14,10 @@ const DECISION_LABELS: Record<string, string> = {
 
 export function PlanApprovalCard() {
   const { pendingPlanApproval, resolvedPlanApproval, lockStatus } = useConnectionStore()
-  const { respondPlanApproval, claimLock } = useWebSocket()
+  const { respondPlanApproval } = useWebSocket()
+  const handleClaim = useClaimLock()
   const [feedback, setFeedback] = useState('')
   const [collapsed, setCollapsed] = useState(false)
-
-  const handleClaim = useCallback(() => {
-    const sid = useSessionStore.getState().currentSessionId
-    if (sid && sid !== '__new__') claimLock(sid)
-  }, [claimLock])
 
   // Show pending or resolved plan
   const plan = pendingPlanApproval ?? resolvedPlanApproval

@@ -29,6 +29,19 @@ export function createWsHandler(deps: HandlerDeps) {
   }
   const pendingRequestMap = new Map<string, PendingRequest>()
 
+  function resendPendingRequests(sessionId: string, connectionId: string, readonly: boolean) {
+    for (const [, entry] of pendingRequestMap) {
+      if (entry.sessionId !== sessionId) continue
+      if (entry.type === 'tool-approval') {
+        wsHub.sendTo(connectionId, { type: 'tool-approval-request', ...entry.payload, readonly } as any)
+      } else if (entry.type === 'ask-user') {
+        wsHub.sendTo(connectionId, { type: 'ask-user-request', ...entry.payload, readonly } as any)
+      } else if (entry.type === 'plan-approval') {
+        wsHub.sendTo(connectionId, { type: 'plan-approval', sessionId, ...entry.payload, readonly } as any)
+      }
+    }
+  }
+
   // On lock release: just broadcast idle — clients claim manually if they want to respond
   lockManager.setOnRelease((sessionId: string) => {
     wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
@@ -52,7 +65,6 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     ws.on('close', () => {
-      console.log('[ws-close] connectionId=%s, lockedSessions=%j', connectionId, lockManager.getLockedSessions(connectionId))
       lockManager.onDisconnect(connectionId)
       wsHub.unregister(connectionId)
     })
@@ -104,7 +116,6 @@ export function createWsHandler(deps: HandlerDeps) {
     const lockHolder = lockManager.getHolder(sessionId)
     const activeSession = sessionManager.getActive(sessionId)
     const isLockHolder = lockHolder === connectionId
-    console.log('[join-session] connectionId=%s, sessionId=%s, lockHolder=%s, isLockHolder=%s, lockStatus=%s', connectionId, sessionId?.slice(0,8), lockHolder, isLockHolder, lockManager.getStatus(sessionId))
     wsHub.sendTo(connectionId, {
       type: 'session-state',
       sessionId,
@@ -116,29 +127,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     // Re-send any pending tool-approval or ask-user requests for this session
-    for (const [, entry] of pendingRequestMap) {
-      if (entry.sessionId !== sessionId) continue
-      if (entry.type === 'tool-approval') {
-        wsHub.sendTo(connectionId, {
-          type: 'tool-approval-request',
-          ...entry.payload,
-          readonly: !isLockHolder,
-        } as any)
-      } else if (entry.type === 'ask-user') {
-        wsHub.sendTo(connectionId, {
-          type: 'ask-user-request',
-          ...entry.payload,
-          readonly: !isLockHolder,
-        } as any)
-      } else if (entry.type === 'plan-approval') {
-        wsHub.sendTo(connectionId, {
-          type: 'plan-approval',
-          sessionId: entry.sessionId,
-          ...entry.payload,
-          readonly: !isLockHolder,
-        } as any)
-      }
-    }
+    resendPendingRequests(sessionId, connectionId, !isLockHolder)
 
     if (!lockHolder) {
       let hasPending = false
@@ -154,16 +143,7 @@ export function createWsHandler(deps: HandlerDeps) {
           holderId: connectionId,
         })
         // Re-send pending requests as non-readonly since this client now holds lock
-        for (const [, entry] of pendingRequestMap) {
-          if (entry.sessionId !== sessionId) continue
-          if (entry.type === 'tool-approval') {
-            wsHub.sendTo(connectionId, { type: 'tool-approval-request', ...entry.payload, readonly: false } as any)
-          } else if (entry.type === 'ask-user') {
-            wsHub.sendTo(connectionId, { type: 'ask-user-request', ...entry.payload, readonly: false } as any)
-          } else if (entry.type === 'plan-approval') {
-            wsHub.sendTo(connectionId, { type: 'plan-approval', sessionId, ...entry.payload, readonly: false } as any)
-          }
-        }
+        resendPendingRequests(sessionId, connectionId, false)
       }
     }
   }
@@ -321,7 +301,6 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('ask-user', (req) => {
-      console.log('[ask-user] received event, connectionId=%s, sessionId=%s, questions=%d', connectionId, realSessionId, req.questions?.length ?? 0)
       pendingRequestMap.set(req.requestId, {
         sessionId: realSessionId,
         type: 'ask-user',
@@ -538,16 +517,7 @@ export function createWsHandler(deps: HandlerDeps) {
       holderId: connectionId,
     })
     // Re-send pending requests as non-readonly to the new holder
-    for (const [, entry] of pendingRequestMap) {
-      if (entry.sessionId !== sessionId) continue
-      if (entry.type === 'tool-approval') {
-        wsHub.sendTo(connectionId, { type: 'tool-approval-request', ...entry.payload, readonly: false } as any)
-      } else if (entry.type === 'ask-user') {
-        wsHub.sendTo(connectionId, { type: 'ask-user-request', ...entry.payload, readonly: false } as any)
-      } else if (entry.type === 'plan-approval') {
-        wsHub.sendTo(connectionId, { type: 'plan-approval', sessionId, ...entry.payload, readonly: false } as any)
-      }
-    }
+    resendPendingRequests(sessionId, connectionId, false)
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: string) {
@@ -653,9 +623,7 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleReconnect(connectionId: string, previousConnectionId: string) {
-    console.log('[reconnect] newId=%s, prevId=%s, lockBefore=%s', connectionId, previousConnectionId, lockManager.getHolder(previousConnectionId ? '' : ''))
     lockManager.onReconnect(previousConnectionId, connectionId)
-    console.log('[reconnect] lock transferred, any lock for prev?', lockManager.getLockedSessions(connectionId))
 
     const oldClient = wsHub.getClient(previousConnectionId)
     if (oldClient?.sessionId) {
