@@ -1,7 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { ChatMessagesPane } from './ChatMessagesPane'
 import { ChatComposer } from './ChatComposer'
-import { StatusBar } from './StatusBar'
 import { PermissionBanner } from './PermissionBanner'
 import { AskUserPanel } from './AskUserPanel'
 import { ConnectionBanner } from './ConnectionBanner'
@@ -25,18 +24,21 @@ export function ChatInterface() {
     }
   }, [currentSessionId, joinSession, isNewSession])
 
-  const handleSend = useCallback((prompt: string) => {
-    // Optimistically add user message — shows immediately with sending indicator
+  const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
     useMessageStore.getState().appendMessage({
       type: 'user',
       _optimistic: true,
       message: { role: 'user', content: [{ type: 'text', text: prompt }] },
     } as any)
 
-    // For new sessions, send with null sessionId — server will create one
     const sessionId = isNewSession ? null : currentSessionId
     const { thinkingMode, effort } = useSettingsStore.getState()
-    sendMessage(prompt, sessionId, { cwd: currentProjectCwd ?? undefined, thinkingMode, effort })
+    sendMessage(prompt, sessionId, {
+      cwd: currentProjectCwd ?? undefined,
+      images,
+      thinkingMode,
+      effort,
+    })
   }, [currentSessionId, currentProjectCwd, sendMessage, isNewSession])
 
   const handleAbort = useCallback(() => {
@@ -60,7 +62,6 @@ export function ChatInterface() {
       )}
       <PermissionBanner />
       <AskUserPanel />
-      <StatusBar />
       <ChatComposer onSend={handleSend} onAbort={handleAbort} />
     </div>
   )
