@@ -2,8 +2,27 @@ import { useState, useRef, useCallback, useMemo } from 'react'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useCommandStore } from '../../stores/commandStore'
+import { useSessionStore } from '../../stores/sessionStore'
 import { SlashCommandPopup } from './SlashCommandPopup'
+import { FileReferencePopup } from './FileReferencePopup'
+import type { FileItem } from './FileReferencePopup'
 import type { LocalSlashCommand } from '../../stores/commandStore'
+
+/**
+ * Find the nearest unclosed @ trigger before cursor position.
+ * Returns null if @ is preceded by alphanumeric (like email).
+ */
+function findAtTrigger(text: string, cursorPos: number): { start: number; query: string } | null {
+  for (let i = cursorPos - 1; i >= 0; i--) {
+    const ch = text[i]
+    if (ch === ' ' || ch === '\n' || ch === '\r') return null
+    if (ch === '@') {
+      if (i > 0 && /[a-zA-Z0-9]/.test(text[i - 1])) return null
+      return { start: i, query: text.slice(i + 1, cursorPos) }
+    }
+  }
+  return null
+}
 
 interface ChatComposerProps {
   onSend: (prompt: string) => void
@@ -16,6 +35,11 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { lockStatus, sessionStatus } = useConnectionStore()
   const commands = useCommandStore((s) => s.commands)
+  const [fileResults, setFileResults] = useState<FileItem[]>([])
+  const [fileSelectedIndex, setFileSelectedIndex] = useState(0)
+  const [atCursorStart, setAtCursorStart] = useState<number | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
@@ -27,6 +51,25 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     return commands.filter((cmd) => cmd.name.toLowerCase().includes(slashQuery))
   }, [slashQuery, commands])
   const showPopup = filteredCommands.length > 0
+  const showFilePopup = atCursorStart !== null && fileResults.length > 0 && !showPopup
+
+  const fetchFiles = useCallback((query: string) => {
+    if (!currentProjectCwd) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ cwd: currentProjectCwd, query, limit: '20' })
+        const res = await fetch(`/api/files?${params}`)
+        if (res.ok) {
+          const data = await res.json()
+          setFileResults(data.files ?? [])
+          setFileSelectedIndex(0)
+        }
+      } catch {
+        setFileResults([])
+      }
+    }, 200)
+  }, [currentProjectCwd])
 
   const executeCommand = useCallback((cmd: LocalSlashCommand) => {
     if (cmd.action === 'local') {
@@ -55,6 +98,29 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }, [text, canSend, onSend, showPopup, filteredCommands, selectedIndex, executeCommand])
 
+  const selectFile = useCallback((file: FileItem) => {
+    if (atCursorStart === null) return
+    const before = text.slice(0, atCursorStart)
+    const cursorPos = textareaRef.current?.selectionStart ?? text.length
+    const after = text.slice(cursorPos)
+    const inserted = `@${file.path} `
+    const newText = before + inserted + after
+    setText(newText)
+    setAtCursorStart(null)
+    setFileResults([])
+    setFileSelectedIndex(0)
+
+    // Restore cursor position after React re-render
+    const newCursorPos = before.length + inserted.length
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.selectionStart = newCursorPos
+        textareaRef.current.selectionEnd = newCursorPos
+        textareaRef.current.focus()
+      }
+    })
+  }, [text, atCursorStart])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showPopup) {
       if (e.key === 'ArrowDown') {
@@ -80,6 +146,34 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
         return
       }
     }
+    if (showFilePopup) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setFileSelectedIndex((prev) => (prev + 1) % fileResults.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setFileSelectedIndex((prev) => (prev - 1 + fileResults.length) % fileResults.length)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setAtCursorStart(null)
+        setFileResults([])
+        return
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault()
+        selectFile(fileResults[fileSelectedIndex])
+        return
+      }
+      if (e.key === ' ') {
+        setAtCursorStart(null)
+        setFileResults([])
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
@@ -87,11 +181,23 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   }
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value)
+    const newText = e.target.value
+    setText(newText)
     setSelectedIndex(0)
     const el = e.target
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+
+    // @ file reference detection
+    const cursorPos = el.selectionStart ?? newText.length
+    const trigger = findAtTrigger(newText, cursorPos)
+    if (trigger) {
+      setAtCursorStart(trigger.start)
+      fetchFiles(trigger.query)
+    } else {
+      setAtCursorStart(null)
+      setFileResults([])
+    }
   }
 
   return (
@@ -102,6 +208,13 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
             commands={filteredCommands}
             selectedIndex={selectedIndex}
             onSelect={executeCommand}
+          />
+        )}
+        {showFilePopup && (
+          <FileReferencePopup
+            files={fileResults}
+            selectedIndex={fileSelectedIndex}
+            onSelect={selectFile}
           />
         )}
         <textarea
