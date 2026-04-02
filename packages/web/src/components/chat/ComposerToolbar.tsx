@@ -1,0 +1,189 @@
+import { useState } from 'react'
+import { useConnectionStore } from '../../stores/connectionStore'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { useSessionStore } from '../../stores/sessionStore'
+import { useWebSocket } from '../../hooks/useWebSocket'
+import { ModesPopup } from './ModesPopup'
+import { PlusMenu } from './PlusMenu'
+import type { PermissionMode, EffortLevel } from '@claude-agent-ui/shared'
+
+interface ComposerToolbarProps {
+  onUpload: () => void
+  onSlashClick: () => void
+  onAtClick: () => void
+  onSend: () => void
+  onAbort: () => void
+  canSend: boolean
+  fileRefs: string[]
+  isLocked: boolean
+  isRunning: boolean
+}
+
+export function ComposerToolbar({
+  onUpload, onSlashClick, onAtClick, onSend, onAbort,
+  canSend, fileRefs, isLocked, isRunning,
+}: ComposerToolbarProps) {
+  const [showPlusMenu, setShowPlusMenu] = useState(false)
+  const [showModes, setShowModes] = useState(false)
+  const { sessionStatus, connectionStatus } = useConnectionStore()
+  const { currentSessionId } = useSessionStore()
+  const { permissionMode, effort, setPermissionMode, setEffort } = useSettingsStore()
+  const { send } = useWebSocket()
+
+  const isDisconnected = connectionStatus !== 'connected'
+
+  // Status config (migrated from StatusBar)
+  const statusConfig: Record<string, { color: string; text: string; pulse: boolean }> = {
+    idle: { color: 'bg-[#a3e635]', text: 'idle', pulse: false },
+    running: { color: 'bg-[#d97706]', text: 'running', pulse: true },
+    awaiting_approval: { color: 'bg-[#eab308]', text: 'awaiting approval', pulse: true },
+    awaiting_user_input: { color: 'bg-[#eab308]', text: 'awaiting input', pulse: true },
+  }
+
+  const statusInfo = isLocked
+    ? null // locked state has no status indicator
+    : isDisconnected
+      ? { color: 'bg-[#7c7872]', text: connectionStatus, pulse: connectionStatus === 'connecting' || connectionStatus === 'reconnecting' }
+      : statusConfig[sessionStatus]
+
+  const modeLabel: Record<string, string> = {
+    default: 'Ask', acceptEdits: 'Edit', plan: 'Plan',
+    bypassPermissions: 'Bypass', dontAsk: 'Auto',
+  }
+
+  const handleModeChange = (newMode: PermissionMode) => {
+    setPermissionMode(newMode)
+    if (currentSessionId && currentSessionId !== '__new__') {
+      send({ type: 'set-mode', sessionId: currentSessionId, mode: newMode })
+    }
+  }
+
+  const handleEffortChange = (newEffort: EffortLevel) => {
+    setEffort(newEffort)
+    if (currentSessionId && currentSessionId !== '__new__') {
+      send({ type: 'set-effort', sessionId: currentSessionId, effort: newEffort })
+    }
+  }
+
+  const handleAddContext = () => {
+    onAtClick()
+  }
+
+  return (
+    <div className={`flex items-center justify-between px-2.5 py-1.5 ${isLocked ? 'opacity-35' : ''}`}>
+      {/* Left side: +, /, @ buttons + separator + file refs */}
+      <div className="flex items-center gap-0.5">
+        <div className="relative">
+          <button
+            onClick={() => !isLocked && setShowPlusMenu(!showPlusMenu)}
+            disabled={isLocked}
+            className="w-7 h-7 flex items-center justify-center text-[#7c7872] hover:text-[#e5e2db] hover:bg-[#2b2a27] rounded transition-colors text-lg"
+          >
+            +
+          </button>
+          {showPlusMenu && (
+            <PlusMenu
+              onUpload={onUpload}
+              onAddContext={handleAddContext}
+              onClose={() => setShowPlusMenu(false)}
+            />
+          )}
+        </div>
+
+        <button
+          onClick={() => !isLocked && onSlashClick()}
+          disabled={isLocked}
+          className="w-7 h-7 flex items-center justify-center text-[#7c7872] hover:text-[#e5e2db] hover:bg-[#2b2a27] rounded transition-colors text-sm font-mono font-bold"
+        >
+          /
+        </button>
+
+        <button
+          onClick={() => !isLocked && onAtClick()}
+          disabled={isLocked}
+          className="w-7 h-7 flex items-center justify-center text-[#7c7872] hover:text-[#e5e2db] hover:bg-[#2b2a27] rounded transition-colors text-sm"
+        >
+          @
+        </button>
+
+        {fileRefs.length > 0 && (
+          <>
+            <div className="w-px h-4 bg-[#3d3b37] mx-1.5" />
+            <div className="flex items-center gap-2">
+              {fileRefs.map((ref) => (
+                <span key={ref} className="flex items-center gap-1 text-xs text-[#a8a29e]">
+                  <span className="text-[#7c7872]">📄</span>
+                  {ref.split('/').pop()}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Right side: status + mode + send/stop */}
+      <div className="flex items-center gap-2">
+        {statusInfo && (
+          <>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${statusInfo.color} ${statusInfo.pulse ? 'animate-pulse' : ''}`} />
+              <span className={`text-[11px] font-mono ${
+                sessionStatus === 'running' ? 'text-[#d97706]' : 'text-[#7c7872]'
+              }`}>
+                {statusInfo.text}
+              </span>
+            </div>
+            <span className="text-[#3d3b37]">|</span>
+          </>
+        )}
+
+        <div className="relative">
+          <button
+            onClick={() => !isLocked && setShowModes(!showModes)}
+            disabled={isLocked}
+            className="text-[11px] text-[#a8a29e] hover:text-[#d97706] transition-colors flex items-center gap-1"
+          >
+            {modeLabel[permissionMode] ?? permissionMode}
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showModes && (
+            <ModesPopup
+              currentMode={permissionMode}
+              currentEffort={effort}
+              onModeChange={handleModeChange}
+              onEffortChange={handleEffortChange}
+              onClose={() => setShowModes(false)}
+            />
+          )}
+        </div>
+
+        {isRunning ? (
+          <button
+            onClick={onAbort}
+            className="w-7 h-7 rounded-md bg-[#f87171] flex items-center justify-center shrink-0"
+          >
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            onClick={onSend}
+            disabled={!canSend || isLocked || isDisconnected}
+            className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+              canSend && !isLocked && !isDisconnected
+                ? 'bg-[#e5e2db] hover:bg-white'
+                : 'bg-[#242320] opacity-40'
+            }`}
+          >
+            <svg className={`w-3.5 h-3.5 ${canSend && !isLocked ? 'text-[#1a1918]' : 'text-[#7c7872]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
