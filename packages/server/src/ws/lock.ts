@@ -33,7 +33,7 @@ export class LockManager {
       sessionId,
       acquiredAt: Date.now(),
       gracePeriodTimer: null,
-      idleTimer: this.startIdleTimer(sessionId),
+      idleTimer: null, // Don't start idle timer on acquire — handler starts it after session completes
     })
     return { success: true }
   }
