@@ -25,10 +25,19 @@ export function ChatInterface() {
   }, [currentSessionId, joinSession, isNewSession])
 
   const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
+    const contentBlocks: any[] = []
+    if (images) {
+      for (const img of images) {
+        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })
+      }
+    }
+    if (prompt) {
+      contentBlocks.push({ type: 'text', text: prompt })
+    }
     useMessageStore.getState().appendMessage({
       type: 'user',
       _optimistic: true,
-      message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+      message: { role: 'user', content: contentBlocks },
     } as any)
 
     const sessionId = isNewSession ? null : currentSessionId

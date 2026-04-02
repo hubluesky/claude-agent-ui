@@ -127,7 +127,18 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     }
 
-    bindSessionEvents(session, effectiveSessionId, connectionId, prompt)
+    // Build content blocks for broadcast (includes images if present)
+    const broadcastContent: any[] = []
+    if (options?.images) {
+      for (const img of options.images) {
+        broadcastContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })
+      }
+    }
+    if (prompt) {
+      broadcastContent.push({ type: 'text', text: prompt })
+    }
+
+    bindSessionEvents(session, effectiveSessionId, connectionId, prompt, broadcastContent)
 
     // Broadcast user message to ALL clients (including sender).
     // The SDK does NOT echo user messages, so this is the only way observers see them.
@@ -141,7 +152,7 @@ export function createWsHandler(deps: HandlerDeps) {
         message: {
           type: 'user',
           uuid: userMsgUuid,
-          message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+          message: { role: 'user', content: broadcastContent },
         },
       } as any)
     }
@@ -154,13 +165,14 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function bindSessionEvents(session: AgentSession, sessionId: string, connectionId: string, prompt?: string) {
+  function bindSessionEvents(session: AgentSession, sessionId: string, connectionId: string, prompt?: string, contentBlocks?: any[]) {
     // Remove ALL previous listeners to prevent accumulation across multiple sends,
     // and to ensure the latest connectionId is captured in closures.
     session.removeAllListeners()
 
     let realSessionId = sessionId
     let pendingUserPrompt = sessionId.startsWith('pending-') ? prompt : undefined
+    let pendingContentBlocks = sessionId.startsWith('pending-') ? contentBlocks : undefined
 
     session.on('message', (msg: any) => {
       if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
@@ -178,17 +190,18 @@ export function createWsHandler(deps: HandlerDeps) {
           realSessionId = newId
 
           // Broadcast the deferred user message now that we have a real session ID
-          if (pendingUserPrompt) {
+          if (pendingUserPrompt || pendingContentBlocks) {
             wsHub.broadcast(newId, {
               type: 'agent-message',
               sessionId: newId,
               message: {
                 type: 'user',
                 uuid: randomUUID(),
-                message: { role: 'user', content: [{ type: 'text', text: pendingUserPrompt }] },
+                message: { role: 'user', content: pendingContentBlocks ?? [{ type: 'text', text: pendingUserPrompt }] },
               },
             } as any)
             pendingUserPrompt = undefined
+            pendingContentBlocks = undefined
           }
         } else if (realSessionId !== newId) {
           sessionManager.registerActive(newId, session)

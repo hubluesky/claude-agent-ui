@@ -18,6 +18,14 @@ export function MessageComponent({ message }: MessageComponentProps) {
         <>
           {content.map((block: any, i: number) => {
             if (block.type === 'tool_result') return <ToolResultBlock key={i} block={block} />
+            if (block.type === 'image' && block.source?.type === 'base64') {
+              const src = `data:${block.source.media_type};base64,${block.source.data}`
+              return (
+                <div key={i} className="flex justify-end">
+                  <img src={src} alt="attached" className="max-w-[300px] max-h-[200px] rounded-lg border border-[#3d3b37]" />
+                </div>
+              )
+            }
             if (block.type === 'text') {
               return (
                 <div key={i} className="flex justify-end">
