@@ -47,3 +47,5 @@ export const TOOL_COLORS: Record<ToolCategory, string> = {
   web: '#0ea5e9',
   default: '#6b7280',
 }
+
+export const PLAN_TOOL = 'ExitPlanMode'

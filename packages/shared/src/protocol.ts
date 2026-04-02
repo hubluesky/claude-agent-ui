@@ -1,5 +1,5 @@
 import type { SessionStatus, PermissionMode, EffortLevel, LockStatus } from './constants.js'
-import type { ToolApprovalDecision, AskUserQuestion } from './tools.js'
+import type { ToolApprovalDecision, AskUserQuestion, PlanApprovalDecisionType } from './tools.js'
 import type { AgentMessage } from './messages.js'
 import type { SessionResult } from './session.js'
 
@@ -60,6 +60,14 @@ export interface C2S_LeaveSession {
   type: 'leave-session'
 }
 
+export interface C2S_ResolvePlanApproval {
+  type: 'resolve-plan-approval'
+  sessionId: string
+  requestId: string
+  decision: PlanApprovalDecisionType
+  feedback?: string
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -70,6 +78,7 @@ export type C2SMessage =
   | C2S_SetEffort
   | C2S_Reconnect
   | C2S_LeaveSession
+  | C2S_ResolvePlanApproval
 
 // ============ Server → Client (S2C) ============
 
@@ -162,6 +171,21 @@ export interface S2C_SlashCommands {
   commands: SlashCommandInfo[]
 }
 
+export interface S2C_PlanApproval {
+  type: 'plan-approval'
+  sessionId: string
+  requestId: string
+  planContent: string
+  planFilePath: string
+  allowedPrompts: { tool: string; prompt: string }[]
+  readonly: boolean
+}
+
+export interface S2C_PlanApprovalResolved {
+  type: 'plan-approval-resolved'
+  requestId: string
+}
+
 export interface S2C_Error {
   type: 'error'
   message: string
@@ -181,4 +205,6 @@ export type S2CMessage =
   | S2C_SessionComplete
   | S2C_SessionAborted
   | S2C_SlashCommands
+  | S2C_PlanApproval
+  | S2C_PlanApprovalResolved
   | S2C_Error

@@ -34,3 +34,17 @@ export interface AskUserRequest {
 export interface AskUserResponse {
   answers: Record<string, string>
 }
+
+export type PlanApprovalDecisionType = 'clear-and-accept' | 'auto-accept' | 'manual' | 'feedback'
+
+export interface PlanApprovalRequest {
+  requestId: string
+  planContent: string
+  planFilePath: string
+  allowedPrompts: { tool: string; prompt: string }[]
+}
+
+export interface PlanApprovalDecision {
+  decision: PlanApprovalDecisionType
+  feedback?: string
+}
