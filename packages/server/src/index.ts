@@ -12,6 +12,7 @@ import { SessionManager } from './agent/manager.js'
 import { sessionRoutes } from './routes/sessions.js'
 import { settingsRoutes } from './routes/settings.js'
 import { commandRoutes } from './routes/commands.js'
+import { fileRoutes } from './routes/files.js'
 
 const config = loadConfig()
 const server = Fastify({ logger: true })
@@ -45,6 +46,7 @@ const sessionManager = new SessionManager()
 await server.register(healthRoutes)
 await server.register(sessionRoutes(sessionManager))
 await server.register(commandRoutes(sessionManager))
+await server.register(fileRoutes)
 if (db) {
   await server.register(settingsRoutes(db))
 }
