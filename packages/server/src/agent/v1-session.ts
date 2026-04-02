@@ -99,14 +99,24 @@ export class V1QuerySession extends AgentSession {
     images?: { data: string; mediaType: string }[]
   ): Promise<void> {
     try {
-      const queryInput: Record<string, unknown> = { prompt, options: options as any }
+      // Build prompt: if images are attached, use SDKUserMessage format
+      // with multimodal content blocks; otherwise use plain string.
+      let promptInput: unknown = prompt
       if (images && images.length > 0) {
-        queryInput.images = images.map((img) => ({
-          data: img.data,
-          media_type: img.mediaType,
+        const content: unknown[] = images.map((img) => ({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mediaType, data: img.data },
         }))
+        if (prompt) {
+          content.push({ type: 'text', text: prompt })
+        }
+        promptInput = {
+          type: 'user',
+          message: { role: 'user', content },
+          parent_tool_use_id: null,
+        }
       }
-      this.queryInstance = query(queryInput as any)
+      this.queryInstance = query({ prompt: promptInput as any, options: options as any })
 
       for await (const msg of this.queryInstance) {
         // Capture session ID from init message
