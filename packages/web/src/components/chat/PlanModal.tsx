@@ -1,0 +1,133 @@
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useConnectionStore } from '../../stores/connectionStore'
+import { useWebSocket } from '../../hooks/useWebSocket'
+import { MarkdownRenderer } from './MarkdownRenderer'
+import type { PlanApprovalDecisionType } from '@claude-agent-ui/shared'
+
+export function PlanModal() {
+  const { pendingPlanApproval, planModalOpen } = useConnectionStore()
+  const { respondPlanApproval } = useWebSocket()
+  const [feedback, setFeedback] = useState('')
+
+  // Close on ESC
+  useEffect(() => {
+    if (!planModalOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        useConnectionStore.getState().setPlanModalOpen(false)
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [planModalOpen])
+
+  if (!planModalOpen || !pendingPlanApproval) return null
+
+  const { requestId, planContent, planFilePath, allowedPrompts, readonly } = pendingPlanApproval
+  const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
+
+  const handleDecision = (decision: PlanApprovalDecisionType) => {
+    if (decision === 'feedback') {
+      if (!feedback.trim()) return
+      respondPlanApproval(requestId, 'feedback', feedback.trim())
+    } else {
+      respondPlanApproval(requestId, decision)
+    }
+    setFeedback('')
+  }
+
+  const handleFeedbackKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleDecision('feedback')
+    }
+  }
+
+  const closeModal = () => {
+    useConnectionStore.getState().setPlanModalOpen(false)
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={(e) => { if (e.target === e.currentTarget) closeModal() }}
+    >
+      <div className="bg-[#1c1b18] border border-[#3d3b37] rounded-lg w-[90vw] h-[90vh] max-w-[900px] flex flex-col max-sm:w-full max-sm:h-full max-sm:rounded-none max-sm:max-w-none">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-[#3d3b37] shrink-0">
+          <svg className="w-4 h-4 text-[#d97706] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+          <span className="text-[14px] text-[#d97706] font-semibold">Plan Review</span>
+          <span className="text-[12px] text-[#7c7872] font-mono truncate flex-1">{fileName}</span>
+          <button
+            onClick={closeModal}
+            className="text-[#7c7872] hover:text-[#a8a29e] transition-colors p-1"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 text-sm text-[#e5e2db]">
+          {planContent ? (
+            <MarkdownRenderer content={planContent} />
+          ) : (
+            <p className="text-[#7c7872] italic">Unable to read plan file</p>
+          )}
+        </div>
+
+        {/* Allowed prompts */}
+        {allowedPrompts.length > 0 && (
+          <div className="px-5 py-2 border-t border-[#3d3b37] shrink-0 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-[#7c7872]">Required permissions:</span>
+            {allowedPrompts.map((p, i) => (
+              <span key={i} className="text-[10px] px-2 py-0.5 bg-[#242320] border border-[#3d3b37] rounded-full text-[#a8a29e] font-mono">
+                {p.tool}: {p.prompt}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Action bar */}
+        {!readonly && (
+          <div className="px-5 py-3 border-t border-[#3d3b37] shrink-0">
+            <div className="flex gap-2 items-center flex-wrap">
+              <button
+                onClick={() => handleDecision('clear-and-accept')}
+                className="px-3 py-1.5 text-[11px] font-semibold text-[#22c55e] bg-[#22c55e15] border border-[#22c55e30] rounded-md hover:bg-[#22c55e25] transition-colors"
+              >
+                Clear + Auto-accept
+              </button>
+              <button
+                onClick={() => handleDecision('auto-accept')}
+                className="px-3 py-1.5 text-[11px] font-medium text-[#d97706] bg-[#d9770615] border border-[#d9770630] rounded-md hover:bg-[#d9770625] transition-colors"
+              >
+                Auto-accept edits
+              </button>
+              <button
+                onClick={() => handleDecision('manual')}
+                className="px-3 py-1.5 text-[11px] font-medium text-[#a8a29e] border border-[#3d3b37] rounded-md hover:bg-[#3d3b37] transition-colors"
+              >
+                Manually approve
+              </button>
+              <div className="flex-1 min-w-[160px]">
+                <input
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  onKeyDown={handleFeedbackKeyDown}
+                  placeholder="Tell Claude what to change..."
+                  className="w-full px-3 py-1.5 text-[12px] bg-[#1e1d1a] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#7c7872] outline-none focus:border-[#d97706] transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  )
+}
