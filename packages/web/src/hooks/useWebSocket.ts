@@ -105,11 +105,30 @@ function handleServerMessage(msg: S2CMessage) {
         // Deduplicate by API message ID — partial and final share the same message.id
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
+
+        // Collect thinking content from streaming blocks before removing them,
+        // in case the final assistant message doesn't include thinking blocks.
+        const streamedThinking: { type: string; thinking: string }[] = []
+        for (const m of current) {
+          if ((m as any).type === '_streaming_block' && (m as any)._blockType === 'thinking' && (m as any)._content) {
+            streamedThinking.push({ type: 'thinking', thinking: (m as any)._content })
+          }
+        }
+
         const cleaned = current.filter((m: any) => {
           if (m.type === '_streaming_block') return false
           if (apiId && m.type === 'assistant' && (m as any).message?.id === apiId) return false
           return true
         })
+
+        // If the final assistant message lacks thinking blocks, prepend them from stream
+        const finalMsg = msg.message as any
+        const contentBlocks: any[] = finalMsg.message?.content ?? []
+        const hasThinking = contentBlocks.some((b: any) => b.type === 'thinking' && b.thinking)
+        if (!hasThinking && streamedThinking.length > 0 && finalMsg.message?.content) {
+          finalMsg.message.content = [...streamedThinking, ...contentBlocks]
+        }
+
         useMessageStore.setState({ messages: [...cleaned, msg.message] })
       } else {
         msgs.appendMessage(msg.message)
