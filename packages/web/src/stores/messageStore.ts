@@ -72,7 +72,7 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     // Save current session to cache before switching
     get()._saveToCache()
 
-    // Check cache for the target session — instant restore
+    // Check cache — show instantly, then refresh from API in background
     const cached = _cache.get(sessionId)
     if (cached) {
       set({
@@ -81,17 +81,24 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
         isLoadingHistory: false,
         currentLoadedSessionId: sessionId,
       })
+      fetchSessionMessages(sessionId, { limit: 50, offset: 0 }).then((result) => {
+        if (get().currentLoadedSessionId !== sessionId) return
+        const loaded = result.messages as AgentMessage[]
+        const live = get().messages.filter((m: any) => m._optimistic || m.type === '_streaming_block')
+        set({ messages: [...loaded, ...live], hasMore: result.hasMore })
+        _cache.set(sessionId, { messages: [...loaded], hasMore: result.hasMore })
+      }).catch(() => {})
       return
     }
 
-    // Preserve any optimistic messages that haven't been confirmed yet
+    // No cache — full load with Loading indicator
     const optimistic = current.filter((m: any) => m._optimistic)
 
     set({ messages: [], isLoadingHistory: true, currentLoadedSessionId: sessionId })
     try {
       const result = await fetchSessionMessages(sessionId, { limit: 50, offset: 0 })
+      if (get().currentLoadedSessionId !== sessionId) return
       const loaded = result.messages as AgentMessage[]
-      // Append leftover optimistic messages that aren't in the loaded set
       const remaining = optimistic.filter((opt: any) => {
         const optText = getUserText(opt)
         return !loaded.some((m: any) => m.type === 'user' && getUserText(m) === optText)
@@ -102,7 +109,9 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
         isLoadingHistory: false,
       })
     } catch {
-      set({ isLoadingHistory: false })
+      if (get().currentLoadedSessionId === sessionId) {
+        set({ isLoadingHistory: false })
+      }
     }
   },
 
@@ -175,11 +184,12 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
       for (let i = updated.length - 1; i >= 0; i--) {
         if ((updated[i] as any).type === '_streaming_block') {
           const delta = event.delta
-          if (delta?.type === 'text_delta') {
-            (updated[i] as any)._content += delta.text
-          } else if (delta?.type === 'thinking_delta') {
-            (updated[i] as any)._content += delta.thinking
-          }
+          const prev = updated[i] as any
+          const addedText = delta?.type === 'text_delta' ? delta.text
+            : delta?.type === 'thinking_delta' ? delta.thinking
+            : ''
+          // Create new object so React memo detects the change
+          updated[i] = { ...prev, _content: prev._content + addedText }
           break
         }
       }

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -5,7 +6,7 @@ interface MarkdownRendererProps {
   content: string
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -106,4 +107,4 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
       {content}
     </ReactMarkdown>
   )
-}
+})

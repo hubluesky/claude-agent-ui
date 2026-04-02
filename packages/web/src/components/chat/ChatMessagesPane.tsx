@@ -1,4 +1,5 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useMessageStore } from '../../stores/messageStore'
 import { MessageComponent } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
@@ -9,41 +10,29 @@ interface ChatMessagesPaneProps {
 }
 
 export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
-  const { messages, hasMore, isLoadingHistory, isLoadingMore, loadInitial, loadMore } = useMessageStore()
+  const messages = useMessageStore((s) => s.messages)
+  const hasMore = useMessageStore((s) => s.hasMore)
+  const isLoadingHistory = useMessageStore((s) => s.isLoadingHistory)
+  const isLoadingMore = useMessageStore((s) => s.isLoadingMore)
+  const loadInitial = useMessageStore((s) => s.loadInitial)
+  const loadMore = useMessageStore((s) => s.loadMore)
   const sessionStatus = useConnectionStore((s) => s.sessionStatus)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const topSentinelRef = useRef<HTMLDivElement>(null)
-  const shouldAutoScroll = useRef(true)
+  const virtuosoRef = useRef<VirtuosoHandle>(null)
+  const isLoadingMoreRef = useRef(false)
 
-  useEffect(() => { loadInitial(sessionId) }, [sessionId])
+  // Track loading state in ref to avoid stale closure in startReached
+  isLoadingMoreRef.current = isLoadingMore
 
+  // Load messages when session changes — must be in useEffect, not during render
   useEffect(() => {
-    if (shouldAutoScroll.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    loadInitial(sessionId)
+  }, [sessionId, loadInitial])
+
+  const handleStartReached = useCallback(() => {
+    if (hasMore && !isLoadingMoreRef.current) {
+      loadMore()
     }
-  }, [messages.length])
-
-  const handleScroll = () => {
-    if (!scrollRef.current) return
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-    shouldAutoScroll.current = scrollHeight - scrollTop - clientHeight < 100
-  }
-
-  useEffect(() => {
-    if (!topSentinelRef.current) return
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && hasMore && !isLoadingMore) {
-        const prevHeight = scrollRef.current?.scrollHeight ?? 0
-        loadMore().then(() => {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight - prevHeight
-          }
-        })
-      }
-    })
-    observer.observe(topSentinelRef.current)
-    return () => observer.disconnect()
-  }, [hasMore, isLoadingMore])
+  }, [hasMore, loadMore])
 
   if (isLoadingHistory) {
     return (
@@ -54,17 +43,39 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
   }
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden">
-      <div className="px-4 py-6 space-y-5 min-w-0">
-        <div ref={topSentinelRef} />
-        {isLoadingMore && (
-          <p className="text-center text-xs text-[#7c7872]">Loading earlier messages...</p>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <Virtuoso
+        ref={virtuosoRef}
+        data={messages}
+        computeItemKey={(_index, msg) => (msg as any).uuid ?? (msg as any).message?.id ?? `msg-${_index}`}
+        initialTopMostItemIndex={Math.max(0, messages.length - 1)}
+        followOutput="smooth"
+        alignToBottom
+        atTopThreshold={200}
+        startReached={handleStartReached}
+        increaseViewportBy={{ top: 400, bottom: 200 }}
+        itemContent={(_index, msg) => (
+          <div className="px-4 py-2.5">
+            <MessageComponent message={msg} />
+          </div>
         )}
-        {messages.map((msg, i) => (
-          <MessageComponent key={(msg as any).uuid ?? i} message={msg} />
-        ))}
-        {sessionStatus === 'running' && <ThinkingIndicator />}
-      </div>
+        components={{
+          Header: () => (
+            isLoadingMore ? (
+              <p className="text-center text-xs text-[#7c7872] py-2">Loading earlier messages...</p>
+            ) : null
+          ),
+          Footer: () => (
+            sessionStatus === 'running' ? (
+              <div className="px-4 py-2.5">
+                <ThinkingIndicator />
+              </div>
+            ) : null
+          ),
+        }}
+        className="flex-1"
+        style={{ overflowX: 'hidden' }}
+      />
     </div>
   )
 }

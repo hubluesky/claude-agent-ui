@@ -22,10 +22,23 @@ function loadClaudeEnv(): Record<string, string> {
 
 const claudeEnv = loadClaudeEnv()
 import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
+import { TOOL_CATEGORIES } from '@claude-agent-ui/shared'
 import type { ToolApprovalDecision, AskUserRequest, AskUserResponse, SendOptions, SessionResult } from '@claude-agent-ui/shared'
 import { AgentSession } from './session.js'
 
+const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
+/** Tools that only read — safe to auto-allow in default/plan modes */
+const READ_ONLY_TOOLS: Set<string> = new Set([
+  ...TOOL_CATEGORIES.read,
+  ...TOOL_CATEGORIES.search,
+  'LSP',
+  'TodoRead',
+  'TaskList',
+  'TaskGet',
+])
+
 interface PendingApproval {
+  toolName: string
   resolve: (decision: ToolApprovalDecision) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -46,6 +59,7 @@ export class V1QuerySession extends AgentSession {
   private pendingAskUser = new Map<string, PendingAskUser>()
   private _projectCwd: string
   private resumeSessionId: string | null
+  private _permissionMode: PermissionMode = 'default'
 
   constructor(cwd: string, options?: { resumeSessionId?: string }) {
     super()
@@ -70,6 +84,7 @@ export class V1QuerySession extends AgentSession {
       cwd: this._projectCwd,
       abortController: this.abortController,
       canUseTool: this.handleCanUseTool.bind(this),
+      allowDangerouslySkipPermissions: true,
       env: { ...process.env, ...claudeEnv },
     }
 
@@ -186,32 +201,16 @@ export class V1QuerySession extends AgentSession {
     input: Record<string, unknown>,
     options: { toolUseID: string; title?: string; displayName?: string; description?: string; suggestions?: unknown[]; agentID?: string; signal: AbortSignal }
   ): Promise<{ behavior: string; updatedInput?: Record<string, unknown>; message?: string; updatedPermissions?: unknown[] }> {
-    // AskUserQuestion
+    // AskUserQuestion always requires user interaction regardless of mode
     if (toolName === 'AskUserQuestion') {
-      this.setStatus('awaiting_user_input')
-      const requestId = randomUUID()
-      const req: AskUserRequest = {
-        requestId,
-        questions: (input as any).questions ?? [],
-      }
-
-      const response = await new Promise<AskUserResponse>((resolve) => {
-        const timeout = setTimeout(() => {
-          this.pendingAskUser.delete(requestId)
-          resolve({ answers: {} })
-        }, APPROVAL_TIMEOUT_MS)
-        this.pendingAskUser.set(requestId, { resolve, timeout })
-        this.emit('ask-user', req)
-      })
-
-      this.setStatus('running')
-      return {
-        behavior: 'allow',
-        updatedInput: { questions: (input as any).questions, answers: response.answers },
-      }
+      return this.handleAskUserTool(input)
     }
 
-    // Normal tool approval
+    // Check if current mode auto-resolves this tool call
+    const autoDecision = this.getAutoDecision(toolName)
+    if (autoDecision) return { ...autoDecision, updatedInput: input }
+
+    // Default / other modes: prompt user for approval
     this.setStatus('awaiting_approval')
     const requestId = randomUUID()
 
@@ -220,7 +219,7 @@ export class V1QuerySession extends AgentSession {
         this.pendingApprovals.delete(requestId)
         resolve({ behavior: 'deny', message: 'Approval timed out' })
       }, APPROVAL_TIMEOUT_MS)
-      this.pendingApprovals.set(requestId, { resolve, timeout })
+      this.pendingApprovals.set(requestId, { toolName, resolve, timeout })
       this.emit('tool-approval', {
         requestId,
         toolName,
@@ -235,7 +234,66 @@ export class V1QuerySession extends AgentSession {
     })
 
     this.setStatus('running')
+    // Ensure updatedInput is always present — SDK Zod schema requires it as a record
+    if (decision.behavior === 'allow') {
+      return { ...decision, updatedInput: decision.updatedInput ?? input }
+    }
     return decision
+  }
+
+  /** Decide if the current mode auto-resolves this tool without user prompt */
+  private getAutoDecision(toolName: string): { behavior: string; message?: string } | null {
+    switch (this._permissionMode) {
+      case 'auto':
+      case 'bypassPermissions':
+        return { behavior: 'allow' }
+
+      case 'acceptEdits':
+        // Read-only + edit tools are auto-allowed; Bash etc. still need approval
+        if (EDIT_TOOLS.has(toolName) || READ_ONLY_TOOLS.has(toolName)) return { behavior: 'allow' }
+        return null
+
+      case 'plan':
+        // Read-only tools are allowed; anything that modifies state is denied
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: 'allow' }
+        return { behavior: 'deny', message: 'Denied by plan mode' }
+
+      case 'dontAsk':
+        return { behavior: 'deny', message: 'Denied by dontAsk mode' }
+
+      case 'default':
+      default:
+        // Read-only tools are auto-allowed; everything else prompts the user
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: 'allow' }
+        return null
+    }
+  }
+
+  /** Handle AskUserQuestion tool — always requires user interaction */
+  private async handleAskUserTool(
+    input: Record<string, unknown>
+  ): Promise<{ behavior: string; updatedInput?: Record<string, unknown> }> {
+    this.setStatus('awaiting_user_input')
+    const requestId = randomUUID()
+    const req: AskUserRequest = {
+      requestId,
+      questions: (input as any).questions ?? [],
+    }
+
+    const response = await new Promise<AskUserResponse>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.pendingAskUser.delete(requestId)
+        resolve({ answers: {} })
+      }, APPROVAL_TIMEOUT_MS)
+      this.pendingAskUser.set(requestId, { resolve, timeout })
+      this.emit('ask-user', req)
+    })
+
+    this.setStatus('running')
+    return {
+      behavior: 'allow',
+      updatedInput: { questions: (input as any).questions, answers: response.answers },
+    }
   }
 
   resolveToolApproval(requestId: string, decision: ToolApprovalDecision): void {
@@ -278,7 +336,54 @@ export class V1QuerySession extends AgentSession {
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
-    await this.queryInstance?.setPermissionMode?.(mode)
+    this._permissionMode = mode
+
+    // Resolve pending tool approvals based on the new mode
+    this.resolvePendingForMode(mode)
+
+    // 'auto' is our UI-only mode; don't pass it to SDK (which doesn't recognize it)
+    if (mode !== 'auto') {
+      await this.queryInstance?.setPermissionMode?.(mode as any)
+    }
+  }
+
+  private resolvePendingForMode(mode: PermissionMode): void {
+    if (this.pendingApprovals.size === 0) return
+
+    for (const [requestId, pending] of this.pendingApprovals) {
+      let decision: ToolApprovalDecision | null = null
+
+      switch (mode) {
+        // Fully permissive: allow everything
+        case 'auto':
+        case 'bypassPermissions':
+          decision = { behavior: 'allow' }
+          break
+
+        // Edit-permissive: allow only edit tools, keep others pending
+        case 'acceptEdits':
+          if (EDIT_TOOLS.has(pending.toolName)) {
+            decision = { behavior: 'allow' }
+          }
+          break
+
+        // Restrictive: deny all pending
+        case 'plan':
+        case 'dontAsk':
+          decision = { behavior: 'deny', message: `Denied by ${mode} mode` }
+          break
+
+        // Default: keep pending (user decides manually)
+        case 'default':
+          break
+      }
+
+      if (decision) {
+        clearTimeout(pending.timeout)
+        pending.resolve(decision)
+        this.pendingApprovals.delete(requestId)
+      }
+    }
   }
 
   close(): void {

@@ -155,6 +155,8 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     if (cmd.action === 'local') {
       if (cmd.name === 'clear') {
         useMessageStore.getState().clear()
+        // Navigate to new session (like CLI behavior)
+        useSessionStore.getState().setCurrentSessionId('__new__')
       }
       // Remove the /query portion from text
       if (slashCursorStart !== null) {

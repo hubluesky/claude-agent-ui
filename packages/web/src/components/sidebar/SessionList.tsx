@@ -18,9 +18,12 @@ export function SessionList({ onSessionSelect }: { onSessionSelect?: () => void 
   )
 
   const currentSessions = currentProjectCwd ? sessions.get(currentProjectCwd) ?? [] : []
-  const filteredSessions = currentSessions.filter((s) =>
-    (s.title ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredSessions = currentSessions.filter((s) => {
+    const title = s.title ?? ''
+    // Hide empty /clear sessions (SDK artifacts)
+    if (title === '/clear' || title === 'clear') return false
+    return title.toLowerCase().includes(searchQuery.toLowerCase())
+  })
 
   if (sidebarScreen === 'sessions' && currentProjectCwd) {
     const projectName = projects.find((p) => p.cwd === currentProjectCwd)?.name ?? ''

@@ -5,12 +5,24 @@ import { AgentSession } from './session.js'
 import { basename } from 'path'
 import { scanSkills } from './skills.js'
 
+interface CacheEntry<T> {
+  data: T
+  expiry: number
+}
+
+const CACHE_TTL_MS = 30_000 // 30 seconds
+
 export class SessionManager {
   private activeSessions = new Map<string, AgentSession>()
   private _cachedCommands: SlashCommandInfo[] | null = null
   private _fetchingCommands = false
+  private _projectsCache: CacheEntry<ProjectInfo[]> | null = null
+  private _sessionsCache = new Map<string, CacheEntry<{ sessions: SessionSummary[]; total: number; hasMore: boolean }>>()
 
   async listProjects(): Promise<ProjectInfo[]> {
+    if (this._projectsCache && Date.now() < this._projectsCache.expiry) {
+      return this._projectsCache.data
+    }
     const sessions = await listSessions()
     const projectMap = new Map<string, { lastActiveAt: string; count: number }>()
 
@@ -43,13 +55,20 @@ export class SessionManager {
       })
     }
 
-    return projects.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
+    const result = projects.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
+    this._projectsCache = { data: result, expiry: Date.now() + CACHE_TTL_MS }
+    return result
   }
 
   async listProjectSessions(
     cwd: string,
     options?: { limit?: number; offset?: number }
   ): Promise<{ sessions: SessionSummary[]; total: number; hasMore: boolean }> {
+    const cacheKey = `${cwd}:${options?.limit ?? 20}:${options?.offset ?? 0}`
+    const cached = this._sessionsCache.get(cacheKey)
+    if (cached && Date.now() < cached.expiry) {
+      return cached.data
+    }
     const allSessions = await listSessions({ dir: cwd })
     const sorted = allSessions.sort((a, b) => (b.lastModified ?? 0) - (a.lastModified ?? 0))
 
@@ -57,7 +76,7 @@ export class SessionManager {
     const offset = options?.offset ?? 0
     const paged = sorted.slice(offset, offset + limit)
 
-    return {
+    const result = {
       sessions: paged.map((s) => ({
         sessionId: s.sessionId,
         cwd: s.cwd ?? cwd,
@@ -69,6 +88,8 @@ export class SessionManager {
       total: sorted.length,
       hasMore: offset + limit < sorted.length,
     }
+    this._sessionsCache.set(cacheKey, { data: result, expiry: Date.now() + CACHE_TTL_MS })
+    return result
   }
 
   async getSessionInfo(sessionId: string) {
@@ -79,11 +100,23 @@ export class SessionManager {
     sessionId: string,
     options?: { limit?: number; offset?: number }
   ): Promise<{ messages: unknown[]; total: number; hasMore: boolean }> {
-    const messages = await getSessionMessages(sessionId, options)
+    // SDK offset counts "from the start", but the UI needs the LATEST messages.
+    // Fetch all messages, then paginate from the end.
+    const allMessages = await getSessionMessages(sessionId)
+    const total = allMessages.length
+    const limit = options?.limit ?? 50
+    const offset = options?.offset ?? 0
+
+    // offset=0 → last `limit` messages (newest)
+    // offset=N → messages before the last N (older)
+    const endIndex = total - offset
+    const startIndex = Math.max(0, endIndex - limit)
+    const sliced = endIndex > 0 ? allMessages.slice(startIndex, endIndex) : []
+
     return {
-      messages,
-      total: messages.length,
-      hasMore: messages.length === (options?.limit ?? 50),
+      messages: sliced,
+      total,
+      hasMore: startIndex > 0,
     }
   }
 

@@ -1,10 +1,13 @@
 import { randomUUID } from 'crypto'
 import type { WebSocket } from 'ws'
-import type { C2SMessage, ToolApprovalDecision } from '@claude-agent-ui/shared'
+import type { C2SMessage, ToolApprovalDecision, PermissionMode } from '@claude-agent-ui/shared'
+import { TOOL_CATEGORIES } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
+
+const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 
 export interface HandlerDeps {
   wsHub: WSHub
@@ -15,8 +18,8 @@ export interface HandlerDeps {
 export function createWsHandler(deps: HandlerDeps) {
   const { wsHub, lockManager, sessionManager } = deps
 
-  // requestId → sessionId mapping for tool approvals and ask-user
-  const pendingRequestMap = new Map<string, string>()
+  // requestId → { sessionId, toolName } mapping for tool approvals and ask-user
+  const pendingRequestMap = new Map<string, { sessionId: string; toolName?: string }>()
 
   return function handleConnection(ws: WebSocket) {
     const connectionId = wsHub.register(ws)
@@ -221,7 +224,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('tool-approval', (req) => {
-      pendingRequestMap.set(req.requestId, realSessionId)
+      pendingRequestMap.set(req.requestId, { sessionId: realSessionId, toolName: req.toolName })
       wsHub.sendTo(connectionId, {
         type: 'tool-approval-request',
         ...req,
@@ -235,7 +238,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('ask-user', (req) => {
-      pendingRequestMap.set(req.requestId, realSessionId)
+      pendingRequestMap.set(req.requestId, { sessionId: realSessionId })
       wsHub.sendTo(connectionId, {
         type: 'ask-user-request',
         ...req,
@@ -295,21 +298,22 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleToolApprovalResponse(connectionId: string, requestId: string, decision: ToolApprovalDecision) {
-    const sessionId = pendingRequestMap.get(requestId)
-    if (!sessionId) return
+    const entry = pendingRequestMap.get(requestId)
+    if (!entry) return
 
-    if (!lockManager.isHolder(sessionId, connectionId)) {
+    if (!lockManager.isHolder(entry.sessionId, connectionId)) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
 
-    const session = sessionManager.getActive(sessionId)
+    const session = sessionManager.getActive(entry.sessionId)
     if (!session) return
 
     session.resolveToolApproval(requestId, decision)
     pendingRequestMap.delete(requestId)
 
-    wsHub.broadcastExcept(sessionId, connectionId, {
+    // Broadcast to ALL clients (including sender) so everyone clears pendingApproval
+    wsHub.broadcast(entry.sessionId, {
       type: 'tool-approval-resolved',
       requestId,
       decision: { behavior: decision.behavior, message: decision.behavior === 'deny' ? decision.message : undefined },
@@ -317,21 +321,22 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleAskUserResponse(connectionId: string, requestId: string, answers: Record<string, string>) {
-    const sessionId = pendingRequestMap.get(requestId)
-    if (!sessionId) return
+    const entry = pendingRequestMap.get(requestId)
+    if (!entry) return
 
-    if (!lockManager.isHolder(sessionId, connectionId)) {
+    if (!lockManager.isHolder(entry.sessionId, connectionId)) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
 
-    const session = sessionManager.getActive(sessionId)
+    const session = sessionManager.getActive(entry.sessionId)
     if (!session) return
 
     session.resolveAskUser(requestId, { answers })
     pendingRequestMap.delete(requestId)
 
-    wsHub.broadcastExcept(sessionId, connectionId, {
+    // Broadcast to ALL clients (including sender) so everyone clears pendingAskUser
+    wsHub.broadcast(entry.sessionId, {
       type: 'ask-user-resolved',
       requestId,
       answers,
@@ -363,9 +368,61 @@ export function createWsHandler(deps: HandlerDeps) {
       return
     }
 
+    // Resolve pending approvals in the UI based on new mode
+    resolvePendingApprovalsForMode(sessionId, mode as PermissionMode)
+
     const session = sessionManager.getActive(sessionId)
     if (session) {
-      await session.setPermissionMode(mode as any)
+      try {
+        await session.setPermissionMode(mode as any)
+      } catch {
+        // Silently ignore — SDK may reject mode changes in certain states
+      }
+    }
+  }
+
+  function resolvePendingApprovalsForMode(sessionId: string, mode: PermissionMode) {
+    for (const [requestId, entry] of pendingRequestMap) {
+      if (entry.sessionId !== sessionId) continue
+
+      let decision: { behavior: 'allow' | 'deny'; message?: string } | null = null
+
+      switch (mode) {
+        // Fully permissive: allow all pending
+        case 'auto':
+        case 'bypassPermissions':
+          decision = { behavior: 'allow' }
+          break
+
+        // Edit-permissive: allow edit tools (+ read-only, but those won't be pending)
+        case 'acceptEdits':
+          if (entry.toolName && EDIT_TOOLS.has(entry.toolName)) {
+            decision = { behavior: 'allow' }
+          }
+          break
+
+        // Plan mode: deny pending write tools (read-only won't be pending)
+        case 'plan':
+          decision = { behavior: 'deny', message: 'Denied by plan mode' }
+          break
+
+        case 'dontAsk':
+          decision = { behavior: 'deny', message: 'Denied by dontAsk mode' }
+          break
+
+        // Default: keep pending
+        case 'default':
+          break
+      }
+
+      if (decision) {
+        wsHub.broadcast(sessionId, {
+          type: 'tool-approval-resolved',
+          requestId,
+          decision,
+        })
+        pendingRequestMap.delete(requestId)
+      }
     }
   }
 

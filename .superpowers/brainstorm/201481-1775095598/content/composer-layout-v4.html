@@ -1,0 +1,116 @@
+<h2>ChatComposer 目标布局 v4</h2>
+<p class="subtitle">修正：输入框与工具栏之间也有分割线，图片只显示名字</p>
+
+<div class="mockup" style="max-width:700px;margin:0 auto;">
+  <div class="mockup-header">目标布局</div>
+  <div class="mockup-body" style="background:#1e1e1e;padding:0;border-radius:12px;overflow:hidden;">
+    <div style="border:1px solid #3a3a3a;border-radius:10px;overflow:hidden;margin:12px;">
+
+      <!-- 图片预览区 -->
+      <div style="padding:10px 12px;">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;padding:4px 10px;font-size:12px;color:#b0b0b0;">
+          <span style="display:inline-block;width:16px;height:16px;background:#3a3a3a;border-radius:3px;"></span>
+          <span style="color:#e0e0e0;">image.png</span>
+          <span style="color:#888;cursor:pointer;margin-left:4px;font-size:14px;">✕</span>
+        </div>
+      </div>
+
+      <!-- 分割线 1：图片 ↔ 输入框 -->
+      <div style="height:1px;background:#3a3a3a;margin:0;"></div>
+
+      <!-- 输入框 -->
+      <div style="padding:10px 14px;color:#666;font-size:14px;min-height:36px;">
+        Queue another message...
+      </div>
+
+      <!-- 分割线 2：输入框 ↔ 工具栏 -->
+      <div style="height:1px;background:#3a3a3a;margin:0;"></div>
+
+      <!-- 工具栏 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;">
+        <div style="display:flex;align-items:center;gap:2px;">
+          <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:18px;cursor:pointer;border-radius:4px;">+</div>
+          <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:16px;cursor:pointer;border-radius:4px;font-family:monospace;font-weight:bold;">/</div>
+          <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:15px;cursor:pointer;border-radius:4px;">@</div>
+          <div style="width:1px;height:18px;background:#3a3a3a;margin:0 6px;"></div>
+          <div style="display:flex;align-items:center;gap:4px;color:#b0b0b0;font-size:12px;">
+            <span style="color:#888;">📄</span> .gitignore
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:4px;color:#b0b0b0;font-size:12px;">
+            <span>📋</span> Plan mode
+          </div>
+          <div style="width:22px;height:22px;background:#e5e5e5;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+            <div style="width:9px;height:9px;background:#1e1e1e;border-radius:2px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- + 按钮弹出菜单 -->
+<h3 style="margin-top:32px;">+ 按钮弹出菜单</h3>
+<p class="subtitle">点击 + 后向上弹出的列表</p>
+
+<div style="max-width:700px;margin:0 auto;position:relative;">
+  <div class="mockup">
+    <div class="mockup-header">+ 菜单展开效果</div>
+    <div class="mockup-body" style="background:#1e1e1e;padding:0;border-radius:12px;overflow:visible;">
+      <div style="border:1px solid #3a3a3a;border-radius:10px;overflow:visible;margin:12px;position:relative;">
+
+        <!-- 弹出菜单（向上弹出，定位在 + 按钮上方） -->
+        <div style="position:absolute;bottom:100%;left:4px;margin-bottom:4px;background:#252525;border:1px solid #3a3a3a;border-radius:8px;overflow:hidden;min-width:220px;box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:10;">
+          <div style="padding:10px 14px;color:#e0e0e0;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <span style="color:#888;font-size:15px;">⬆</span> Upload from computer
+          </div>
+          <div style="height:1px;background:#3a3a3a;"></div>
+          <div style="padding:10px 14px;color:#e0e0e0;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer;background:rgba(37,99,235,0.12);">
+            <span style="color:#888;font-size:15px;">📋</span> Add context
+          </div>
+        </div>
+
+        <!-- 输入框 -->
+        <div style="padding:10px 14px;color:#666;font-size:14px;min-height:36px;">
+          Queue another message...
+        </div>
+
+        <!-- 分割线 -->
+        <div style="height:1px;background:#3a3a3a;margin:0;"></div>
+
+        <!-- 工具栏（+ 高亮状态） -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;">
+          <div style="display:flex;align-items:center;gap:2px;">
+            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#e0e0e0;font-size:18px;cursor:pointer;border-radius:4px;background:#333;">+</div>
+            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:16px;cursor:pointer;border-radius:4px;font-family:monospace;font-weight:bold;">/</div>
+            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:15px;cursor:pointer;border-radius:4px;">@</div>
+            <div style="width:1px;height:18px;background:#3a3a3a;margin:0 6px;"></div>
+            <div style="display:flex;align-items:center;gap:4px;color:#b0b0b0;font-size:12px;">
+              <span style="color:#888;">📄</span> .gitignore
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="display:flex;align-items:center;gap:4px;color:#b0b0b0;font-size:12px;">
+              <span>📋</span> Plan mode
+            </div>
+            <div style="width:22px;height:22px;background:#e5e5e5;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+              <div style="width:9px;height:9px;background:#1e1e1e;border-radius:2px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:24px;">确认清单</h3>
+<div style="background:#242420;border-radius:8px;padding:16px;color:#c4c0b8;font-size:13px;line-height:2;">
+  <div>✅ 图片预览只显示<strong>文件名 + 删除按钮</strong>，不显示尺寸</div>
+  <div>✅ 图片预览 ↔ 输入框：<strong>分割线</strong></div>
+  <div>✅ 输入框 ↔ 工具栏：<strong>分割线</strong></div>
+  <div>✅ <strong>+</strong> 点击弹出菜单：Upload from computer / Add context</div>
+  <div>✅ <strong>/</strong> 点击弹出斜杠命令列表</div>
+  <div>✅ <strong>@</strong> 点击弹出文件引用列表</div>
+  <div>✅ 图片上传：Ctrl+V 粘贴 / + 菜单上传</div>
+</div>

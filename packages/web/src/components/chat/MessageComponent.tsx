@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 import { getToolCategory, TOOL_COLORS, type ToolCategory } from '@claude-agent-ui/shared'
 import { MarkdownRenderer } from './MarkdownRenderer'
@@ -7,7 +7,17 @@ interface MessageComponentProps {
   message: AgentMessage
 }
 
-export function MessageComponent({ message }: MessageComponentProps) {
+/** Parse SDK command XML format into a friendly display string, or return null if not a command */
+function parseCommandXml(text: string): string | null {
+  const nameMatch = text.match(/<command-name>\s*(.*?)\s*<\/command-name>/)
+  if (!nameMatch) return null
+  const name = nameMatch[1]
+  const argsMatch = text.match(/<command-args>\s*(.*?)\s*<\/command-args>/s)
+  const args = argsMatch?.[1]?.trim() ?? ''
+  return args ? `${name} ${args}` : name
+}
+
+export const MessageComponent = memo(function MessageComponent({ message }: MessageComponentProps) {
   const isOptimistic = (message as any)._optimistic
 
   // User message
@@ -22,11 +32,22 @@ export function MessageComponent({ message }: MessageComponentProps) {
               const src = `data:${block.source.media_type};base64,${block.source.data}`
               return (
                 <div key={i} className="flex justify-end">
-                  <img src={src} alt="attached" className="max-w-[300px] max-h-[200px] rounded-lg border border-[#3d3b37]" />
+                  <img src={src} alt="attached" loading="lazy" className="max-w-[300px] max-h-[200px] rounded-lg border border-[#3d3b37]" />
                 </div>
               )
             }
             if (block.type === 'text') {
+              const cmdText = parseCommandXml(block.text)
+              if (cmdText) {
+                return (
+                  <div key={i} className="flex justify-end">
+                    <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
+                      <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
+                      <span className="text-sm text-[#e5e2db]">{cmdText}</span>
+                    </div>
+                  </div>
+                )
+              }
               return (
                 <div key={i} className="flex justify-end">
                   <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
@@ -41,11 +62,22 @@ export function MessageComponent({ message }: MessageComponentProps) {
         </>
       )
     }
-    const text = typeof content === 'string' ? content : JSON.stringify(content)
+    const rawText = typeof content === 'string' ? content : JSON.stringify(content)
+    const cmdText = parseCommandXml(rawText)
+    if (cmdText) {
+      return (
+        <div className="flex justify-end">
+          <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
+            <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
+            <span className="text-sm text-[#e5e2db]">{cmdText}</span>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="flex justify-end">
         <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-          <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{text}</p>
+          <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{rawText}</p>
           {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
         </div>
       </div>
@@ -55,6 +87,16 @@ export function MessageComponent({ message }: MessageComponentProps) {
   // Assistant message
   if (message.type === 'assistant') {
     const contentBlocks = (message as any).message?.content ?? []
+    // Skip rendering if no blocks produce visible content
+    const hasVisibleContent = contentBlocks.some((block: any) => {
+      if (block.type === 'text') return !!block.text
+      if (block.type === 'tool_use' || block.type === 'server_tool_use') return true
+      if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return true
+      if (block.type === 'redacted_thinking') return true
+      if (block.type === 'thinking') return !!(block.thinking || block.text)
+      return false
+    })
+    if (!hasVisibleContent) return null
     return (
       <div className="flex gap-3 items-start">
         <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
@@ -65,16 +107,24 @@ export function MessageComponent({ message }: MessageComponentProps) {
             if (block.type === 'text') {
               return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
             }
-            if (block.type === 'thinking') {
+            if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+              const thinkingText = block.thinking || block.text || ''
+              if (!thinkingText) {
+                return block.type === 'redacted_thinking' ? (
+                  <div key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
+                    <span className="text-xs text-[#8b5cf680] italic">Thinking (redacted)</span>
+                  </div>
+                ) : null
+              }
               return (
                 <details key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
                   <summary className="text-xs text-[#8b5cf6] cursor-pointer">Thinking...</summary>
-                  <p className="text-xs text-[#a8a29e] mt-1 whitespace-pre-wrap">{block.thinking}</p>
+                  <p className="text-xs text-[#a8a29e] mt-1 whitespace-pre-wrap">{thinkingText}</p>
                 </details>
               )
             }
-            if (block.type === 'tool_use') return <ToolUseBlock key={i} block={block} />
-            if (block.type === 'tool_result') return <ToolResultBlock key={i} block={block} />
+            if (block.type === 'tool_use' || block.type === 'server_tool_use') return <ToolUseBlock key={i} block={block} />
+            if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return <ToolResultBlock key={i} block={block} />
             return null
           })}
         </div>
@@ -191,7 +241,45 @@ export function MessageComponent({ message }: MessageComponentProps) {
         </div>
       )
     }
+    // hook events
+    if (sub === 'hook_started' || sub === 'hook_progress' || sub === 'hook_response') {
+      const hookContent = (message as any).content ?? (message as any).hook_name ?? ''
+      if (!hookContent) return null
+      return (
+        <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#7c7872]" />
+          <span className="truncate">{typeof hookContent === 'string' ? hookContent.slice(0, 150) : JSON.stringify(hookContent).slice(0, 150)}</span>
+        </div>
+      )
+    }
+    // local_command_output
+    if (sub === 'local_command_output') {
+      const output = (message as any).output ?? (message as any).content ?? ''
+      if (!output) return null
+      return (
+        <div className="border border-[#3d3b37] rounded-md overflow-hidden ml-10">
+          <div className="px-3 py-2 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all">
+            {typeof output === 'string' ? output : JSON.stringify(output)}
+          </div>
+        </div>
+      )
+    }
     return null
+  }
+
+  // tool_use_summary — rendered like a compact tool block
+  if (message.type === 'tool_use_summary') {
+    const toolName = (message as any).tool_name ?? (message as any).name ?? 'tool'
+    const summary = (message as any).summary ?? (message as any).result_summary ?? ''
+    return (
+      <div className="border border-[#3d3b37] rounded-md overflow-hidden ml-10">
+        <div className="flex items-center gap-2 px-3 py-2 bg-[#242320]">
+          <div className="w-0.5 h-4 rounded-full bg-[#6b7280]" />
+          <span className="text-xs font-mono font-semibold text-[#6b7280]">{toolName}</span>
+          {summary && <span className="text-xs font-mono text-[#7c7872] truncate flex-1">{typeof summary === 'string' ? summary.slice(0, 200) : JSON.stringify(summary).slice(0, 200)}</span>}
+        </div>
+      </div>
+    )
   }
 
   // tool_progress
@@ -223,7 +311,7 @@ export function MessageComponent({ message }: MessageComponentProps) {
   }
 
   return null
-}
+})
 
 // ---- Tool Use Block ----
 
@@ -254,7 +342,7 @@ function ToolUseBlock({ block }: { block: any }) {
         )}
       </div>
       {expanded && detail && (
-        <div className="border-t border-[#3d3b37] bg-[#1e1d1a] px-3 py-2.5 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+        <div className="border-t border-[#3d3b37] bg-[#1e1d1a] px-3 py-2.5 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all">
           {detail}
         </div>
       )}
@@ -265,6 +353,7 @@ function ToolUseBlock({ block }: { block: any }) {
 // ---- Tool Result Block ----
 
 function ToolResultBlock({ block }: { block: any }) {
+  const [expanded, setExpanded] = useState(false)
   const content = block.content
   const isError = block.is_error
   const text = typeof content === 'string'
@@ -273,20 +362,30 @@ function ToolResultBlock({ block }: { block: any }) {
       ? content.map((c: any) => c.text ?? '').join('')
       : JSON.stringify(content)
 
-  const truncated = text.length > 500 ? text.slice(0, 500) + '...' : text
+  const preview = text.length > 120 ? text.slice(0, 120) + '...' : text
+  const isLong = text.length > 120
 
   return (
     <div className={`border rounded-md overflow-hidden ml-10 ${
       isError ? 'border-[#f8717126] bg-[#f871710a]' : 'border-[#3d3b37] bg-[#242320]'
     }`}>
-      <div className="flex items-center gap-2 px-3 py-1.5">
+      <div
+        className={`flex items-center gap-2 px-3 py-1.5 ${isLong ? 'cursor-pointer hover:bg-[#2b2a2780]' : ''}`}
+        onClick={() => isLong && setExpanded(!expanded)}
+      >
         <div className={`w-0.5 h-3 rounded-full ${isError ? 'bg-[#f87171]' : 'bg-[#6b7280]'}`} />
         <span className={`text-[10px] font-mono ${isError ? 'text-[#f87171]' : 'text-[#7c7872]'}`}>
           {isError ? 'Error' : 'Result'}
         </span>
+        <span className="flex-1" />
+        {isLong && (
+          <svg className={`w-3 h-3 text-[#7c7872] transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
       </div>
-      <div className="px-3 py-2 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all max-h-[150px] overflow-y-auto">
-        {truncated}
+      <div className="px-3 py-2 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all">
+        {expanded || !isLong ? text : preview}
       </div>
     </div>
   )

@@ -160,10 +160,15 @@ export function ComposerToolbar({
           <button
             onClick={() => !isLocked && setShowModes(!showModes)}
             disabled={isLocked}
-            className="text-[11px] text-[#a8a29e] hover:text-[#e5e2db] transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-[#3d3b3780]"
+            className={`text-[11px] transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md ${
+              permissionMode === 'auto'
+                ? 'text-[#d97706] hover:text-[#f59e0b] hover:bg-[#d977061a]'
+                : 'text-[#a8a29e] hover:text-[#e5e2db] hover:bg-[#3d3b3780]'
+            }`}
           >
-            <ModeIcon type={currentModeInfo.icon} active={false} className="w-3.5 h-3.5 text-current" />
-            {currentModeInfo.label}
+            {permissionMode === 'auto' && <span className="text-[#d97706]">{'»'}</span>}
+            <ModeIcon type={currentModeInfo.icon} active={permissionMode === 'auto'} className={`w-3.5 h-3.5 ${permissionMode === 'auto' ? 'text-[#d97706]' : 'text-current'}`} />
+            {permissionMode === 'auto' ? 'auto mode on' : currentModeInfo.label}
           </button>
           {showModes && (
             <ModesPopup
@@ -176,7 +181,7 @@ export function ComposerToolbar({
           )}
         </div>
 
-        {isRunning ? (
+        {isRunning && !canSend ? (
           <button
             onClick={onAbort}
             className="w-7 h-7 rounded-md bg-[#f87171] flex items-center justify-center shrink-0"

@@ -1,0 +1,79 @@
+<h2>ChatComposer 目标布局 v3</h2>
+<p class="subtitle">修正：图片与输入框之间有分割线，按钮是 + / @</p>
+
+<div class="mockup" style="max-width:700px;margin:0 auto;">
+  <div class="mockup-header">目标布局（修正版）</div>
+  <div class="mockup-body" style="background:#1e1e1e;padding:0;border-radius:12px;overflow:hidden;">
+    <div style="border:1px solid #3a3a3a;border-radius:10px;overflow:hidden;margin:12px;">
+
+      <!-- 图片预览区 -->
+      <div style="padding:10px 12px;">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;padding:4px 10px;font-size:12px;color:#b0b0b0;">
+          <span style="display:inline-block;width:16px;height:16px;background:#3a3a3a;border-radius:3px;"></span>
+          <span style="color:#e0e0e0;">image.png</span>
+          <span style="color:#777;">1015×…</span>
+          <span style="color:#888;cursor:pointer;margin-left:2px;font-size:14px;">✕</span>
+        </div>
+      </div>
+
+      <!-- 分割线 -->
+      <div style="height:1px;background:#3a3a3a;margin:0;"></div>
+
+      <!-- 输入框 -->
+      <div style="padding:10px 14px;color:#666;font-size:14px;min-height:36px;">
+        Queue another message...
+      </div>
+
+      <!-- 工具栏 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;">
+        <div style="display:flex;align-items:center;gap:2px;">
+          <!-- + 按钮 -->
+          <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:18px;cursor:pointer;border-radius:4px;">+</div>
+          <!-- / 按钮 -->
+          <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:16px;cursor:pointer;border-radius:4px;font-family:monospace;font-weight:bold;">/</div>
+          <!-- @ 按钮 -->
+          <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#999;font-size:15px;cursor:pointer;border-radius:4px;">@</div>
+          <!-- 竖线分隔 -->
+          <div style="width:1px;height:18px;background:#3a3a3a;margin:0 6px;"></div>
+          <!-- 已添加的文件标签 -->
+          <div style="display:flex;align-items:center;gap:4px;color:#b0b0b0;font-size:12px;">
+            <span style="color:#888;">📄</span> .gitignore
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:4px;color:#b0b0b0;font-size:12px;">
+            <span>📋</span> Plan mode
+          </div>
+          <div style="width:22px;height:22px;background:#e5e5e5;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+            <div style="width:9px;height:9px;background:#1e1e1e;border-radius:2px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:24px;">+ 按钮弹出菜单</h3>
+<div class="mockup" style="max-width:300px;">
+  <div class="mockup-header">点击 + 弹出</div>
+  <div class="mockup-body" style="background:#1e1e1e;padding:0;border-radius:8px;overflow:hidden;">
+    <div style="padding:10px 16px;color:#e0e0e0;font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <span style="color:#888;">⬆</span> Upload from computer
+    </div>
+    <div style="padding:10px 16px;color:#e0e0e0;font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(37,99,235,0.15);">
+      <span style="color:#888;">📋</span> Add context
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:24px;">设计要点确认</h3>
+<div style="background:#242420;border-radius:8px;padding:16px;color:#c4c0b8;font-size:13px;line-height:2;">
+  <div>✅ 一体化圆角容器</div>
+  <div>✅ 图片预览在顶部，与输入框之间有<strong>分割线</strong></div>
+  <div>✅ 输入框无独立边框，融入容器</div>
+  <div>✅ 工具栏左侧：<strong>+</strong>（上传菜单） <strong>/</strong>（斜杠命令） <strong>@</strong>（文件引用） | 已添加文件标签</div>
+  <div>✅ 工具栏右侧：权限模式 + 发送/停止按钮</div>
+  <div>✅ 图片上传：Ctrl+V 粘贴 + 点击 + 菜单上传</div>
+  <div>✅ <strong>/</strong> 按钮点击 → 弹出斜杠命令列表（与输入 / 触发相同）</div>
+  <div>✅ <strong>@</strong> 按钮点击 → 弹出文件引用列表（与输入 @ 触发相同）</div>
+</div>

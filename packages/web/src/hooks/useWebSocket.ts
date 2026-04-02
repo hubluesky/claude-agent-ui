@@ -93,6 +93,10 @@ function handleServerMessage(msg: S2CMessage) {
           if (ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'join-session', sessionId: newId }))
           }
+          // Refresh sidebar session list so the new session appears
+          if (sess.currentProjectCwd) {
+            sess.loadProjectSessions(sess.currentProjectCwd)
+          }
         }
       }
 

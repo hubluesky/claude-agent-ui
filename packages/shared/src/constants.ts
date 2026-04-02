@@ -1,4 +1,4 @@
-export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto'
 
 export type EffortLevel = 'low' | 'medium' | 'high' | 'max'
 

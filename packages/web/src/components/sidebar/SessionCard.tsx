@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import type { SessionSummary } from '@claude-agent-ui/shared'
 
 interface SessionCardProps {
@@ -42,6 +42,16 @@ export function SessionCard({ session, isSelected, onClick, onRename }: SessionC
     setEditing(false)
   }
 
+  const [copied, setCopied] = useState(false)
+  const handleCopyId = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const cmd = `claude -r ${session.sessionId}`
+    navigator.clipboard.writeText(cmd).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [session.sessionId])
+
   return (
     <button
       onClick={onClick}
@@ -74,8 +84,12 @@ export function SessionCard({ session, isSelected, onClick, onRename }: SessionC
         <div className="flex gap-2 text-[10px] text-[#7c7872]">
           <span>{relativeTime(session.updatedAt)}</span>
         </div>
-        <p className="text-[9px] font-mono text-[#5c5952] truncate cursor-pointer hover:text-[#7c7872]">
-          claude -r {session.sessionId.slice(0, 8)}
+        <p
+          onClick={handleCopyId}
+          title="点击复制恢复命令"
+          className="text-[9px] font-mono text-[#5c5952] truncate cursor-pointer hover:text-[#7c7872] select-all"
+        >
+          {copied ? '✓ 已复制' : `claude -r ${session.sessionId}`}
         </p>
       </div>
     </button>
