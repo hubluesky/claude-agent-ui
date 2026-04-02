@@ -273,28 +273,32 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
 
   return (
     <div className="px-4 sm:px-10 py-3">
-      <div className={`relative rounded-xl border ${borderClass} overflow-hidden bg-[#1a1918]`}>
+      <div className={`relative rounded-xl border ${borderClass} bg-[#1a1918]`}>
         {/* Image preview bar */}
         <ImagePreviewBar images={images} onRemove={removeImage} />
 
-        {/* Popups */}
-        <div className="relative">
-          {showPopup && (
+        {/* Popups — outside overflow context so they aren't clipped */}
+        {showPopup && (
+          <div className="relative">
             <SlashCommandPopup
               commands={filteredCommands}
               selectedIndex={selectedIndex}
               onSelect={executeCommand}
             />
-          )}
-          {showFilePopup && (
+          </div>
+        )}
+        {showFilePopup && (
+          <div className="relative">
             <FileReferencePopup
               files={fileResults}
               selectedIndex={fileSelectedIndex}
               onSelect={selectFile}
             />
-          )}
+          </div>
+        )}
 
-          {/* Textarea */}
+        {/* Textarea */}
+        <div>
           {isLocked ? (
             <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[#f87171]">
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
