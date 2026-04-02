@@ -2,12 +2,19 @@ import { create } from 'zustand'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 import { fetchSessionMessages } from '../lib/api'
 
+interface SessionCache {
+  messages: AgentMessage[]
+  hasMore: boolean
+}
+
 interface MessageState {
   messages: AgentMessage[]
   hasMore: boolean
   isLoadingHistory: boolean
   isLoadingMore: boolean
   currentLoadedSessionId: string | null
+  /** Per-session message cache so switching back is instant */
+  _cache: Map<string, SessionCache>
 }
 
 interface MessageActions {
@@ -18,6 +25,8 @@ interface MessageActions {
   /** Replace a matching optimistic user message with the server version, or append if no match */
   replaceOptimistic(serverMsg: AgentMessage): void
   clear(): void
+  /** Save current session's messages into cache */
+  _saveToCache(): void
 }
 
 /** Extract the plain text from a user message for matching */
@@ -33,23 +42,52 @@ function getUserText(msg: any): string {
   return ''
 }
 
+const MAX_CACHED_SESSIONS = 10
+
 export const useMessageStore = create<MessageState & MessageActions>((set, get) => ({
   messages: [],
   hasMore: false,
   isLoadingHistory: false,
   isLoadingMore: false,
   currentLoadedSessionId: null,
+  _cache: new Map(),
+
+  _saveToCache() {
+    const { currentLoadedSessionId, messages, hasMore, _cache } = get()
+    if (!currentLoadedSessionId || messages.length === 0) return
+    _cache.set(currentLoadedSessionId, { messages: [...messages], hasMore })
+    // Evict oldest entries if cache grows too large
+    if (_cache.size > MAX_CACHED_SESSIONS) {
+      const first = _cache.keys().next().value
+      if (first) _cache.delete(first)
+    }
+  },
 
   async loadInitial(sessionId: string) {
-    const { messages: current, currentLoadedSessionId } = get()
+    const { messages: current, currentLoadedSessionId, _cache } = get()
 
     // If we already have messages for this session (from live WS), skip API load
     if (currentLoadedSessionId === sessionId && current.length > 0) return
 
+    // Save current session to cache before switching
+    get()._saveToCache()
+
+    // Check cache for the target session — instant restore
+    const cached = _cache.get(sessionId)
+    if (cached) {
+      set({
+        messages: cached.messages,
+        hasMore: cached.hasMore,
+        isLoadingHistory: false,
+        currentLoadedSessionId: sessionId,
+      })
+      return
+    }
+
     // Preserve any optimistic messages that haven't been confirmed yet
     const optimistic = current.filter((m: any) => m._optimistic)
 
-    set({ isLoadingHistory: true, currentLoadedSessionId: sessionId })
+    set({ messages: [], isLoadingHistory: true, currentLoadedSessionId: sessionId })
     try {
       const result = await fetchSessionMessages(sessionId, { limit: 50, offset: 0 })
       const loaded = result.messages as AgentMessage[]
@@ -151,6 +189,8 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
   },
 
   clear() {
+    // Save current session before clearing so we can restore it later
+    get()._saveToCache()
     set({ messages: [], hasMore: false, currentLoadedSessionId: null })
   },
 }))

@@ -27,6 +27,20 @@ function findAtTrigger(text: string, cursorPos: number): { start: number; query:
   return null
 }
 
+/** Detect `/` trigger at cursor: must be at start-of-line or after whitespace, no newline in query */
+function findSlashTrigger(text: string, cursorPos: number): { start: number; query: string } | null {
+  for (let i = cursorPos - 1; i >= 0; i--) {
+    const ch = text[i]
+    if (ch === '\n' || ch === '\r') return null
+    if (ch === '/') {
+      // `/` must be at pos 0 or preceded by whitespace/newline
+      if (i > 0 && text[i - 1] !== ' ' && text[i - 1] !== '\n' && text[i - 1] !== '\r') return null
+      return { start: i, query: text.slice(i + 1, cursorPos).toLowerCase() }
+    }
+  }
+  return null
+}
+
 let imageIdCounter = 0
 
 interface ChatComposerProps {
@@ -45,18 +59,19 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const [fileResults, setFileResults] = useState<FileItem[]>([])
   const [fileSelectedIndex, setFileSelectedIndex] = useState(0)
   const [atCursorStart, setAtCursorStart] = useState<number | null>(null)
+  const [slashCursorStart, setSlashCursorStart] = useState<number | null>(null)
+  const [slashQueryText, setSlashQueryText] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
 
-  // Slash command detection
-  const slashQuery = text.startsWith('/') && !text.includes('\n') ? text.slice(1).toLowerCase() : null
+  // Slash command detection (cursor-based, like @ trigger)
   const filteredCommands = useMemo(() => {
-    if (slashQuery === null) return []
-    return commands.filter((cmd) => cmd.name.toLowerCase().includes(slashQuery))
-  }, [slashQuery, commands])
+    if (slashQueryText === null) return []
+    return commands.filter((cmd) => cmd.name.toLowerCase().includes(slashQueryText))
+  }, [slashQueryText, commands])
   const showPopup = filteredCommands.length > 0
   const showFilePopup = atCursorStart !== null && fileResults.length > 0 && !showPopup
 
@@ -141,13 +156,34 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
       if (cmd.name === 'clear') {
         useMessageStore.getState().clear()
       }
+      // Remove the /query portion from text
+      if (slashCursorStart !== null) {
+        const cursorPos = textareaRef.current?.selectionStart ?? text.length
+        const before = text.slice(0, slashCursorStart)
+        const after = text.slice(cursorPos)
+        const remaining = (before + after).trim()
+        setText(remaining)
+      } else {
+        setText('')
+      }
     } else {
-      onSend('/' + cmd.name)
+      // For agent commands: send command + remaining text as argument
+      let argument = ''
+      if (slashCursorStart !== null) {
+        const cursorPos = textareaRef.current?.selectionStart ?? text.length
+        const before = text.slice(0, slashCursorStart).trim()
+        const after = text.slice(cursorPos).trim()
+        argument = [before, after].filter(Boolean).join(' ')
+      }
+      const prompt = argument ? `/${cmd.name} ${argument}` : `/${cmd.name}`
+      onSend(prompt)
+      setText('')
     }
-    setText('')
     setSelectedIndex(0)
+    setSlashCursorStart(null)
+    setSlashQueryText(null)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-  }, [onSend])
+  }, [onSend, text, slashCursorStart])
 
   const canSend = (text.trim().length > 0 || images.length > 0) && !isLocked
 
@@ -197,13 +233,25 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const handleSlashClick = useCallback(() => {
     if (!textareaRef.current) return
     const ta = textareaRef.current
-    setText('/')
+    const pos = ta.selectionStart ?? text.length
+    const before = text.slice(0, pos)
+    const after = text.slice(pos)
+    // Insert '/' at cursor (prepend space if needed so trigger detects it)
+    const needSpace = before.length > 0 && before[before.length - 1] !== ' ' && before[before.length - 1] !== '\n'
+    const insert = needSpace ? ' /' : '/'
+    const newText = before + insert + after
+    setText(newText)
+    const slashPos = pos + (needSpace ? 1 : 0)
+    setSlashCursorStart(slashPos)
+    setSlashQueryText('')
+    setSelectedIndex(0)
+    const newCursorPos = slashPos + 1
     requestAnimationFrame(() => {
-      ta.selectionStart = 1
-      ta.selectionEnd = 1
+      ta.selectionStart = newCursorPos
+      ta.selectionEnd = newCursorPos
       ta.focus()
     })
-  }, [])
+  }, [text])
 
   const handleAtClick = useCallback(() => {
     if (!textareaRef.current) return
@@ -254,6 +302,19 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
 
     const cursorPos = el.selectionStart ?? newText.length
+
+    // Detect slash trigger
+    const slashTrigger = findSlashTrigger(newText, cursorPos)
+    if (slashTrigger) {
+      setSlashCursorStart(slashTrigger.start)
+      setSlashQueryText(slashTrigger.query)
+      setSelectedIndex(0)
+    } else {
+      setSlashCursorStart(null)
+      setSlashQueryText(null)
+    }
+
+    // Detect @ trigger
     const trigger = findAtTrigger(newText, cursorPos)
     if (trigger) {
       setAtCursorStart(trigger.start)
@@ -272,7 +333,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
       : 'border-[#3d3b37]'
 
   return (
-    <div className="px-4 py-3">
+    <div className="px-4 py-3 shrink-0">
       <div className={`relative rounded-xl border ${borderClass} bg-[#1a1918]`}>
         {/* Image preview bar */}
         <ImagePreviewBar images={images} onRemove={removeImage} />

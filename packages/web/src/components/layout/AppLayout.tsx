@@ -34,7 +34,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, [sidebarWidth, setSidebarWidth])
 
   return (
-    <div className="h-screen flex bg-[#2b2a27]">
+    <div className="h-dvh flex bg-[#2b2a27]">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -60,9 +60,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       />
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Mobile hamburger */}
-        <div className="md:hidden flex items-center h-10 px-3 border-b border-[#3d3b37]">
+        <div className="md:hidden flex items-center h-10 shrink-0 px-3 border-b border-[#3d3b37]">
           <button
             onClick={() => setSidebarOpen(true)}
             className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872]"
