@@ -8,11 +8,11 @@ interface ModesPopupProps {
   onClose: () => void
 }
 
-const MODES: { mode: PermissionMode; label: string; desc: string; icon: string }[] = [
-  { mode: 'default', label: 'Ask', desc: 'Ask before edits', icon: 'shield' },
-  { mode: 'acceptEdits', label: 'Edit', desc: 'Edit automatically', icon: 'pencil' },
-  { mode: 'plan', label: 'Plan', desc: 'Explore, then present plan', icon: 'doc' },
-  { mode: 'bypassPermissions', label: 'Bypass', desc: 'Skip all approvals', icon: 'bolt' },
+export const MODES: { mode: PermissionMode; label: string; desc: string; icon: string }[] = [
+  { mode: 'default', label: 'Ask before edits', desc: 'Claude will ask for approval before making each edit', icon: 'shield' },
+  { mode: 'acceptEdits', label: 'Edit automatically', desc: 'Claude will edit your selected text or the whole file', icon: 'code' },
+  { mode: 'plan', label: 'Plan mode', desc: 'Claude will explore the code and present a plan before editing', icon: 'doc' },
+  { mode: 'bypassPermissions', label: 'Bypass permissions', desc: 'Claude will not ask for approval before running potentially dangerous commands', icon: 'bolt' },
 ]
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'max']
@@ -21,9 +21,15 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute bottom-full left-0 mb-2 w-[260px] bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
-        <div className="px-4 pt-3 pb-2">
-          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">Permission Mode</span>
+      <div className="absolute bottom-full right-0 mb-2 w-[320px] bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">Modes</span>
+          <div className="flex items-center gap-1 text-[10px] text-[#5c5952]">
+            <kbd className="px-1 py-0.5 bg-[#3d3b37] rounded text-[9px]">⇧</kbd>
+            <span>+</span>
+            <kbd className="px-1 py-0.5 bg-[#3d3b37] rounded text-[9px]">tab</kbd>
+            <span className="ml-0.5">to switch</span>
+          </div>
         </div>
 
         <div className="px-2 pb-2">
@@ -77,13 +83,13 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
   )
 }
 
-function ModeIcon({ type, active }: { type: string; active: boolean }) {
-  const cls = `w-5 h-5 ${active ? 'text-[#d97706]' : 'text-[#7c7872]'}`
+export function ModeIcon({ type, active, className }: { type: string; active: boolean; className?: string }) {
+  const cls = className ?? `w-5 h-5 ${active ? 'text-[#d97706]' : 'text-[#7c7872]'}`
   switch (type) {
     case 'shield':
       return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
-    case 'pencil':
-      return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+    case 'code':
+      return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>
     case 'doc':
       return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
     case 'bolt':

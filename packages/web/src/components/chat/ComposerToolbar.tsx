@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
-import { ModesPopup } from './ModesPopup'
+import { ModesPopup, MODES, ModeIcon } from './ModesPopup'
 import { PlusMenu } from './PlusMenu'
 import type { PermissionMode, EffortLevel } from '@claude-agent-ui/shared'
 
@@ -46,10 +46,29 @@ export function ComposerToolbar({
       ? { color: 'bg-[#7c7872]', text: connectionStatus, pulse: connectionStatus === 'connecting' || connectionStatus === 'reconnecting' }
       : statusConfig[sessionStatus]
 
-  const modeLabel: Record<string, string> = {
-    default: 'Ask', acceptEdits: 'Edit', plan: 'Plan',
-    bypassPermissions: 'Bypass', dontAsk: 'Auto',
-  }
+  const currentModeInfo = MODES.find((m) => m.mode === permissionMode) ?? MODES[0]
+
+  // Shift+Tab cycles through permission modes
+  const cycleMode = useCallback(() => {
+    const modeOrder = MODES.map((m) => m.mode)
+    const currentIndex = modeOrder.indexOf(permissionMode)
+    const nextMode = modeOrder[(currentIndex + 1) % modeOrder.length]
+    setPermissionMode(nextMode)
+    if (currentSessionId && currentSessionId !== '__new__') {
+      send({ type: 'set-mode', sessionId: currentSessionId, mode: nextMode })
+    }
+  }, [permissionMode, currentSessionId, setPermissionMode, send])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault()
+        cycleMode()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [cycleMode])
 
   const handleModeChange = (newMode: PermissionMode) => {
     setPermissionMode(newMode)
@@ -141,12 +160,10 @@ export function ComposerToolbar({
           <button
             onClick={() => !isLocked && setShowModes(!showModes)}
             disabled={isLocked}
-            className="text-[11px] text-[#a8a29e] hover:text-[#d97706] transition-colors flex items-center gap-1"
+            className="text-[11px] text-[#a8a29e] hover:text-[#e5e2db] transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-[#3d3b3780]"
           >
-            {modeLabel[permissionMode] ?? permissionMode}
-            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            <ModeIcon type={currentModeInfo.icon} active={false} className="w-3.5 h-3.5 text-current" />
+            {currentModeInfo.label}
           </button>
           {showModes && (
             <ModesPopup
