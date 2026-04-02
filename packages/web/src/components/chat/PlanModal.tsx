@@ -59,7 +59,7 @@ export function PlanModal() {
           <svg className="w-4 h-4 text-[#d97706] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
           </svg>
-          <span className="text-[14px] text-[#d97706] font-semibold">Plan Review</span>
+          <span className="text-[14px] text-[#d97706] font-semibold">计划审批</span>
           <span className="text-[12px] text-[#7c7872] font-mono truncate flex-1">{fileName}</span>
           <button
             onClick={closeModal}
@@ -76,14 +76,14 @@ export function PlanModal() {
           {planContent ? (
             <MarkdownRenderer content={planContent} />
           ) : (
-            <p className="text-[#7c7872] italic">Unable to read plan file</p>
+            <p className="text-[#7c7872] italic">无法读取计划文件</p>
           )}
         </div>
 
         {/* Allowed prompts */}
         {allowedPrompts.length > 0 && (
           <div className="px-5 py-2 border-t border-[#3d3b37] shrink-0 flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-[#7c7872]">Required permissions:</span>
+            <span className="text-[11px] text-[#7c7872]">所需权限:</span>
             {allowedPrompts.map((p, i) => (
               <span key={i} className="text-[10px] px-2 py-0.5 bg-[#242320] border border-[#3d3b37] rounded-full text-[#a8a29e] font-mono">
                 {p.tool}: {p.prompt}
@@ -100,26 +100,26 @@ export function PlanModal() {
                 onClick={() => handleDecision('clear-and-accept')}
                 className="px-3 py-1.5 text-[11px] font-semibold text-[#22c55e] bg-[#22c55e15] border border-[#22c55e30] rounded-md hover:bg-[#22c55e25] transition-colors"
               >
-                Clear + Auto-accept
+                清除上下文并自动接受
               </button>
               <button
                 onClick={() => handleDecision('auto-accept')}
                 className="px-3 py-1.5 text-[11px] font-medium text-[#d97706] bg-[#d9770615] border border-[#d9770630] rounded-md hover:bg-[#d9770625] transition-colors"
               >
-                Auto-accept edits
+                自动接受编辑
               </button>
               <button
                 onClick={() => handleDecision('manual')}
                 className="px-3 py-1.5 text-[11px] font-medium text-[#a8a29e] border border-[#3d3b37] rounded-md hover:bg-[#3d3b37] transition-colors"
               >
-                Manually approve
+                手动审批
               </button>
               <div className="flex-1 min-w-[160px]">
                 <input
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   onKeyDown={handleFeedbackKeyDown}
-                  placeholder="Tell Claude what to change..."
+                  placeholder="告诉 Claude 需要修改什么..."
                   className="w-full px-3 py-1.5 text-[12px] bg-[#1e1d1a] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#7c7872] outline-none focus:border-[#d97706] transition-colors"
                 />
               </div>
