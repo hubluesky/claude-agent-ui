@@ -3,6 +3,8 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useMessageStore } from '../../stores/messageStore'
 import { MessageComponent } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
+import { AskUserPanel } from './AskUserPanel'
+import { PlanApprovalCard } from './PlanApprovalCard'
 import { useConnectionStore } from '../../stores/connectionStore'
 
 interface ChatMessagesPaneProps {
@@ -17,8 +19,12 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
   const loadInitial = useMessageStore((s) => s.loadInitial)
   const loadMore = useMessageStore((s) => s.loadMore)
   const sessionStatus = useConnectionStore((s) => s.sessionStatus)
+  const pendingAskUser = useConnectionStore((s) => s.pendingAskUser)
+  const pendingApproval = useConnectionStore((s) => s.pendingApproval)
+  const pendingPlanApproval = useConnectionStore((s) => s.pendingPlanApproval)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const isLoadingMoreRef = useRef(false)
+  const isAtBottomRef = useRef(true)
 
   // Track loading state in ref to avoid stale closure in startReached
   isLoadingMoreRef.current = isLoadingMore
@@ -27,6 +33,27 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
   useEffect(() => {
     loadInitial(sessionId)
   }, [sessionId, loadInitial])
+
+  // Scroll to bottom when Footer content changes (AskUserPanel, ThinkingIndicator, PermissionBanner)
+  useEffect(() => {
+    if (isAtBottomRef.current) {
+      // Small delay to let Footer render before scrolling
+      requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: 'smooth' })
+      })
+    }
+  }, [pendingAskUser?.requestId, pendingApproval?.requestId, pendingPlanApproval?.requestId, sessionStatus])
+
+  // Scroll to bottom on initial message load
+  const prevMessageCountRef = useRef(0)
+  useEffect(() => {
+    if (prevMessageCountRef.current === 0 && messages.length > 0) {
+      requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({ index: messages.length - 1, behavior: 'auto' })
+      })
+    }
+    prevMessageCountRef.current = messages.length
+  }, [messages.length])
 
   const handleStartReached = useCallback(() => {
     if (hasMore && !isLoadingMoreRef.current) {
@@ -47,15 +74,15 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
       <Virtuoso
         ref={virtuosoRef}
         data={messages}
-        computeItemKey={(_index, msg) => (msg as any).uuid ?? (msg as any).message?.id ?? `msg-${_index}`}
         initialTopMostItemIndex={Math.max(0, messages.length - 1)}
         followOutput="smooth"
         alignToBottom
+        atBottomStateChange={(atBottom) => { isAtBottomRef.current = atBottom }}
         atTopThreshold={200}
         startReached={handleStartReached}
         increaseViewportBy={{ top: 400, bottom: 200 }}
         itemContent={(_index, msg) => (
-          <div className="px-4 py-2.5">
+          <div className="px-4 py-2.5 empty:p-0">
             <MessageComponent message={msg} />
           </div>
         )}
@@ -66,11 +93,15 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
             ) : null
           ),
           Footer: () => (
-            sessionStatus === 'running' ? (
-              <div className="px-4 py-2.5">
-                <ThinkingIndicator />
-              </div>
-            ) : null
+            <>
+              {sessionStatus === 'running' && (
+                <div className="px-4 py-2.5">
+                  <ThinkingIndicator />
+                </div>
+              )}
+              <AskUserPanel />
+              <PlanApprovalCard />
+            </>
           ),
         }}
         className="flex-1"

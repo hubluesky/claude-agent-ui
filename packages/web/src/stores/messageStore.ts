@@ -44,7 +44,45 @@ function getUserText(msg: any): string {
 
 const MAX_CACHED_SESSIONS = 10
 
-export const useMessageStore = create<MessageState & MessageActions>((set, get) => ({
+// ── Streaming delta batching ─────────────────────────────────
+// Accumulate rapid text deltas and flush to store at ~60fps via RAF
+let _pendingDeltaText = ''
+let _deltaRafId: number | null = null
+let _storeGet: (() => MessageState & MessageActions) | null = null
+let _storeSet: ((partial: Partial<MessageState>) => void) | null = null
+
+function _flushStreamingDelta() {
+  _deltaRafId = null
+  if (!_pendingDeltaText || !_storeGet || !_storeSet) return
+  const text = _pendingDeltaText
+  _pendingDeltaText = ''
+  const { messages } = _storeGet()
+  const updated = [...messages]
+  for (let i = updated.length - 1; i >= 0; i--) {
+    if ((updated[i] as any).type === '_streaming_block') {
+      const prev = updated[i] as any
+      updated[i] = { ...prev, _content: prev._content + text }
+      break
+    }
+  }
+  _storeSet({ messages: updated })
+}
+
+/** Force-flush any buffered streaming text (call before cleaning streaming blocks) */
+export function flushStreamingDelta() {
+  if (_deltaRafId !== null) {
+    cancelAnimationFrame(_deltaRafId)
+    _deltaRafId = null
+  }
+  _flushStreamingDelta()
+}
+
+export const useMessageStore = create<MessageState & MessageActions>((set, get) => {
+  // Capture store accessors for the RAF callback
+  _storeGet = get as any
+  _storeSet = set as any
+
+  return {
   messages: [],
   hasMore: false,
   isLoadingHistory: false,
@@ -162,13 +200,14 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
   },
 
   appendStreamDelta(msg: AgentMessage) {
-    const { messages } = get()
     const event = (msg as any).event
     if (!event) return
 
     if (event.type === 'content_block_start') {
+      // Flush any pending delta text before creating a new block
+      flushStreamingDelta()
       set({
-        messages: [...messages, {
+        messages: [...get().messages, {
           ...msg,
           type: '_streaming_block' as any,
           _blockType: event.content_block?.type ?? 'text',
@@ -180,20 +219,14 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     }
 
     if (event.type === 'content_block_delta') {
-      const updated = [...messages]
-      for (let i = updated.length - 1; i >= 0; i--) {
-        if ((updated[i] as any).type === '_streaming_block') {
-          const delta = event.delta
-          const prev = updated[i] as any
-          const addedText = delta?.type === 'text_delta' ? delta.text
-            : delta?.type === 'thinking_delta' ? delta.thinking
-            : ''
-          // Create new object so React memo detects the change
-          updated[i] = { ...prev, _content: prev._content + addedText }
-          break
-        }
+      const delta = event.delta
+      _pendingDeltaText += delta?.type === 'text_delta' ? delta.text
+        : delta?.type === 'thinking_delta' ? delta.thinking
+        : ''
+      // Batch rapid deltas — flush at ~60fps via requestAnimationFrame
+      if (_deltaRafId === null) {
+        _deltaRafId = requestAnimationFrame(_flushStreamingDelta)
       }
-      set({ messages: updated })
       return
     }
   },
@@ -203,4 +236,5 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     get()._saveToCache()
     set({ messages: [], hasMore: false, currentLoadedSessionId: null })
   },
-}))
+}})
+

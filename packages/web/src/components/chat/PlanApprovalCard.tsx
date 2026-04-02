@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useConnectionStore } from '../../stores/connectionStore'
+import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import type { PlanApprovalDecisionType } from '@claude-agent-ui/shared'
@@ -12,10 +13,15 @@ const DECISION_LABELS: Record<string, string> = {
 }
 
 export function PlanApprovalCard() {
-  const { pendingPlanApproval, resolvedPlanApproval } = useConnectionStore()
-  const { respondPlanApproval } = useWebSocket()
+  const { pendingPlanApproval, resolvedPlanApproval, lockStatus } = useConnectionStore()
+  const { respondPlanApproval, claimLock } = useWebSocket()
   const [feedback, setFeedback] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+
+  const handleClaim = useCallback(() => {
+    const sid = useSessionStore.getState().currentSessionId
+    if (sid && sid !== '__new__') claimLock(sid)
+  }, [claimLock])
 
   // Show pending or resolved plan
   const plan = pendingPlanApproval ?? resolvedPlanApproval
@@ -24,10 +30,14 @@ export function PlanApprovalCard() {
   const isPending = !!pendingPlanApproval
   const { planContent, planFilePath, allowedPrompts } = plan
   const readonly = isPending ? pendingPlanApproval.readonly : true
+  const isIdle = lockStatus === 'idle'
+  const canClaim = readonly && isIdle && isPending
+  const canInteract = (!readonly || canClaim) && isPending
   const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
 
   const handleDecision = (decision: PlanApprovalDecisionType) => {
     if (!isPending) return
+    if (canClaim) handleClaim()
     if (decision === 'feedback') {
       if (!feedback.trim()) return
       respondPlanApproval(pendingPlanApproval!.requestId, 'feedback', feedback.trim())
@@ -128,8 +138,8 @@ export function PlanApprovalCard() {
         </>
       )}
 
-      {/* Action buttons — only for pending, non-readonly */}
-      {!readonly && (
+      {/* Action buttons — show when user can interact (owns lock or can claim) */}
+      {canInteract && (
         <div className="px-4 pb-3.5">
           <div className="flex gap-2 items-center flex-wrap">
             <button

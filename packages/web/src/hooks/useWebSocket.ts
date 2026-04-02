@@ -29,7 +29,7 @@ function connect() {
     useConnectionStore.getState().setConnectionStatus('connected')
     reconnectAttempt = 0
 
-    const prevId = localStorage.getItem(CONNECTION_ID_KEY)
+    const prevId = sessionStorage.getItem(CONNECTION_ID_KEY)
     if (prevId) {
       socket.send(JSON.stringify({ type: 'reconnect', previousConnectionId: prevId }))
     }
@@ -72,7 +72,7 @@ function handleServerMessage(msg: S2CMessage) {
   switch (msg.type) {
     case 'init':
       conn.setConnectionId(msg.connectionId)
-      localStorage.setItem(CONNECTION_ID_KEY, msg.connectionId)
+      sessionStorage.setItem(CONNECTION_ID_KEY, msg.connectionId)
       break
 
     case 'session-state':
@@ -126,6 +126,23 @@ function handleServerMessage(msg: S2CMessage) {
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
 
+        // ── Diagnostic logging for thinking disappearance bug ──
+        const streamingBlocks = current.filter((m: any) => m.type === '_streaming_block')
+        const thinkingBlocks = streamingBlocks.filter((m: any) => (m as any)._blockType === 'thinking')
+        const prevAssistantWithSameId = apiId ? current.filter((m: any) => m.type === 'assistant' && (m as any).message?.id === apiId) : []
+        const finalContentBlocks: any[] = (msg.message as any).message?.content ?? []
+        const finalThinkingBlocks = finalContentBlocks.filter((b: any) => b.type === 'thinking')
+        console.log('[assistant-msg] apiId=%s, streamingBlocks=%d, thinkingStreamBlocks=%d (content: %s), prevAssistantSameId=%d, finalContentBlocks=%d, finalThinkingBlocks=%d (content: %s)',
+          apiId?.slice(0, 12),
+          streamingBlocks.length,
+          thinkingBlocks.length,
+          thinkingBlocks.map((m: any) => (m as any)._content?.slice(0, 50) || '<empty>').join('; '),
+          prevAssistantWithSameId.length,
+          finalContentBlocks.length,
+          finalThinkingBlocks.length,
+          finalThinkingBlocks.map((b: any) => (b.thinking ? b.thinking.slice(0, 50) : '<empty>')).join('; '),
+        )
+
         // Collect thinking content from streaming blocks before removing them,
         // in case the final assistant message doesn't include thinking blocks.
         const streamedThinking: { type: string; thinking: string }[] = []
@@ -148,6 +165,11 @@ function handleServerMessage(msg: S2CMessage) {
         if (!hasThinking && streamedThinking.length > 0 && finalMsg.message?.content) {
           finalMsg.message.content = [...streamedThinking, ...contentBlocks]
         }
+
+        console.log('[assistant-msg] hasThinking=%s, streamedThinking=%d, finalAction=%s',
+          hasThinking, streamedThinking.length,
+          hasThinking ? 'use-final' : (streamedThinking.length > 0 ? 'prepend-streamed' : 'no-thinking'),
+        )
 
         useMessageStore.setState({ messages: [...cleaned, msg.message] })
       } else {
@@ -227,11 +249,20 @@ function handleServerMessage(msg: S2CMessage) {
 
     case 'lock-status': {
       const myId = useConnectionStore.getState().connectionId
+      const amIHolder = msg.status !== 'idle' && msg.holderId === myId
       conn.setLockStatus(
         msg.status === 'idle' ? 'idle'
-          : msg.holderId === myId ? 'locked_self' : 'locked_other'
+          : amIHolder ? 'locked_self' : 'locked_other'
       )
       conn.setLockHolderId(msg.holderId ?? null)
+      // Sync readonly flag on pending requests when lock ownership changes
+      const { pendingAskUser, pendingApproval } = useConnectionStore.getState()
+      if (pendingAskUser) {
+        conn.setPendingAskUser({ ...pendingAskUser, readonly: !amIHolder })
+      }
+      if (pendingApproval) {
+        conn.setPendingApproval({ ...pendingApproval, readonly: !amIHolder })
+      }
       break
     }
 
@@ -313,6 +344,10 @@ function releaseLock(sessionId: string) {
   send({ type: 'release-lock', sessionId })
 }
 
+function claimLock(sessionId: string) {
+  send({ type: 'claim-lock', sessionId })
+}
+
 // ── Hook (manages singleton lifecycle via ref-counting) ─────────
 export function useWebSocket() {
   useEffect(() => {
@@ -328,5 +363,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, disconnect }
+  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
 }

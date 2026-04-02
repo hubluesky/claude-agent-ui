@@ -73,6 +73,11 @@ export interface C2S_ReleaseLock {
   sessionId: string
 }
 
+export interface C2S_ClaimLock {
+  type: 'claim-lock'
+  sessionId: string
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -85,6 +90,7 @@ export type C2SMessage =
   | C2S_LeaveSession
   | C2S_ResolvePlanApproval
   | C2S_ReleaseLock
+  | C2S_ClaimLock
 
 // ============ Server → Client (S2C) ============
 

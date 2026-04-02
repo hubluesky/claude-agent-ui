@@ -29,6 +29,11 @@ export function createWsHandler(deps: HandlerDeps) {
   }
   const pendingRequestMap = new Map<string, PendingRequest>()
 
+  // On lock release: just broadcast idle — clients claim manually if they want to respond
+  lockManager.setOnRelease((sessionId: string) => {
+    wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
+  })
+
   return function handleConnection(ws: WebSocket) {
     const connectionId = wsHub.register(ws)
     wsHub.sendTo(connectionId, { type: 'init', connectionId })
@@ -47,6 +52,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     ws.on('close', () => {
+      console.log('[ws-close] connectionId=%s, lockedSessions=%j', connectionId, lockManager.getLockedSessions(connectionId))
       lockManager.onDisconnect(connectionId)
       wsHub.unregister(connectionId)
     })
@@ -81,6 +87,9 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'release-lock':
         handleReleaseLock(connectionId, msg.sessionId)
         break
+      case 'claim-lock':
+        handleClaimLock(connectionId, msg.sessionId)
+        break
       case 'leave-session':
         wsHub.leaveSession(connectionId)
         break
@@ -95,6 +104,7 @@ export function createWsHandler(deps: HandlerDeps) {
     const lockHolder = lockManager.getHolder(sessionId)
     const activeSession = sessionManager.getActive(sessionId)
     const isLockHolder = lockHolder === connectionId
+    console.log('[join-session] connectionId=%s, sessionId=%s, lockHolder=%s, isLockHolder=%s, lockStatus=%s', connectionId, sessionId?.slice(0,8), lockHolder, isLockHolder, lockManager.getStatus(sessionId))
     wsHub.sendTo(connectionId, {
       type: 'session-state',
       sessionId,
@@ -515,6 +525,31 @@ export function createWsHandler(deps: HandlerDeps) {
     lockManager.release(sessionId)
   }
 
+  function handleClaimLock(connectionId: string, sessionId: string) {
+    const result = lockManager.acquire(sessionId, connectionId)
+    if (!result.success) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Session already locked', code: 'session_locked' })
+      return
+    }
+    wsHub.broadcast(sessionId, {
+      type: 'lock-status',
+      sessionId,
+      status: 'locked',
+      holderId: connectionId,
+    })
+    // Re-send pending requests as non-readonly to the new holder
+    for (const [, entry] of pendingRequestMap) {
+      if (entry.sessionId !== sessionId) continue
+      if (entry.type === 'tool-approval') {
+        wsHub.sendTo(connectionId, { type: 'tool-approval-request', ...entry.payload, readonly: false } as any)
+      } else if (entry.type === 'ask-user') {
+        wsHub.sendTo(connectionId, { type: 'ask-user-request', ...entry.payload, readonly: false } as any)
+      } else if (entry.type === 'plan-approval') {
+        wsHub.sendTo(connectionId, { type: 'plan-approval', sessionId, ...entry.payload, readonly: false } as any)
+      }
+    }
+  }
+
   async function handleSetMode(connectionId: string, sessionId: string, mode: string) {
     const isIdle = lockManager.getStatus(sessionId) === 'idle'
     const isHolder = lockManager.isHolder(sessionId, connectionId)
@@ -618,7 +653,9 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleReconnect(connectionId: string, previousConnectionId: string) {
+    console.log('[reconnect] newId=%s, prevId=%s, lockBefore=%s', connectionId, previousConnectionId, lockManager.getHolder(previousConnectionId ? '' : ''))
     lockManager.onReconnect(previousConnectionId, connectionId)
+    console.log('[reconnect] lock transferred, any lock for prev?', lockManager.getLockedSessions(connectionId))
 
     const oldClient = wsHub.getClient(previousConnectionId)
     if (oldClient?.sessionId) {

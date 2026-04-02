@@ -2,9 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { ChatMessagesPane } from './ChatMessagesPane'
 import { ChatComposer } from './ChatComposer'
 import { PermissionBanner } from './PermissionBanner'
-import { PlanApprovalCard } from './PlanApprovalCard'
 import { PlanModal } from './PlanModal'
-import { AskUserPanel } from './AskUserPanel'
 import { ConnectionBanner } from './ConnectionBanner'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -71,9 +69,7 @@ export function ChatInterface() {
       ) : (
         <ChatMessagesPane sessionId={currentSessionId} />
       )}
-      <PlanApprovalCard />
       <PermissionBanner />
-      <AskUserPanel />
       <ChatComposer onSend={handleSend} onAbort={handleAbort} />
       <PlanModal />
     </div>

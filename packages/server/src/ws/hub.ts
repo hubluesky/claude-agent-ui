@@ -99,6 +99,12 @@ export class WSHub {
     return this.sessionSubscribers.get(sessionId)?.size ?? 0
   }
 
+  /** Get all connection IDs subscribed to a session */
+  getSessionClients(sessionId: string): string[] {
+    const subs = this.sessionSubscribers.get(sessionId)
+    return subs ? [...subs] : []
+  }
+
   getSessionIdForConnection(connectionId: string): string | null {
     return this.clients.get(connectionId)?.sessionId ?? null
   }

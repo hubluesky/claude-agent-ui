@@ -17,11 +17,13 @@ interface ComposerToolbarProps {
   fileRefs: string[]
   isLocked: boolean
   isRunning: boolean
+  isLockHolder: boolean
+  onReleaseLock: () => void
 }
 
 export function ComposerToolbar({
   onUpload, onSlashClick, onAtClick, onSend, onAbort,
-  canSend, fileRefs, isLocked, isRunning,
+  canSend, fileRefs, isLocked, isRunning, isLockHolder, onReleaseLock,
 }: ComposerToolbarProps) {
   const [showPlusMenu, setShowPlusMenu] = useState(false)
   const [showModes, setShowModes] = useState(false)
@@ -152,6 +154,22 @@ export function ComposerToolbar({
                 {statusInfo.text}
               </span>
             </div>
+            <span className="text-[#3d3b37]">|</span>
+          </>
+        )}
+
+        {isLockHolder && (
+          <>
+            <button
+              onClick={onReleaseLock}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[#a8a29e] hover:text-[#e5e2db] hover:bg-[#3d3b3780] transition-colors"
+              title="Release lock"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </button>
             <span className="text-[#3d3b37]">|</span>
           </>
         )}

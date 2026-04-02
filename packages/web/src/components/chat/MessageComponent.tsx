@@ -241,17 +241,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
         </div>
       )
     }
-    // hook events
-    if (sub === 'hook_started' || sub === 'hook_progress' || sub === 'hook_response') {
-      const hookContent = (message as any).content ?? (message as any).hook_name ?? ''
-      if (!hookContent) return null
-      return (
-        <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#7c7872]" />
-          <span className="truncate">{typeof hookContent === 'string' ? hookContent.slice(0, 150) : JSON.stringify(hookContent).slice(0, 150)}</span>
-        </div>
-      )
-    }
+    // hook events — internal lifecycle noise, don't render in chat
+    // (hook_started, hook_progress, hook_response fall through to return null)
     // local_command_output
     if (sub === 'local_command_output') {
       const output = (message as any).output ?? (message as any).content ?? ''

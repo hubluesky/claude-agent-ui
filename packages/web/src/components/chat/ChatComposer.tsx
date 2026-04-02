@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
+import { useWebSocket } from '../../hooks/useWebSocket'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useCommandStore } from '../../stores/commandStore'
@@ -66,6 +67,15 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
 
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
+  const isLockHolder = lockStatus === 'locked_self'
+  const { releaseLock } = useWebSocket()
+
+  const handleReleaseLock = useCallback(() => {
+    const sid = useSessionStore.getState().currentSessionId
+    if (sid && sid !== '__new__' && isLockHolder) {
+      releaseLock(sid)
+    }
+  }, [isLockHolder, releaseLock])
 
   // Slash command detection (cursor-based, like @ trigger)
   const filteredCommands = useMemo(() => {
@@ -399,6 +409,8 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
           fileRefs={fileRefs}
           isLocked={isLocked}
           isRunning={isRunning}
+          isLockHolder={isLockHolder}
+          onReleaseLock={handleReleaseLock}
         />
       </div>
 
