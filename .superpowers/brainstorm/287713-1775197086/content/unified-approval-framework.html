@@ -1,0 +1,284 @@
+<h2>方案 B：统一审批框架 — 架构设计</h2>
+<p class="subtitle">抽象出 ApprovalPanel 组件，三种审批类型共享布局、claim-lock 逻辑和交互模式</p>
+
+<!-- ==================== 架构图 ==================== -->
+<h3 style="margin-top:16px;border-bottom:1px solid #3d3b37;padding-bottom:8px;">1. 组件架构</h3>
+
+<div class="mockup">
+  <div class="mockup-header">统一审批框架层级</div>
+  <div class="mockup-body" style="background:#1c1b18;padding:20px;">
+    <!-- Architecture diagram -->
+    <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;">
+      <!-- Top: ApprovalPanel -->
+      <div style="border:2px solid #d97706;border-radius:8px;padding:16px;background:#d9770608;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:14px;font-weight:700;color:#d97706;">ApprovalPanel</span>
+          <span style="font-size:10px;color:#7c7872;background:#242320;padding:2px 8px;border-radius:4px;">新组件 — 统一容器</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">
+          <div style="background:#242320;border:1px solid #3d3b37;border-radius:6px;padding:8px;">
+            <span style="color:#22c55e;">●</span> <span style="color:#a8a29e;">claim-lock 逻辑</span><br/>
+            <span style="color:#7c7872;font-size:10px;">canClaim / canInteract / handleClaim</span>
+          </div>
+          <div style="background:#242320;border:1px solid #3d3b37;border-radius:6px;padding:8px;">
+            <span style="color:#0ea5e9;">●</span> <span style="color:#a8a29e;">readonly 展示</span><br/>
+            <span style="color:#7c7872;font-size:10px;">等待操作者响应 / 锁超时恢复</span>
+          </div>
+          <div style="background:#242320;border:1px solid #3d3b37;border-radius:6px;padding:8px;">
+            <span style="color:#a855f7;">●</span> <span style="color:#a8a29e;">统一样式</span><br/>
+            <span style="color:#7c7872;font-size:10px;">圆角容器 / 编号选项 / 键盘快捷键</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="text-align:center;color:#3d3b37;font-size:20px;">▼ 通过 config 驱动渲染 ▼</div>
+
+      <!-- Three panels -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div style="border:1px solid #22c55e40;border-radius:8px;padding:12px;background:#22c55e08;">
+          <div style="font-size:12px;font-weight:600;color:#22c55e;margin-bottom:6px;">ToolApprovalConfig</div>
+          <ul style="font-size:10px;color:#a8a29e;margin:0;padding-left:14px;line-height:1.6;">
+            <li>title: 工具名 + 描述</li>
+            <li>content: 工具输入展示</li>
+            <li>options: 允许/始终允许/拒绝</li>
+            <li>feedbackField: 拒绝原因</li>
+            <li>onDecision → respondToolApproval()</li>
+          </ul>
+        </div>
+        <div style="border:1px solid #d9770640;border-radius:8px;padding:12px;background:#d9770608;">
+          <div style="font-size:12px;font-weight:600;color:#d97706;margin-bottom:6px;">PlanApprovalConfig</div>
+          <ul style="font-size:10px;color:#a8a29e;margin:0;padding-left:14px;line-height:1.6;">
+            <li>title: 接受此计划？</li>
+            <li>content: 计划内容 (Markdown)</li>
+            <li>options: 动态生成（基于模式/上下文%）</li>
+            <li>badge: 上下文占比</li>
+            <li>feedbackField: 修改建议</li>
+            <li>onDecision → respondPlanApproval()</li>
+          </ul>
+        </div>
+        <div style="border:1px solid #0ea5e940;border-radius:8px;padding:12px;background:#0ea5e908;">
+          <div style="font-size:12px;font-weight:600;color:#0ea5e9;margin-bottom:6px;">AskUserConfig</div>
+          <ul style="font-size:10px;color:#a8a29e;margin:0;padding-left:14px;line-height:1.6;">
+            <li>title: Claude 需要输入</li>
+            <li>content: 问题文本</li>
+            <li>options: SDK 预设选项</li>
+            <li>multiSelect: 多选模式</li>
+            <li>preview: 选项预览</li>
+            <li>otherField: 自定义输入</li>
+            <li>onDecision → respondAskUser()</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="text-align:center;color:#3d3b37;font-size:20px;">▼ 替换现有组件 ▼</div>
+
+      <!-- Deleted components -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div style="border:1px dashed #f8717150;border-radius:8px;padding:10px;text-align:center;">
+          <span style="font-size:12px;color:#f87171;text-decoration:line-through;">PermissionBanner.tsx</span>
+          <span style="font-size:10px;color:#f87171;display:block;">→ 删除</span>
+        </div>
+        <div style="border:1px dashed #f8717150;border-radius:8px;padding:10px;text-align:center;">
+          <span style="font-size:12px;color:#f87171;text-decoration:line-through;">PlanApprovalActions.tsx</span>
+          <span style="font-size:10px;color:#f87171;display:block;">→ 删除</span>
+        </div>
+        <div style="border:1px dashed #f8717150;border-radius:8px;padding:10px;text-align:center;">
+          <span style="font-size:12px;color:#f87171;text-decoration:line-through;">AskUserPanel.tsx</span>
+          <span style="font-size:10px;color:#f87171;display:block;">→ 删除</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ApprovalPanel 接口 ==================== -->
+<h3 style="margin-top:24px;border-bottom:1px solid #3d3b37;padding-bottom:8px;">2. ApprovalPanel 接口设计</h3>
+
+<div class="mockup">
+  <div class="mockup-header">TypeScript 接口</div>
+  <div class="mockup-body" style="background:#1e1d1a;padding:16px;font-family:monospace;font-size:12px;line-height:1.7;color:#a8a29e;">
+<pre style="margin:0;white-space:pre-wrap;"><span style="color:#a855f7;">interface</span> <span style="color:#22c55e;">ApprovalOption</span> {
+  <span style="color:#e5e2db;">key</span>: <span style="color:#0ea5e9;">string</span>           <span style="color:#7c7872;">// 决策标识 'allow' | 'deny' | 'auto-accept' ...</span>
+  <span style="color:#e5e2db;">label</span>: <span style="color:#0ea5e9;">string</span>         <span style="color:#7c7872;">// 显示文字</span>
+  <span style="color:#e5e2db;">description</span>?: <span style="color:#0ea5e9;">string</span>   <span style="color:#7c7872;">// 选项说明</span>
+  <span style="color:#e5e2db;">color</span>?: <span style="color:#d97706;">'green'</span> | <span style="color:#d97706;">'amber'</span> | <span style="color:#d97706;">'purple'</span> | <span style="color:#d97706;">'gray'</span> | <span style="color:#d97706;">'red'</span>
+  <span style="color:#e5e2db;">preview</span>?: <span style="color:#0ea5e9;">string</span>       <span style="color:#7c7872;">// AskUser: 选项预览内容</span>
+}
+
+<span style="color:#a855f7;">interface</span> <span style="color:#22c55e;">ApprovalPanelConfig</span> {
+  <span style="color:#e5e2db;">type</span>: <span style="color:#d97706;">'tool-approval'</span> | <span style="color:#d97706;">'plan-approval'</span> | <span style="color:#d97706;">'ask-user'</span>
+  <span style="color:#e5e2db;">title</span>: <span style="color:#0ea5e9;">string</span>           <span style="color:#7c7872;">// 面板标题</span>
+  <span style="color:#e5e2db;">titleIcon</span>?: <span style="color:#0ea5e9;">ReactNode</span>   <span style="color:#7c7872;">// 标题图标</span>
+  <span style="color:#e5e2db;">badge</span>?: <span style="color:#0ea5e9;">string</span>          <span style="color:#7c7872;">// 右上角 badge（如"上下文 42%"）</span>
+  <span style="color:#e5e2db;">content</span>?: <span style="color:#0ea5e9;">ReactNode</span>    <span style="color:#7c7872;">// 中间区域（工具输入/计划内容/问题文字）</span>
+  <span style="color:#e5e2db;">options</span>: <span style="color:#22c55e;">ApprovalOption</span>[]
+  <span style="color:#e5e2db;">multiSelect</span>?: <span style="color:#0ea5e9;">boolean</span>  <span style="color:#7c7872;">// AskUser 多选模式</span>
+  <span style="color:#e5e2db;">feedbackField</span>?: {       <span style="color:#7c7872;">// 可选文本输入</span>
+    <span style="color:#e5e2db;">placeholder</span>: <span style="color:#0ea5e9;">string</span>
+    <span style="color:#e5e2db;">submitKey</span>?: <span style="color:#0ea5e9;">string</span>    <span style="color:#7c7872;">// 关联的决策 key（按 Enter 时触发）</span>
+  }
+  <span style="color:#e5e2db;">otherField</span>?: {          <span style="color:#7c7872;">// AskUser "其他" 输入</span>
+    <span style="color:#e5e2db;">placeholder</span>: <span style="color:#0ea5e9;">string</span>
+  }
+  <span style="color:#e5e2db;">onDecision</span>: (<span style="color:#e5e2db;">key</span>: <span style="color:#0ea5e9;">string</span>, <span style="color:#e5e2db;">payload</span>?: <span style="color:#0ea5e9;">any</span>) => <span style="color:#0ea5e9;">void</span>
+  <span style="color:#e5e2db;">readonly</span>: <span style="color:#0ea5e9;">boolean</span>
+  <span style="color:#e5e2db;">canClaim</span>: <span style="color:#0ea5e9;">boolean</span>
+}</pre>
+  </div>
+</div>
+
+<!-- ==================== 新的统一 UI ==================== -->
+<h3 style="margin-top:24px;border-bottom:1px solid #3d3b37;padding-bottom:8px;">3. 统一面板 UI — 三种类型示例</h3>
+
+<div style="display:flex;flex-direction:column;gap:16px;">
+  <!-- Tool Approval -->
+  <div class="mockup">
+    <div class="mockup-header">ApprovalPanel → 工具审批</div>
+    <div class="mockup-body" style="background:#1c1b18;padding:16px;border-radius:8px;">
+      <div style="border:1px solid #d9770640;border-radius:12px;background:#1a1918;overflow:hidden;padding:12px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="color:#d97706;">🛡</span>
+          <span style="font-size:13px;font-weight:600;color:#d97706;">Claude 请求使用 Bash</span>
+        </div>
+        <!-- content slot: tool input -->
+        <div style="margin-bottom:10px;background:#1e1d1a;border:1px solid #3d3b37;border-radius:6px;padding:10px 12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="color:#059669;font-family:monospace;font-size:10px;">&gt;_</span>
+            <span style="font-size:12px;font-family:monospace;color:#d97706;font-weight:600;">Bash</span>
+            <span style="font-size:12px;font-family:monospace;color:#a8a29e;">npm install lodash</span>
+          </div>
+        </div>
+        <!-- unified options -->
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #22c55e30;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #22c55e50;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#22c55e;">1</span>
+            <span style="font-size:13px;color:#e5e2db;">允许</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #d9770630;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #d9770650;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#d97706;">2</span>
+            <span style="font-size:13px;color:#e5e2db;">始终允许</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #f8717130;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #f8717150;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#f87171;">3</span>
+            <span style="font-size:13px;color:#f87171;">拒绝</span>
+          </div>
+          <input type="text" placeholder="拒绝原因（可选）..." style="width:100%;box-sizing:border-box;padding:8px 16px;font-size:12px;background:transparent;border:1px solid #3d3b37;border-radius:6px;color:#e5e2db;outline:none;" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan Approval -->
+  <div class="mockup">
+    <div class="mockup-header">ApprovalPanel → 计划审批</div>
+    <div class="mockup-body" style="background:#1c1b18;padding:16px;border-radius:8px;">
+      <div style="border:1px solid #d9770640;border-radius:12px;background:#1a1918;overflow:hidden;padding:12px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="color:#d97706;">📋</span>
+          <span style="font-size:13px;font-weight:600;color:#d97706;">接受此计划？</span>
+          <span style="flex:1;"></span>
+          <span style="font-size:10px;padding:2px 8px;background:#d9770615;border:1px solid #d9770630;border-radius:10px;color:#d97706;font-family:monospace;">上下文 42% 已用</span>
+        </div>
+        <!-- content slot: plan markdown (collapsed) -->
+        <div style="margin-bottom:10px;background:#1e1d1a;border:1px solid #3d3b37;border-radius:6px;padding:10px 12px;max-height:60px;overflow:hidden;position:relative;">
+          <span style="font-size:12px;color:#a8a29e;">计划：侧边栏显示会话消息数量徽章...</span>
+          <div style="position:absolute;bottom:0;left:0;right:0;height:30px;background:linear-gradient(transparent,#1e1d1a);"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #22c55e30;border-radius:6px;background:#22c55e08;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #22c55e50;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#22c55e;">1</span>
+            <span style="font-size:13px;color:#e5e2db;">清除上下文 <span style="color:#7c7872;font-size:11px;">(42%)</span> 并自动接受</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #d9770630;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #d9770650;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#d97706;">2</span>
+            <span style="font-size:13px;color:#e5e2db;">自动接受编辑</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #a855f730;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #a855f750;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#a855f7;">3</span>
+            <span style="font-size:13px;color:#e5e2db;">跳过所有权限检查</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #3d3b37;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #3d3b37;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7c7872;">4</span>
+            <span style="font-size:13px;color:#a8a29e;">手动审批编辑</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #3d3b37;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid #3d3b37;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7c7872;">5</span>
+            <span style="font-size:13px;color:#a8a29e;">否，继续规划</span>
+          </div>
+          <input type="text" placeholder="告诉 Claude 需要修改什么..." style="width:100%;box-sizing:border-box;padding:8px 16px;font-size:12px;background:transparent;border:1px solid #3d3b37;border-radius:6px;color:#e5e2db;outline:none;" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AskUser -->
+  <div class="mockup">
+    <div class="mockup-header">ApprovalPanel → 用户提问（多选模式）</div>
+    <div class="mockup-body" style="background:#1c1b18;padding:16px;border-radius:8px;">
+      <div style="border:1px solid #d9770640;border-radius:12px;background:#1a1918;overflow:hidden;padding:12px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="color:#d97706;">❓</span>
+          <span style="font-size:13px;font-weight:600;color:#d97706;">Claude 需要输入</span>
+          <span style="font-size:9px;padding:2px 6px;background:#0ea5e915;border:1px solid #0ea5e930;border-radius:8px;color:#0ea5e9;">可多选</span>
+        </div>
+        <p style="font-size:14px;color:#e5e2db;margin:0 0 10px;">你希望启用哪些功能？</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #22c55e40;border-radius:6px;background:#22c55e08;">
+            <span style="width:20px;height:20px;border-radius:4px;border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;font-size:12px;color:#22c55e;">✓</span>
+            <span style="font-size:13px;color:#e5e2db;">TypeScript 严格模式</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #3d3b37;border-radius:6px;">
+            <span style="width:20px;height:20px;border-radius:4px;border:2px solid #3d3b37;display:flex;align-items:center;justify-content:center;font-size:12px;color:transparent;">✓</span>
+            <span style="font-size:13px;color:#a8a29e;">ESLint 集成</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border:1px solid #22c55e40;border-radius:6px;background:#22c55e08;">
+            <span style="width:20px;height:20px;border-radius:4px;border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;font-size:12px;color:#22c55e;">✓</span>
+            <span style="font-size:13px;color:#e5e2db;">Prettier</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            <button style="padding:6px 16px;font-size:12px;color:#1c1b18;background:#d97706;border-radius:6px;border:none;font-weight:600;">确认选择 (2)</button>
+            <span style="font-size:11px;color:#5c5952;">其他...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 全量文件改动 ==================== -->
+<h3 style="margin-top:24px;border-bottom:1px solid #3d3b37;padding-bottom:8px;">4. 全量文件改动清单</h3>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+  <div style="background:#22c55e08;border:1px solid #22c55e30;border-radius:8px;padding:12px;">
+    <h4 style="color:#22c55e;font-size:11px;text-transform:uppercase;margin:0 0 8px;">➕ 新建</h4>
+    <ul style="font-size:12px;color:#a8a29e;margin:0;padding-left:16px;line-height:2;">
+      <li><code>web/components/chat/ApprovalPanel.tsx</code> — 统一审批面板</li>
+      <li><code>web/components/chat/approval-configs.ts</code> — 三种类型的配置工厂</li>
+      <li><code>shared/constants.ts</code> — SAFETY_SENSITIVE_PATTERNS</li>
+    </ul>
+  </div>
+  <div style="background:#f8717108;border:1px solid #f8717130;border-radius:8px;padding:12px;">
+    <h4 style="color:#f87171;font-size:11px;text-transform:uppercase;margin:0 0 8px;">🗑 删除</h4>
+    <ul style="font-size:12px;color:#a8a29e;margin:0;padding-left:16px;line-height:2;">
+      <li><code style="text-decoration:line-through;">PermissionBanner.tsx</code></li>
+      <li><code style="text-decoration:line-through;">PlanApprovalActions.tsx</code></li>
+      <li><code style="text-decoration:line-through;">AskUserPanel.tsx</code></li>
+    </ul>
+  </div>
+  <div style="background:#d9770608;border:1px solid #d9770630;border-radius:8px;padding:12px;grid-column:1/3;">
+    <h4 style="color:#d97706;font-size:11px;text-transform:uppercase;margin:0 0 8px;">✏️ 修改</h4>
+    <ul style="font-size:12px;color:#a8a29e;margin:0;padding-left:16px;line-height:2;columns:2;">
+      <li><code>shared/tools.ts</code> — PlanApprovalDecisionType + 'bypass'</li>
+      <li><code>shared/protocol.ts</code> — S2C_PlanApproval + contextUsagePercent</li>
+      <li><code>server/v1-session.ts</code> — bypass 安全检查 / prePlanMode / 上下文占比 / AskUser 透传</li>
+      <li><code>server/handler.ts</code> — bypass 决策 / prePlanMode 保存恢复</li>
+      <li><code>web/stores/connectionStore.ts</code> — contextUsagePercent 字段</li>
+      <li><code>web/hooks/useWebSocket.ts</code> — 解析 contextUsagePercent</li>
+      <li><code>web/components/chat/ChatInterface.tsx</code> — 引用 ApprovalPanel 替换旧组件</li>
+      <li><code>web/components/chat/ModesPopup.tsx</code> — 中文化 + bypass 安全提示</li>
+      <li><code>web/components/chat/PlanApprovalCard.tsx</code> — 透传 contextUsagePercent</li>
+    </ul>
+  </div>
+</div>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 2: 消息增强 — 实施计划</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--tm:#8b949e;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;padding:2rem;max-width:1200px;margin:0 auto}
+  h1{font-size:1.6rem;margin-bottom:.3rem;color:var(--c)}
+  .sub{color:var(--tm);font-size:.85rem;margin-bottom:2rem;border-bottom:1px solid var(--bd);padding-bottom:1rem}
+  h2{font-size:1.25rem;margin:2.5rem 0 .75rem;color:var(--a);border-bottom:1px solid var(--bd);padding-bottom:.4rem}
+  h3{font-size:1rem;margin:1.2rem 0 .5rem;color:var(--t)}
+  h4{font-size:.9rem;color:var(--p);margin:1rem 0 .4rem}
+  .feature{background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:1.5rem;margin:1.5rem 0}
+  .feature-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+  .feature-num{background:var(--c);color:#000;font-weight:700;font-size:.8rem;padding:.2rem .6rem;border-radius:6px}
+  .feature-title{font-size:1.15rem;font-weight:600}
+  .meta{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.8rem;color:var(--tm)}
+  .badge{display:inline-block;padding:.1rem .4rem;border-radius:9999px;font-size:.7rem;font-weight:600}
+  .b-g{background:rgba(63,185,80,.15);color:var(--g)}.b-y{background:rgba(210,153,34,.15);color:var(--y)}.b-p{background:rgba(188,140,255,.15);color:var(--p)}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.85rem}
+  th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--bd)}
+  th{background:var(--s2);color:var(--a);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+  code{background:var(--s2);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;color:var(--p);font-family:'SF Mono','Cascadia Code',monospace}
+  pre{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.8rem;line-height:1.5;margin:.75rem 0;font-family:'SF Mono','Cascadia Code',monospace}
+  .note{background:rgba(88,166,255,.08);border-left:3px solid var(--a);padding:.6rem .8rem;border-radius:0 6px 6px 0;font-size:.85rem;color:var(--tm);margin:.75rem 0}
+  a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+  .nav{display:flex;justify-content:space-between;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--bd);font-size:.85rem}
+
+  /* Mockup frame common styles */
+  .mockup-frame{max-width:520px;background:#1a1918;border:1px solid #3d3b37;border-radius:10px;padding:16px;margin:12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#e5e2db}
+  .mockup-frame *{box-sizing:border-box}
+  .mockup-label{font-size:11px;color:#7c7872;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+</style>
+</head>
+<body>
+
+<h1>Phase 2: 消息增强</h1>
+<p class="sub">改善消息渲染质量，让工具结果更可读、更易操作 &nbsp;|&nbsp; 6 个功能点</p>
+
+<!-- ==================== 2.1 Task Progress ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">2.1</span>
+    <span class="feature-title">Task 进度卡片</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 4</span>
+    <span>SDK 消息: <code>SDKTaskStarted</code> / <code>SDKTaskProgress</code> / <code>SDKTaskNotification</code></span>
+  </div>
+
+  <h3>问题</h3>
+  <p>Agent 用 TaskCreate/TaskUpdate 管理工作进度，但 UI 上完全看不到任务列表和进度。</p>
+
+  <h3>SDK 消息格式</h3>
+<pre>// Task 开始
+{ type:'system', subtype:'task_started',
+  task_id:'task_1', description:'修复登录bug',
+  task_type:'agent', workflow_name:'debug' }
+
+// Task 进度（周期性）
+{ type:'system', subtype:'task_progress',
+  task_id:'task_1', description:'修复登录bug',
+  usage: { total_tokens:5200, tool_uses:3, duration_ms:12000 },
+  last_tool_name:'Grep', summary:'正在搜索相关代码...' }
+
+// Task 完成
+{ type:'system', subtype:'task_notification',
+  task_id:'task_1', status:'completed'|'failed'|'stopped',
+  summary:'已修复登录验证逻辑', output_file:'/tmp/...',
+  usage: { total_tokens:15000, tool_uses:8, duration_ms:45000 } }</pre>
+
+  <h3>UI 表现</h3>
+
+  <!-- Mockup: Task Started -->
+  <div class="mockup-frame">
+    <div class="mockup-label">Task Started</div>
+    <div style="border:1px solid rgba(168,85,247,0.15);border-left:3px solid #a855f7;border-radius:8px;padding:12px 14px;background:#1e1d1a">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="color:#a855f7;font-size:15px">&#9635;</span>
+        <span style="color:#e5e2db;font-weight:600;font-size:14px">修复登录bug</span>
+        <span style="margin-left:auto;font-size:11px;color:#7c7872;background:#242320;padding:2px 8px;border-radius:9999px">agent &middot; debug</span>
+      </div>
+      <div style="font-size:12px;color:#7c7872;padding-left:23px">&#9201; 刚开始</div>
+    </div>
+  </div>
+
+  <!-- Mockup: Task Progress -->
+  <div class="mockup-frame">
+    <div class="mockup-label">Task Progress (实时更新同一个卡片)</div>
+    <div style="border:1px solid rgba(234,179,8,0.15);border-left:3px solid #eab308;border-radius:8px;padding:12px 14px;background:#1e1d1a">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="color:#d97706;font-size:15px">&#9635;</span>
+        <span style="color:#e5e2db;font-weight:600;font-size:14px">修复登录bug</span>
+        <!-- pulsing dot -->
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#eab308;box-shadow:0 0 6px #eab308;animation:pulse 1.5s infinite"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#a8a29e;padding-left:23px;margin-bottom:4px">
+        <span style="color:#eab308">&#9201; 12s</span>
+        <span>&middot;</span>
+        <span>3 tools</span>
+        <span>&middot;</span>
+        <span>5.2K tokens</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;padding-left:23px">
+        <span style="color:#0ea5e9">正在搜索相关代码...</span>
+        <span style="color:#7c7872;background:#242320;padding:1px 6px;border-radius:4px;font-size:11px">Grep</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mockup: Task Completed -->
+  <div class="mockup-frame">
+    <div class="mockup-label">Task Completed</div>
+    <div style="border:1px solid rgba(163,230,53,0.15);border-left:3px solid #a3e635;border-radius:8px;padding:12px 14px;background:#1e1d1a">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="color:#3fb950;font-size:15px">&#10003;</span>
+        <span style="color:#e5e2db;font-weight:600;font-size:14px">修复登录bug</span>
+        <span style="font-size:11px;color:#3fb950;background:rgba(63,185,80,0.1);padding:2px 8px;border-radius:9999px;margin-left:auto">completed</span>
+      </div>
+      <div style="font-size:12px;color:#7c7872;padding-left:23px;margin-bottom:4px">45s &middot; 8 tools &middot; 15K tokens</div>
+      <div style="font-size:12px;color:#a8a29e;padding-left:23px">已修复登录验证逻辑</div>
+    </div>
+  </div>
+
+  <!-- Mockup: Task Failed -->
+  <div class="mockup-frame">
+    <div class="mockup-label">Task Failed</div>
+    <div style="border:1px solid rgba(248,113,113,0.15);border-left:3px solid #f87171;border-radius:8px;padding:12px 14px;background:#1e1d1a">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="color:#f87171;font-size:15px">&#10007;</span>
+        <span style="color:#e5e2db;font-weight:600;font-size:14px">修复登录bug</span>
+        <span style="font-size:11px;color:#f87171;background:rgba(248,113,113,0.1);padding:2px 8px;border-radius:9999px;margin-left:auto">failed</span>
+      </div>
+      <div style="font-size:12px;color:#7c7872;padding-left:23px">23s &middot; 5 tools &middot; 8K tokens</div>
+    </div>
+  </div>
+
+  <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}</style>
+
+  <h4>实现要点</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>TaskCard 是<strong>有状态组件</strong>：started → progress（多次更新）→ notification</li>
+    <li>用 <code>task_id</code> 关联三种消息，更新同一张卡片而不是新增消息</li>
+    <li>在 messageStore 中维护 <code>taskMap: Map&lt;string, TaskState&gt;</code></li>
+    <li>消息流中仅在 task_started 时插入一条消息，后续更新该消息</li>
+    <li>completed 用绿色左边框，failed 用红色，running 用黄色脉冲</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/stores/messageStore.ts</code></td><td>新增 task 消息识别和 task map 维护</td></tr>
+    <tr><td><code>web/hooks/useWebSocket.ts</code></td><td>路由 task_started/progress/notification 到 messageStore</td></tr>
+    <tr><td><code>web/components/chat/TaskCard.tsx</code></td><td><strong>新增</strong>：Task 进度卡片组件</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>增加 task 类型消息渲染分支</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 2.2 折叠 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">2.2</span>
+    <span class="feature-title">工具结果折叠/展开</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 1</span>
+    <span>纯 UI</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>长工具结果（如 Grep 返回几十行、Bash 输出大量日志）占满屏幕，挤掉有意义的内容。</p>
+
+  <h3>UI 表现</h3>
+
+  <!-- Mockup: Collapsed State -->
+  <div class="mockup-frame">
+    <div class="mockup-label">折叠状态 (默认，结果 &gt; 10 行)</div>
+    <!-- Tool header -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #3d3b37">
+        <span style="color:#0ea5e9;font-weight:600;font-size:13px">Grep</span>
+        <span style="color:#7c7872;font-size:12px">pattern="TODO" &middot; 23 matches</span>
+        <span style="margin-left:auto;color:#7c7872;font-size:11px">&#9660;</span>
+      </div>
+      <div style="padding:8px 12px;font-family:'SF Mono','Cascadia Code',monospace;font-size:12px;color:#a8a29e;line-height:1.7">
+        <div>src/main.ts:12: <span style="color:#7c7872">// TODO: fix this</span></div>
+        <div>src/main.ts:45: <span style="color:#7c7872">// TODO: refactor</span></div>
+        <div>src/utils.ts:8: <span style="color:#7c7872">// TODO: add tests</span></div>
+      </div>
+      <div style="padding:6px 12px 10px;text-align:center">
+        <button style="background:none;border:1px solid #3d3b37;color:#d97706;font-size:12px;padding:4px 14px;border-radius:6px;cursor:pointer">&#9662; 展开全部 (23 行)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mockup: Expanded State -->
+  <div class="mockup-frame">
+    <div class="mockup-label">展开状态</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #3d3b37">
+        <span style="color:#0ea5e9;font-weight:600;font-size:13px">Grep</span>
+        <span style="color:#7c7872;font-size:12px">pattern="TODO" &middot; 23 matches</span>
+        <button style="margin-left:auto;background:none;border:1px solid #3d3b37;color:#d97706;font-size:11px;padding:2px 10px;border-radius:6px;cursor:pointer">&#9652; 折叠</button>
+      </div>
+      <div style="padding:8px 12px;font-family:'SF Mono','Cascadia Code',monospace;font-size:12px;color:#a8a29e;line-height:1.7;max-height:160px;overflow-y:auto">
+        <div>src/main.ts:12: <span style="color:#7c7872">// TODO: fix this</span></div>
+        <div>src/main.ts:45: <span style="color:#7c7872">// TODO: refactor</span></div>
+        <div>src/utils.ts:8: <span style="color:#7c7872">// TODO: add tests</span></div>
+        <div>src/api.ts:22: <span style="color:#7c7872">// TODO: error handling</span></div>
+        <div>src/api.ts:67: <span style="color:#7c7872">// TODO: retry logic</span></div>
+        <div>src/db.ts:11: <span style="color:#7c7872">// TODO: migration</span></div>
+        <div style="color:#7c7872">... (23 行)</div>
+      </div>
+    </div>
+  </div>
+
+  <h4>实现规则</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>工具结果 ≤ 10 行：完整展示，无折叠按钮</li>
+    <li>工具结果 > 10 行：默认折叠，显示前 3 行 + "展开全部 (N 行)" 按钮</li>
+    <li>点击展开/折叠切换，使用 <code>&lt;details&gt;</code> 或 local state</li>
+    <li>不影响消息流的虚拟滚动（Virtuoso）— 使用 CSS transition 避免跳变</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>工具结果渲染区增加折叠逻辑（已有部分实现，增强阈值判断和 UI）</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 2.3 Diff ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">2.3</span>
+    <span class="feature-title">Diff 渲染组件</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 3</span>
+    <span>纯 UI</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>Edit/Write 工具的结果是纯文本，看不出改了什么。claude-code 有语法高亮的 unified diff。</p>
+
+  <h3>UI 表现</h3>
+
+  <div class="mockup-frame">
+    <div class="mockup-label">Diff View &mdash; Edit Tool</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;overflow:hidden">
+      <!-- Tool header -->
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #3d3b37">
+        <span style="color:#d97706;font-weight:600;font-size:13px">Edit</span>
+        <span style="color:#a8a29e;font-size:12px">src/agent/v1-session.ts</span>
+        <span style="margin-left:auto;color:#7c7872;font-size:11px">&#9660;</span>
+      </div>
+      <!-- Diff body -->
+      <div style="font-family:'SF Mono','Cascadia Code',monospace;font-size:12px;line-height:1.8">
+        <!-- Context line -->
+        <div style="display:flex;padding:0 12px;color:#7c7872">
+          <span style="display:inline-block;width:40px;text-align:right;padding-right:10px;user-select:none;color:#7c7872">257</span>
+          <span style="color:#a8a29e">&nbsp; private getAutoDecision(</span>
+        </div>
+        <!-- Deletion lines -->
+        <div style="display:flex;padding:0 12px;background:rgba(248,81,73,0.1)">
+          <span style="display:inline-block;width:40px;text-align:right;padding-right:10px;user-select:none;color:#7c7872">258</span>
+          <span style="color:#f87171">-&nbsp;&nbsp; case 'auto':</span>
+        </div>
+        <div style="display:flex;padding:0 12px;background:rgba(248,81,73,0.1)">
+          <span style="display:inline-block;width:40px;text-align:right;padding-right:10px;user-select:none;color:#7c7872">259</span>
+          <span style="color:#f87171">-&nbsp;&nbsp; case 'bypassPermissions':</span>
+        </div>
+        <!-- Addition line -->
+        <div style="display:flex;padding:0 12px;background:rgba(63,185,80,0.1)">
+          <span style="display:inline-block;width:40px;text-align:right;padding-right:10px;user-select:none;color:#7c7872">258</span>
+          <span style="color:#3fb950">+&nbsp;&nbsp; case 'bypassPermissions':</span>
+        </div>
+        <!-- Context line -->
+        <div style="display:flex;padding:0 12px;color:#7c7872">
+          <span style="display:inline-block;width:40px;text-align:right;padding-right:10px;user-select:none;color:#7c7872">260</span>
+          <span style="color:#a8a29e">&nbsp;&nbsp;&nbsp;&nbsp; return { behavior: 'allow' }</span>
+        </div>
+      </div>
+      <!-- Summary bar -->
+      <div style="display:flex;align-items:center;gap:12px;padding:6px 12px;border-top:1px solid #3d3b37;font-size:11px;color:#7c7872">
+        <span style="color:#3fb950">+1</span>
+        <span style="color:#f87171">-2</span>
+      </div>
+    </div>
+  </div>
+
+  <h4>方案</h4>
+  <p>从 Edit 工具的 <code>old_string</code> / <code>new_string</code> 输入参数生成 unified diff，然后渲染。</p>
+
+  <h4>实现细节</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>使用 <code>diff</code> npm 包（轻量）计算行级差异</li>
+    <li>删除行：<code>bg-[#f8717110] text-[#f87171]</code>，前缀 <code>-</code></li>
+    <li>新增行：<code>bg-[#3fb95010] text-[#3fb950]</code>，前缀 <code>+</code></li>
+    <li>上下文行：正常颜色，前缀空格</li>
+    <li>显示行号（参考 Edit 工具的 file_path）</li>
+    <li>Write 工具：整个 content 都是新增（全绿），可显示前 20 行</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/package.json</code></td><td>新增 <code>diff</code> 依赖</td></tr>
+    <tr><td><code>web/components/chat/DiffView.tsx</code></td><td><strong>新增</strong>：Diff 渲染组件</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>Edit/Write tool_use 块使用 DiffView 渲染</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 2.4 代码块 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">2.4</span>
+    <span class="feature-title">代码块增强</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 1</span>
+    <span>纯 UI</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>Markdown 中的代码块只能看，无法快速复制。</p>
+
+  <h3>UI 表现</h3>
+
+  <div class="mockup-frame">
+    <div class="mockup-label">代码块 + Copy 按钮</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;overflow:hidden">
+      <!-- Header bar -->
+      <div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid #3d3b37">
+        <span style="font-size:11px;color:#7c7872;font-weight:600;text-transform:uppercase;letter-spacing:.04em">typescript</span>
+        <button style="margin-left:auto;background:none;border:1px solid #3d3b37;color:#a8a29e;font-size:11px;padding:2px 10px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px">
+          <span style="font-size:12px">&#128203;</span> Copy
+        </button>
+      </div>
+      <!-- Code body -->
+      <div style="padding:10px 14px;font-family:'SF Mono','Cascadia Code',monospace;font-size:12px;line-height:1.7;color:#e5e2db;overflow-x:auto">
+        <div><span style="color:#8b5cf6">function</span> <span style="color:#d97706">isPrime</span>(n: <span style="color:#0ea5e9">number</span>) {</div>
+        <div>&nbsp;&nbsp;<span style="color:#8b5cf6">if</span> (n &lt;= <span style="color:#a3e635">1</span>) <span style="color:#8b5cf6">return</span> <span style="color:#f87171">false</span></div>
+        <div>&nbsp;&nbsp;<span style="color:#8b5cf6">for</span> (<span style="color:#8b5cf6">let</span> i = <span style="color:#a3e635">2</span>; i * i &lt;= n; i++)</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#8b5cf6">if</span> (n % i === <span style="color:#a3e635">0</span>) <span style="color:#8b5cf6">return</span> <span style="color:#f87171">false</span></div>
+        <div>&nbsp;&nbsp;<span style="color:#8b5cf6">return</span> <span style="color:#a3e635">true</span></div>
+        <div>}</div>
+      </div>
+    </div>
+    <!-- Post-copy feedback -->
+    <div style="margin-top:10px;display:flex;align-items:center;gap:6px;font-size:12px;color:#7c7872">
+      点击 Copy 后 &rarr;
+      <span style="background:none;border:1px solid #3d3b37;color:#3fb950;font-size:11px;padding:2px 10px;border-radius:4px;display:inline-flex;align-items:center;gap:4px">&#10003; Copied!</span>
+      <span>1.5s 后恢复</span>
+    </div>
+  </div>
+
+  <h4>实现</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>在 <code>MarkdownRenderer.tsx</code> 的 <code>code</code> 块渲染器中增加 header bar</li>
+    <li>左侧显示语言标签（从 fence info string 提取）</li>
+    <li>右侧 Copy 按钮，使用 <code>navigator.clipboard.writeText()</code></li>
+    <li>复制成功显示 "Copied!" 1.5s 后恢复</li>
+    <li>按钮仅在 hover 代码块时显示（避免视觉噪音）</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/components/chat/MarkdownRenderer.tsx</code></td><td>代码块 header + Copy 按钮</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 2.5 Prompt Suggestions ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">2.5</span>
+    <span class="feature-title">Prompt Suggestions</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 4</span>
+    <span>SDK: <code>promptSuggestions</code> option + <code>SDKPromptSuggestionMessage</code></span>
+  </div>
+
+  <h3>问题</h3>
+  <p>对话结束后用户不知道下一步可以做什么。SDK 可以自动建议后续 prompt。</p>
+
+  <h3>SDK 消息格式</h3>
+<pre>{ type: 'prompt_suggestion', suggestion: '运行测试看看是否通过' }</pre>
+
+  <h3>UI 表现</h3>
+
+  <div class="mockup-frame">
+    <div class="mockup-label">Prompt Suggestion Card</div>
+    <!-- Last message stub -->
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px">
+      <div style="width:28px;height:28px;border-radius:50%;background:#242320;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <span style="color:#d97706;font-weight:700;font-size:13px">C</span>
+      </div>
+      <div style="font-size:13px;color:#a8a29e;line-height:1.5">已完成登录验证逻辑的修复，修改了 3 个文件。</div>
+    </div>
+    <!-- Suggestion card -->
+    <div style="border:1px solid #3d3b37;border-radius:8px;padding:12px 14px;background:#1e1d1a">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="color:#0ea5e9;font-size:14px">&#128161;</span>
+        <span style="color:#a8a29e;font-size:12px;font-weight:600">推荐下一步</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="flex:1;color:#e5e2db;font-size:13px;padding:8px 12px;background:#242320;border:1px solid #3d3b37;border-radius:6px">运行测试看看是否通过</span>
+        <button style="background:#d97706;color:#1c1b18;border:none;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;white-space:nowrap">发送</button>
+      </div>
+      <div style="font-size:11px;color:#7c7872;margin-top:6px">点击「发送」自动填入 Composer 并发送</div>
+    </div>
+  </div>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>query options 中启用 <code>promptSuggestions: true</code></td></tr>
+    <tr><td><code>web/hooks/useWebSocket.ts</code></td><td>识别 prompt_suggestion 消息，存入 connectionStore</td></tr>
+    <tr><td><code>web/stores/connectionStore.ts</code></td><td>新增 <code>promptSuggestion: string | null</code></td></tr>
+    <tr><td><code>web/components/chat/PromptSuggestion.tsx</code></td><td><strong>新增</strong>：建议卡片，点击自动发送</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 2.6 API Retry ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">2.6</span>
+    <span class="feature-title">API Retry 提示</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 2</span>
+    <span>SDK 消息: <code>SDKAPIRetryMessage</code></span>
+  </div>
+
+  <h3>问题</h3>
+  <p>API 请求失败重试时用户以为卡住了。</p>
+
+  <h3>SDK 消息格式</h3>
+<pre>{ type:'system', subtype:'api_retry',
+  attempt: 2, max_retries: 5,
+  retry_delay_ms: 3000,
+  error_status: 429 }</pre>
+
+  <h3>UI 表现</h3>
+
+  <div class="mockup-frame">
+    <div class="mockup-label">API Retry Inline Banner</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px">
+      <!-- Spinning arrow -->
+      <span style="color:#eab308;font-size:15px;display:inline-block;animation:spin 1s linear infinite">&#8635;</span>
+      <span style="color:#eab308;font-size:13px;font-weight:600">API 重试中 (2/5)</span>
+      <span style="color:#7c7872;font-size:12px">&middot;</span>
+      <span style="color:#a8a29e;font-size:12px">3s 后重试</span>
+      <span style="color:#7c7872;font-size:12px">&middot;</span>
+      <span style="font-size:11px;color:#f87171;background:rgba(248,113,113,0.1);padding:1px 8px;border-radius:4px">HTTP 429</span>
+    </div>
+  </div>
+
+  <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+
+  <p style="font-size:.85rem;color:var(--tm)">在消息流中显示为轻量 inline 提示（黄色，不占大空间），重试成功后自动消失。</p>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/hooks/useWebSocket.ts</code></td><td>识别 api_retry 消息，追加到消息流</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>渲染 api_retry 类型为 inline 提示</td></tr>
+  </table>
+</div>
+
+<div class="nav">
+  <a href="01-phase1-quick-wins.html">&larr; Phase 1: 快速接入</a>
+  <a href="03-phase3-session-mgmt.html">Phase 3: 会话管理 &rarr;</a>
+</div>
+</body>
+</html>

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Persistent Lock / Multi-Terminal Access Control</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1c1b18;
+    color: #e5e2db;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+    padding: 2rem 1rem;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: #d97706;
+    border-bottom: 2px solid #d9770640;
+    padding-bottom: 0.6rem;
+    margin-bottom: 2rem;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #e5e2db;
+    margin-top: 2.4rem;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #e5e2db20;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #d97706;
+    margin-top: 1.8rem;
+    margin-bottom: 0.6rem;
+  }
+
+  p {
+    margin-bottom: 0.9rem;
+    color: #c5c2bb;
+  }
+
+  strong { color: #e5e2db; }
+
+  /* Code blocks */
+  pre {
+    background: #141310;
+    border: 1px solid #2a2924;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    margin-bottom: 1.2rem;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+
+  code {
+    font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, monospace;
+    font-size: 0.88rem;
+  }
+
+  pre code {
+    color: #c5c2bb;
+  }
+
+  p code, li code, td code {
+    background: #2a2924;
+    color: #d97706;
+    padding: 0.15em 0.45em;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+
+  /* Syntax highlighting */
+  .kw { color: #c678dd; }
+  .type { color: #e5c07b; }
+  .str { color: #98c379; }
+  .comment { color: #5c6370; font-style: italic; }
+  .prop { color: #61afef; }
+
+  /* Diagram / flowchart blocks */
+  pre.diagram {
+    background: #18171480;
+    border-color: #d9770630;
+    color: #b0ada6;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    white-space: pre;
+  }
+  pre.diagram .highlight {
+    color: #d97706;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.4rem;
+    font-size: 0.92rem;
+  }
+
+  thead th {
+    background: #252420;
+    color: #d97706;
+    font-weight: 600;
+    text-align: left;
+    padding: 0.65rem 0.9rem;
+    border-bottom: 2px solid #d9770640;
+  }
+
+  tbody td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid #2a2924;
+    color: #c5c2bb;
+    vertical-align: top;
+  }
+
+  tbody tr:hover {
+    background: #22211e;
+  }
+
+  /* Lists */
+  ul, ol {
+    margin-bottom: 1rem;
+    padding-left: 1.6rem;
+  }
+
+  li {
+    margin-bottom: 0.35rem;
+    color: #c5c2bb;
+  }
+
+  li strong {
+    color: #e5e2db;
+  }
+
+  /* Horizontal rule */
+  hr {
+    border: none;
+    border-top: 1px solid #2a2924;
+    margin: 2rem 0;
+  }
+
+  /* Arrow accent for flowchart */
+  .arrow { color: #d97706; }
+
+  @media (max-width: 600px) {
+    body { padding: 1rem 0.6rem; }
+    h1 { font-size: 1.45rem; }
+    pre { padding: 0.7rem 0.8rem; font-size: 0.82rem; }
+    table { font-size: 0.84rem; }
+    thead th, tbody td { padding: 0.45rem 0.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Persistent Lock / Multi-Terminal Access Control</h1>
+
+<h2>Problem</h2>
+<p>Current lock model: lock acquired on <code>sendMessage</code>, released on <code>session-complete</code>. Idle sessions have no lock, so all terminals can input simultaneously. Users expect exclusive control — only one terminal should operate at a time.</p>
+
+<h2>Design</h2>
+
+<h3>Lock Lifecycle</h3>
+
+<pre class="diagram">No lock <span class="arrow">→</span> A sends message <span class="arrow">→</span> A holds lock
+                                │
+                ┌───────────────┤
+                ↓               ↓
+          A manual release   A leaves page
+                │               │
+                ↓               ↓
+          No lock         Lock retained (grace)
+                                │
+                          1 min timeout
+                                │
+                                ↓
+                      Lock released
+                      If pending task exists (ask-user/tool-approval/plan-approval):
+                        <span class="arrow">→</span> next client to join auto-claims lock</pre>
+
+<h3>Lock Rules</h3>
+
+<table>
+<thead>
+  <tr><th>Rule</th><th>Description</th></tr>
+</thead>
+<tbody>
+  <tr><td><strong>Acquire</strong></td><td>First client to send a message acquires the lock</td></tr>
+  <tr><td><strong>Persist</strong></td><td>Lock persists across query completions — NOT released on <code>session-complete</code></td></tr>
+  <tr><td><strong>Manual release</strong></td><td>Lock holder clicks unlock button in status bar</td></tr>
+  <tr><td><strong>Idle timeout</strong></td><td>1 minute of no interaction → auto-release + broadcast</td></tr>
+  <tr><td><strong>Disconnect grace</strong></td><td>Lock holder disconnects → 1 min grace (up from current 10s). If reconnects within grace, lock transfers to new connectionId</td></tr>
+  <tr><td><strong>Pending task auto-claim</strong></td><td>If lock is released/expired AND there's a pending interaction (ask-user, tool-approval, plan-approval), the next client to join auto-claims the lock</td></tr>
+  <tr><td><strong>Locked-out view</strong></td><td>Input disabled + "已被其他终端锁定" message. AskUserPanel/PermissionBanner/PlanApproval show as readonly</td></tr>
+</tbody>
+</table>
+
+<h3>"Interaction" for Idle Timeout</h3>
+
+<p>The 1-minute idle timer resets on:</p>
+<ul>
+  <li>Sending a message</li>
+  <li>Responding to tool-approval</li>
+  <li>Responding to ask-user</li>
+  <li>Responding to plan-approval</li>
+</ul>
+
+<p>It does NOT reset on: typing (client-side only), scrolling, or other passive actions.</p>
+
+<h3>UI Changes</h3>
+
+<p><strong>Status bar (bottom of ChatComposer):</strong></p>
+
+<pre><code>Current:   ● idle  |  ◈ Ask before edits  |  ↑
+New:       ● idle  🔓  |  ◈ Ask before edits  |  ↑</code></pre>
+
+<p>Lock indicator states:</p>
+<ul>
+  <li><strong>No lock</strong>: no icon shown (clean)</li>
+  <li><strong>Self holds lock</strong>: 🔒 icon, clickable → releases lock</li>
+  <li><strong>Other holds lock</strong>: 🔒 icon + tooltip "已被其他终端锁定"</li>
+</ul>
+
+<p><strong>ChatComposer when locked out:</strong></p>
+<ul>
+  <li>Textarea replaced with disabled state + "Session locked by another client" message (existing pattern, already implemented)</li>
+  <li>Send button disabled</li>
+</ul>
+
+<h3>Protocol Changes</h3>
+
+<p><strong>New C2S message:</strong></p>
+
+<pre><code><span class="kw">interface</span> <span class="type">C2S_ReleaseLock</span> {
+  <span class="prop">type</span>: <span class="str">'release-lock'</span>
+  <span class="prop">sessionId</span>: <span class="type">string</span>
+}</code></pre>
+
+<p><strong>Existing <code>lock-status</code> S2C message</strong> — no changes needed, already has <code>status</code> + <code>holderId</code>.</p>
+
+<h3>Server Changes</h3>
+
+<p><strong>LockManager:</strong></p>
+<ul>
+  <li><code>GRACE_PERIOD_MS</code>: 10s → 60s (or add separate <code>IDLE_TIMEOUT_MS = 60_000</code>)</li>
+  <li>New: <code>resetIdleTimer(sessionId)</code> — called on each user interaction to restart the 1-min timer</li>
+  <li>New: <code>onInteraction(sessionId, connectionId)</code> — resets idle timer, returns success/fail</li>
+  <li><code>release()</code> should broadcast lock-status to all clients</li>
+  <li>On idle timeout: release lock + broadcast. If session has pending requests in <code>pendingRequestMap</code>, set a flag so next <code>handleJoinSession</code> auto-claims</li>
+</ul>
+
+<p><strong>handler.ts:</strong></p>
+<ul>
+  <li><code>session-complete</code> / <code>session-aborted</code>: do NOT call <code>lockManager.release()</code> — lock persists</li>
+  <li>New <code>release-lock</code> message handler: verify holder, release, broadcast</li>
+  <li><code>handleSendMessage</code> / <code>handleToolApprovalResponse</code> / <code>handleAskUserResponse</code> / <code>handleResolvePlanApproval</code>: call <code>lockManager.resetIdleTimer(sessionId)</code> after successful handling</li>
+  <li><code>handleJoinSession</code>: if no lock held AND pending requests exist → auto-acquire lock for joining client</li>
+</ul>
+
+<h3>Client Changes</h3>
+
+<p><strong>ChatComposer (ComposerToolbar area):</strong></p>
+<ul>
+  <li>New lock indicator component next to idle/running status</li>
+  <li>When <code>lockStatus === 'locked_self'</code>: show clickable lock icon</li>
+  <li>On click: send <code>{ type: 'release-lock', sessionId }</code></li>
+</ul>
+
+<p><strong>useWebSocket.ts:</strong></p>
+<ul>
+  <li>New <code>releaseLock(sessionId)</code> send helper</li>
+  <li>Export from <code>useWebSocket()</code></li>
+</ul>
+
+<h3>Files to Modify</h3>
+
+<table>
+<thead>
+  <tr><th>File</th><th>Change</th></tr>
+</thead>
+<tbody>
+  <tr><td><code>shared/protocol.ts</code></td><td>Add <code>C2S_ReleaseLock</code> type</td></tr>
+  <tr><td><code>server/ws/lock.ts</code></td><td>Idle timeout, resetIdleTimer, extended grace period</td></tr>
+  <tr><td><code>server/ws/handler.ts</code></td><td><code>release-lock</code> handler, remove auto-release on complete, resetIdleTimer calls, auto-claim on join</td></tr>
+  <tr><td><code>web/hooks/useWebSocket.ts</code></td><td><code>releaseLock</code> helper</td></tr>
+  <tr><td><code>web/components/chat/ComposerToolbar.tsx</code></td><td>Lock indicator + release button</td></tr>
+</tbody>
+</table>
+
+</div>
+</body>
+</html>

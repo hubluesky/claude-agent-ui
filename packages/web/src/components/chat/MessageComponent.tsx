@@ -232,9 +232,9 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
           </div>
           <div>
             <p className="text-xs font-medium text-[#f87171]">
-              {subtype === 'error_max_turns' ? 'Max turns reached'
-                : subtype === 'error_max_budget_usd' ? 'Budget limit reached'
-                : 'Error during execution'}
+              {subtype === 'error_max_turns' ? '已达最大轮次'
+                : subtype === 'error_max_budget_usd' ? '已达预算上限'
+                : '执行出错'}
             </p>
             <p className="text-sm text-[#f8717199] mt-1">{((message as any).errors ?? []).join('\n')}</p>
           </div>
@@ -442,20 +442,24 @@ function ToolResultBlock({ block }: { block: any }) {
       ? content.map((c: any) => c.text ?? '').join('')
       : JSON.stringify(content)
 
+  // Distinguish user-initiated denials (short messages) from real execution errors
+  const isDenial = isError && text.length < 200
   const preview = text.length > 120 ? text.slice(0, 120) + '...' : text
   const isLong = text.length > 120
 
   return (
     <div className={`border rounded-md overflow-hidden ml-10 ${
-      isError ? 'border-[#f8717126] bg-[#f871710a]' : 'border-[#3d3b37] bg-[#242320]'
+      isDenial ? 'border-[#d9770626] bg-[#d977060a]'
+        : isError ? 'border-[#f8717126] bg-[#f871710a]'
+        : 'border-[#3d3b37] bg-[#242320]'
     }`}>
       <div
         className={`flex items-center gap-2 px-3 py-1.5 ${isLong ? 'cursor-pointer hover:bg-[#2b2a2780]' : ''}`}
         onClick={() => isLong && setExpanded(!expanded)}
       >
-        <div className={`w-0.5 h-3 rounded-full ${isError ? 'bg-[#f87171]' : 'bg-[#6b7280]'}`} />
-        <span className={`text-[10px] font-mono ${isError ? 'text-[#f87171]' : 'text-[#7c7872]'}`}>
-          {isError ? 'Error' : 'Result'}
+        <div className={`w-0.5 h-3 rounded-full ${isDenial ? 'bg-[#d97706]' : isError ? 'bg-[#f87171]' : 'bg-[#6b7280]'}`} />
+        <span className={`text-[10px] font-mono ${isDenial ? 'text-[#d97706]' : isError ? 'text-[#f87171]' : 'text-[#7c7872]'}`}>
+          {isDenial ? '拒绝' : isError ? '错误' : '结果'}
         </span>
         <span className="flex-1" />
         {isLong && (

@@ -13,10 +13,6 @@ export function PlanApprovalCard() {
   const readonly = pendingPlanApproval.readonly
   const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
 
-  const openModal = () => {
-    useConnectionStore.getState().setPlanModalOpen(true)
-  }
-
   return (
     <div className="mx-4 sm:mx-10 mb-4 rounded-lg border bg-[#d977060a] border-[#d9770626]">
       {/* Header */}
@@ -39,12 +35,6 @@ export function PlanApprovalCard() {
           className="text-[11px] text-[#7c7872] hover:text-[#a8a29e] shrink-0 ml-1"
         >
           {collapsed ? '展开' : '收起'}
-        </button>
-        <button
-          onClick={openModal}
-          className="text-[11px] text-[#0ea5e9] hover:underline shrink-0 ml-1"
-        >
-          全屏查看 ↗
         </button>
       </div>
 

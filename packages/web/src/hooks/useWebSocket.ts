@@ -222,7 +222,7 @@ function handleServerMessage(msg: S2CMessage) {
         planFilePath: msg.planFilePath,
         allowedPrompts: msg.allowedPrompts,
         readonly: msg.readonly,
-        contextUsagePercent: (msg as any).contextUsagePercent,
+        contextUsagePercent: msg.contextUsagePercent,
       })
       break
 

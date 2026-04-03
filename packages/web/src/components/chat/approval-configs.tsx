@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { getToolCategory, TOOL_COLORS, type ToolCategory } from '@claude-agent-ui/shared'
 import type { ApprovalPanelConfig, ApprovalOption } from './ApprovalPanel'
 
-// ─── ToolIcon (reused from old PermissionBanner) ───────────────────────────────
+// ─── ToolIcon ────────────────────────────────────────────────────────────────
 function ToolIcon({ category }: { category: ToolCategory }) {
   const cls = 'w-3.5 h-3.5 shrink-0'
   switch (category) {

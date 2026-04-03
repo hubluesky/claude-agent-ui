@@ -11,9 +11,9 @@ interface ModesPopupProps {
 export const MODES: { mode: PermissionMode; label: string; desc: string; icon: string }[] = [
   { mode: 'default', label: '编辑前询问', desc: 'Claude 在每次编辑前征求你的同意', icon: 'shield' },
   { mode: 'acceptEdits', label: '自动接受编辑', desc: 'Claude 自动执行文件编辑，危险操作仍需审批', icon: 'code' },
-  { mode: 'auto', label: '自动模式', desc: 'Claude 自动处理权限 — 安全操作直接执行，风险操作阻止', icon: 'auto' },
   { mode: 'plan', label: '计划模式', desc: 'Claude 先探索代码并提出计划，审批后再编辑', icon: 'doc' },
   { mode: 'bypassPermissions', label: '跳过权限', desc: '跳过大部分权限检查（⚠ 安全敏感操作仍需审批）', icon: 'bolt' },
+  { mode: 'auto', label: '自动模式', desc: 'Claude 自动处理权限 — 安全操作直接执行，风险操作阻止', icon: 'auto' },
 ]
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'max']
@@ -22,7 +22,7 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="fixed bottom-[52px] left-2 right-2 mx-auto max-w-[320px] bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
+      <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">模式</span>
           <div className="flex items-center gap-1 text-[10px] text-[#5c5952]">
@@ -61,22 +61,28 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
 
         <div className="border-t border-[#3d3b37] px-4 pt-3 pb-4">
           <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">推理强度</span>
-          <div className="flex items-center justify-between mt-3">
-            {EFFORTS.map((e) => {
-              const isActive = e === currentEffort
-              return (
-                <button
-                  key={e}
-                  onClick={() => onEffortChange(e)}
-                  className="flex flex-col items-center gap-1.5"
-                >
-                  <div className={`w-3 h-3 rounded-full transition-colors ${
-                    isActive ? 'bg-[#d97706]' : 'bg-[#3d3b37] hover:bg-[#5c5952]'
-                  }`} />
-                  <span className={`text-[10px] ${isActive ? 'text-[#d97706] font-semibold' : 'text-[#7c7872]'}`}>{e}</span>
-                </button>
-              )
-            })}
+          <div className="relative flex items-center mt-3">
+            {/* Track line */}
+            <div className="absolute left-0 right-0 h-0.5 bg-[#3d3b37]" />
+            <div className="relative flex items-center justify-between w-full">
+              {EFFORTS.map((e) => {
+                const isActive = e === currentEffort
+                return (
+                  <button
+                    key={e}
+                    onClick={() => onEffortChange(e)}
+                    className="flex flex-col items-center gap-1.5 z-10"
+                  >
+                    <div className={`w-3.5 h-3.5 rounded-full border-2 transition-colors ${
+                      isActive
+                        ? 'bg-[#d97706] border-[#d97706]'
+                        : 'bg-[#242320] border-[#5c5952] hover:border-[#7c7872]'
+                    }`} />
+                    <span className={`text-[11px] ${isActive ? 'text-[#d97706] font-semibold' : 'text-[#7c7872]'}`}>{e}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

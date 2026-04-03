@@ -3,9 +3,8 @@ import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
-import { ModesPopup, MODES, ModeIcon } from './ModesPopup'
+import { MODES, ModeIcon } from './ModesPopup'
 import { PlusMenu } from './PlusMenu'
-import type { PermissionMode, EffortLevel } from '@claude-agent-ui/shared'
 
 interface ComposerToolbarProps {
   onUpload: () => void
@@ -21,15 +20,20 @@ interface ComposerToolbarProps {
   onReleaseLock: () => void
 }
 
+export function useModesPopupState() {
+  const [showModes, setShowModes] = useState(false)
+  return { showModes, setShowModes }
+}
+
 export function ComposerToolbar({
   onUpload, onSlashClick, onAtClick, onSend, onAbort,
   canSend, fileRefs, isLocked, isRunning, isLockHolder, onReleaseLock,
-}: ComposerToolbarProps) {
+  showModes, setShowModes,
+}: ComposerToolbarProps & { showModes: boolean; setShowModes: (v: boolean) => void }) {
   const [showPlusMenu, setShowPlusMenu] = useState(false)
-  const [showModes, setShowModes] = useState(false)
   const { sessionStatus, connectionStatus } = useConnectionStore()
   const { currentSessionId } = useSessionStore()
-  const { permissionMode, effort, setPermissionMode, setEffort } = useSettingsStore()
+  const { permissionMode, setPermissionMode } = useSettingsStore()
   const { send } = useWebSocket()
 
   const isDisconnected = connectionStatus !== 'connected'
@@ -49,6 +53,15 @@ export function ComposerToolbar({
       : statusConfig[sessionStatus]
 
   const currentModeInfo = MODES.find((m) => m.mode === permissionMode) ?? MODES[0]
+
+  const modeColorClass: Record<string, { text: string; hover: string; hoverBg: string }> = {
+    default: { text: 'text-[#a8a29e]', hover: 'hover:text-[#e5e2db]', hoverBg: 'hover:bg-[#3d3b3780]' },
+    acceptEdits: { text: 'text-[#60a5fa]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
+    auto: { text: 'text-[#d97706]', hover: 'hover:text-[#f59e0b]', hoverBg: 'hover:bg-[#d977061a]' },
+    plan: { text: 'text-[#a78bfa]', hover: 'hover:text-[#c4b5fd]', hoverBg: 'hover:bg-[#a78bfa1a]' },
+    bypassPermissions: { text: 'text-[#f87171]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
+  }
+  const modeColor = modeColorClass[permissionMode] ?? modeColorClass.default
 
   // Shift+Tab cycles through permission modes
   const cycleMode = useCallback(() => {
@@ -71,20 +84,6 @@ export function ComposerToolbar({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [cycleMode])
-
-  const handleModeChange = (newMode: PermissionMode) => {
-    setPermissionMode(newMode)
-    if (currentSessionId && currentSessionId !== '__new__') {
-      send({ type: 'set-mode', sessionId: currentSessionId, mode: newMode })
-    }
-  }
-
-  const handleEffortChange = (newEffort: EffortLevel) => {
-    setEffort(newEffort)
-    if (currentSessionId && currentSessionId !== '__new__') {
-      send({ type: 'set-effort', sessionId: currentSessionId, effort: newEffort })
-    }
-  }
 
   const handleAddContext = () => {
     onAtClick()
@@ -174,30 +173,15 @@ export function ComposerToolbar({
           </>
         )}
 
-        <div className="relative">
-          <button
-            onClick={() => !isLocked && setShowModes(!showModes)}
-            disabled={isLocked}
-            className={`text-[11px] transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md ${
-              permissionMode === 'auto'
-                ? 'text-[#d97706] hover:text-[#f59e0b] hover:bg-[#d977061a]'
-                : 'text-[#a8a29e] hover:text-[#e5e2db] hover:bg-[#3d3b3780]'
-            }`}
-          >
-            {permissionMode === 'auto' && <span className="text-[#d97706]">{'»'}</span>}
-            <ModeIcon type={currentModeInfo.icon} active={permissionMode === 'auto'} className={`w-3.5 h-3.5 ${permissionMode === 'auto' ? 'text-[#d97706]' : 'text-current'}`} />
-            {permissionMode === 'auto' ? 'auto mode on' : currentModeInfo.label}
-          </button>
-          {showModes && (
-            <ModesPopup
-              currentMode={permissionMode}
-              currentEffort={effort}
-              onModeChange={handleModeChange}
-              onEffortChange={handleEffortChange}
-              onClose={() => setShowModes(false)}
-            />
-          )}
-        </div>
+        <button
+          onClick={() => !isLocked && setShowModes(!showModes)}
+          disabled={isLocked}
+          className={`text-[11px] transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md ${modeColor.text} ${modeColor.hover} ${modeColor.hoverBg}`}
+        >
+          {permissionMode === 'auto' && <span>{'»'}</span>}
+          <ModeIcon type={currentModeInfo.icon} active={permissionMode !== 'default'} className="w-3.5 h-3.5 text-current" />
+          {permissionMode === 'auto' ? '自动模式' : currentModeInfo.label}
+        </button>
 
         {isRunning && !canSend ? (
           <button

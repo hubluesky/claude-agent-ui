@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 4: 高级功能 — 实施计划</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--tm:#8b949e;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;padding:2rem;max-width:1200px;margin:0 auto}
+  h1{font-size:1.6rem;margin-bottom:.3rem;color:var(--o)}
+  .sub{color:var(--tm);font-size:.85rem;margin-bottom:2rem;border-bottom:1px solid var(--bd);padding-bottom:1rem}
+  h3{font-size:1rem;margin:1.2rem 0 .5rem;color:var(--t)}
+  h4{font-size:.9rem;color:var(--p);margin:1rem 0 .4rem}
+  .feature{background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:1.5rem;margin:1.5rem 0}
+  .feature-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+  .feature-num{background:var(--o);color:#000;font-weight:700;font-size:.8rem;padding:.2rem .6rem;border-radius:6px}
+  .feature-title{font-size:1.15rem;font-weight:600}
+  .meta{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.8rem;color:var(--tm)}
+  .badge{display:inline-block;padding:.1rem .4rem;border-radius:9999px;font-size:.7rem;font-weight:600}
+  .b-g{background:rgba(63,185,80,.15);color:var(--g)}.b-y{background:rgba(210,153,34,.15);color:var(--y)}.b-r{background:rgba(248,81,73,.15);color:var(--r)}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.85rem}
+  th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--bd)}
+  th{background:var(--s2);color:var(--a);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+  code{background:var(--s2);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;color:var(--p);font-family:'SF Mono','Cascadia Code',monospace}
+  pre{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.8rem;line-height:1.5;margin:.75rem 0;font-family:'SF Mono','Cascadia Code',monospace}
+  .note{background:rgba(88,166,255,.08);border-left:3px solid var(--a);padding:.6rem .8rem;border-radius:0 6px 6px 0;font-size:.85rem;color:var(--tm);margin:.75rem 0}
+  a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+  .nav{display:flex;justify-content:space-between;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--bd);font-size:.85rem}
+
+  /* Mockup frame common styles */
+  .mockup-frame{max-width:520px;background:#1a1918;border:1px solid #3d3b37;border-radius:10px;padding:16px;margin:.75rem 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#e5e2db;overflow:hidden}
+  .mockup-frame *{box-sizing:border-box}
+  .mockup-label{font-size:11px;color:#7c7872;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;font-weight:600}
+</style>
+</head>
+<body>
+
+<h1>Phase 4: 高级功能</h1>
+<p class="sub">Sub-agent 可视化、Context 面板、MCP 管理等进阶能力 &nbsp;|&nbsp; 5 个功能点</p>
+
+<!-- ==================== 4.1 Sub-agent ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">4.1</span>
+    <span class="feature-title">Sub-agent 可视化</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-r">高</span></span>
+    <span>改动文件: 7</span>
+    <span>SDK: <code>listSubagents()</code>, <code>getSubagentMessages()</code>, <code>SDKTaskStarted/Progress/Notification</code></span>
+  </div>
+
+  <h3>问题</h3>
+  <p>Agent 频繁 spawn 子 agent，用户完全看不到有多少个子 agent 在运行、各自在做什么、进度如何。</p>
+
+  <h3>UI 表现 — 内联 Agent 卡片</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">消息流中 Agent 工具调用</div>
+    <!-- Agent Card - collapsed / running -->
+    <div style="border:1px solid #3d3b37;border-left:3px solid #a855f7;border-radius:8px;background:#242320;padding:14px 16px;position:relative;">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="color:#a855f7;font-size:14px;">&#9656;</span>
+        <span style="font-weight:600;color:#e5e2db;font-size:13px;">Agent</span>
+        <span style="color:#0ea5e9;font-size:13px;font-weight:500;">explore-codebase</span>
+        <!-- spinner -->
+        <span style="display:inline-block;width:12px;height:12px;border:2px solid #3d3b37;border-top-color:#d97706;border-radius:50%;margin-left:auto;animation:none;"></span>
+      </div>
+      <!-- Description -->
+      <div style="color:#a8a29e;font-size:12px;margin-bottom:10px;padding-left:22px;">"搜索认证模块的实现"</div>
+      <!-- Stats row -->
+      <div style="display:flex;align-items:center;gap:12px;padding-left:22px;font-size:12px;">
+        <span style="color:#eab308;">&#9201; 8s</span>
+        <span style="color:#7c7872;">4 tools</span>
+        <span style="color:#7c7872;">Grep</span>
+      </div>
+      <!-- Progress text -->
+      <div style="color:#0ea5e9;font-size:12px;margin-top:6px;padding-left:22px;">正在分析 auth middleware...</div>
+      <!-- Expand toggle -->
+      <div style="margin-top:12px;padding-left:22px;">
+        <span style="color:#7c7872;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <span style="font-size:10px;">&#9662;</span> 查看详细消息
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <h3>UI 表现 — 展开后的子 Agent 消息</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">Agent 卡片展开状态</div>
+    <!-- Agent Card - expanded / completed -->
+    <div style="border:1px solid #3d3b37;border-left:3px solid #a855f7;border-radius:8px;background:#242320;overflow:hidden;">
+      <!-- Header -->
+      <div style="padding:14px 16px 10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="color:#a855f7;font-size:14px;">&#9656;</span>
+          <span style="font-weight:600;color:#e5e2db;font-size:13px;">Agent</span>
+          <span style="color:#0ea5e9;font-size:13px;font-weight:500;">explore-codebase</span>
+          <span style="background:rgba(163,230,53,.12);color:#a3e635;font-size:11px;padding:1px 8px;border-radius:9999px;font-weight:600;margin-left:auto;">completed</span>
+        </div>
+        <div style="color:#7c7872;font-size:11px;padding-left:22px;">15s &middot; 8 tools &middot; 12K tokens</div>
+      </div>
+      <!-- Divider -->
+      <div style="border-top:1px solid #3d3b37;"></div>
+      <!-- Sub-agent messages -->
+      <div style="padding:12px 16px 14px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:11px;color:#7c7872;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:2px;">Sub-agent 消息</div>
+        <!-- Message items -->
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;background:#1e1d1a;border-radius:6px;border-left:2px solid #3d3b37;">
+          <span style="color:#d97706;font-size:13px;flex-shrink:0;">&#128269;</span>
+          <div>
+            <span style="color:#e5e2db;font-size:12px;font-weight:500;">Grep</span>
+            <span style="color:#a8a29e;font-size:12px;"> "authenticate" &rarr; 5 files</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;background:#1e1d1a;border-radius:6px;border-left:2px solid #3d3b37;">
+          <span style="color:#0ea5e9;font-size:13px;flex-shrink:0;">&#128196;</span>
+          <div>
+            <span style="color:#e5e2db;font-size:12px;font-weight:500;">Read</span>
+            <span style="color:#a8a29e;font-size:12px;"> auth/middleware.ts</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;background:#1e1d1a;border-radius:6px;border-left:2px solid #3d3b37;">
+          <span style="color:#0ea5e9;font-size:13px;flex-shrink:0;">&#128196;</span>
+          <div>
+            <span style="color:#e5e2db;font-size:12px;font-weight:500;">Read</span>
+            <span style="color:#a8a29e;font-size:12px;"> auth/session.ts</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;background:#1e1d1a;border-radius:6px;border-left:2px solid #a855f7;">
+          <span style="color:#a855f7;font-size:13px;flex-shrink:0;">&#128172;</span>
+          <div>
+            <span style="color:#e5e2db;font-size:12px;">认证使用 JWT + Redis 缓存</span>
+          </div>
+        </div>
+      </div>
+      <!-- Collapse toggle -->
+      <div style="padding:0 16px 12px;">
+        <span style="color:#7c7872;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <span style="font-size:10px;">&#9652;</span> 收起
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <h4>实现要点</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>启用 <code>agentProgressSummaries: true</code> 获取周期性进度摘要</li>
+    <li>通过 <code>SDKTaskStarted</code> 的 <code>task_type: 'agent'</code> 识别 agent 类型任务</li>
+    <li>Agent 卡片初始显示进度摘要（来自 <code>SDKTaskProgress.summary</code>）</li>
+    <li>展开时懒加载子 agent 消息：调用 <code>getSubagentMessages(sessionId, agentId)</code></li>
+    <li>子 agent 消息用缩进 + 左边框区分层级</li>
+    <li>嵌套 agent（agent 启动的 agent）用递增缩进</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>启用 <code>agentProgressSummaries</code>；新增 <code>getSubagentMessages()</code> 方法</td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>新增 <code>C2S_GetSubagentMessages</code>、<code>S2C_SubagentMessages</code></td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>处理子 agent 消息请求</td></tr>
+    <tr><td><code>server/routes/sessions.ts</code></td><td>新增 <code>GET /api/sessions/:id/subagents</code>、<code>GET /api/sessions/:id/subagents/:agentId/messages</code></td></tr>
+    <tr><td><code>web/components/chat/AgentCard.tsx</code></td><td><strong>新增</strong>：Agent 进度卡片（折叠/展开）</td></tr>
+    <tr><td><code>web/components/chat/SubagentMessages.tsx</code></td><td><strong>新增</strong>：嵌套消息渲染</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>Agent tool_use 块使用 AgentCard</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 4.2 Context Usage ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">4.2</span>
+    <span class="feature-title">Context Usage 可视化面板</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 6</span>
+    <span>SDK: <code>query.getContextUsage()</code></span>
+  </div>
+
+  <h3>SDK 返回数据</h3>
+<pre>{ categories: [
+    { name: 'Conversation', tokens: 45000, color: '#58a6ff' },
+    { name: 'System Prompt', tokens: 8000, color: '#3fb950' },
+    { name: 'MCP Tools', tokens: 12000, color: '#bc8cff' },
+    ...
+  ],
+  totalTokens: 85000, maxTokens: 200000, percentage: 42.5,
+  model: 'claude-sonnet-4-6', isAutoCompactEnabled: true,
+  memoryFiles: [...], mcpTools: [...], agents: [...]
+}</pre>
+
+  <h3>UI 表现 — 状态栏 + 弹出面板</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">状态栏（常驻）</div>
+    <!-- Status bar -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:10px;font-size:12px;">
+      <span style="color:#a8a29e;">claude-sonnet-4-6</span>
+      <span style="color:#3d3b37;">&middot;</span>
+      <span style="color:#a8a29e;">user@email</span>
+      <span style="color:#3d3b37;">&middot;</span>
+      <!-- Segmented progress bar -->
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto;cursor:pointer;">
+        <div style="width:80px;height:6px;background:#3d3b37;border-radius:3px;overflow:hidden;display:flex;">
+          <div style="width:53%;background:#0ea5e9;"></div>
+          <div style="width:14%;background:#8b5cf6;"></div>
+          <div style="width:9%;background:#3fb950;"></div>
+          <div style="width:7%;background:#a855f7;"></div>
+          <div style="width:5%;background:#eab308;"></div>
+        </div>
+        <span style="color:#0ea5e9;font-weight:600;">42%</span>
+        <span style="color:#7c7872;">Auto</span>
+      </div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#7c7872;margin-top:4px;padding-right:4px;">&#8593; 点击展开详情面板</div>
+
+    <div class="mockup-label" style="margin-top:16px;">详情面板（点击展开）</div>
+    <!-- Detail panel -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:10px;padding:16px;margin-top:4px;">
+      <!-- Panel header -->
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;">
+        <span style="color:#0ea5e9;font-weight:600;font-size:14px;">Context Usage</span>
+        <span style="color:#7c7872;font-size:12px;">85K / 200K tokens (42%)</span>
+      </div>
+      <!-- Full-width segmented bar -->
+      <div style="width:100%;height:10px;background:#3d3b37;border-radius:5px;overflow:hidden;display:flex;margin-bottom:16px;">
+        <div style="width:53%;background:#0ea5e9;"></div>
+        <div style="width:14%;background:#d97706;"></div>
+        <div style="width:9%;background:#3fb950;"></div>
+        <div style="width:7%;background:#8b5cf6;"></div>
+        <div style="width:5%;background:#eab308;"></div>
+        <div style="width:12%;background:#7c7872;opacity:.4;"></div>
+      </div>
+      <!-- Category legend -->
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#0ea5e9;"></span>
+            <span style="color:#e5e2db;">Conversation</span>
+          </div>
+          <div><span style="color:#a8a29e;">45,000</span><span style="color:#7c7872;margin-left:12px;display:inline-block;width:30px;text-align:right;">53%</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#d97706;"></span>
+            <span style="color:#e5e2db;">MCP Tools</span>
+          </div>
+          <div><span style="color:#a8a29e;">12,000</span><span style="color:#7c7872;margin-left:12px;display:inline-block;width:30px;text-align:right;">14%</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3fb950;"></span>
+            <span style="color:#e5e2db;">System Prompt</span>
+          </div>
+          <div><span style="color:#a8a29e;">8,000</span><span style="color:#7c7872;margin-left:12px;display:inline-block;width:30px;text-align:right;">9%</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;"></span>
+            <span style="color:#e5e2db;">Agents</span>
+          </div>
+          <div><span style="color:#a8a29e;">6,000</span><span style="color:#7c7872;margin-left:12px;display:inline-block;width:30px;text-align:right;">7%</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#eab308;"></span>
+            <span style="color:#e5e2db;">Memory Files</span>
+          </div>
+          <div><span style="color:#a8a29e;">4,000</span><span style="color:#7c7872;margin-left:12px;display:inline-block;width:30px;text-align:right;">5%</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#7c7872;opacity:.5;"></span>
+            <span style="color:#a8a29e;">Other</span>
+          </div>
+          <div><span style="color:#a8a29e;">10,000</span><span style="color:#7c7872;margin-left:12px;display:inline-block;width:30px;text-align:right;">12%</span></div>
+        </div>
+      </div>
+      <!-- Footer note -->
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #3d3b37;color:#7c7872;font-size:11px;">
+        Auto-compact at 180K tokens
+      </div>
+    </div>
+  </div>
+
+  <h4>轮询策略</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>Session running 时每 15s 调用一次 <code>getContextUsage()</code></li>
+    <li>Session idle 时不轮询</li>
+    <li>面板展开时立即刷新一次</li>
+    <li>通过 server 新增 <code>C2S_GetContextUsage</code> / <code>S2C_ContextUsage</code> 消息对</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>新增 <code>getContextUsage()</code> 方法包装 SDK API</td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>新增 <code>C2S_GetContextUsage</code>、<code>S2C_ContextUsage</code></td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>处理 context usage 请求/响应</td></tr>
+    <tr><td><code>web/stores/connectionStore.ts</code></td><td>新增 <code>contextUsage</code> 状态</td></tr>
+    <tr><td><code>web/components/chat/ContextPanel.tsx</code></td><td><strong>新增</strong>：Context 详情面板</td></tr>
+    <tr><td><code>web/components/chat/StatusBar.tsx</code></td><td>状态栏增加 token 进度条 + 点击展开</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 4.3 MCP ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">4.3</span>
+    <span class="feature-title">MCP 服务器管理面板</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-r">高</span></span>
+    <span>改动文件: 6</span>
+    <span>SDK: <code>mcpServerStatus()</code>, <code>toggleMcpServer()</code>, <code>reconnectMcpServer()</code></span>
+  </div>
+
+  <h3>UI 表现</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">MCP 服务器管理面板</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:10px;overflow:hidden;">
+      <!-- Panel header -->
+      <div style="padding:14px 16px 12px;border-bottom:1px solid #3d3b37;display:flex;align-items:center;justify-content:space-between;">
+        <span style="color:#0ea5e9;font-weight:600;font-size:14px;">MCP Servers</span>
+        <span style="color:#7c7872;font-size:11px;">4 servers</span>
+      </div>
+      <!-- Server list -->
+      <div style="display:flex;flex-direction:column;">
+        <!-- Connected server -->
+        <div style="padding:12px 16px;border-bottom:1px solid #3d3b37;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fb950;flex-shrink:0;"></span>
+            <span style="color:#e5e2db;font-weight:500;font-size:13px;">chrome-devtools</span>
+            <span style="color:#3fb950;font-size:11px;margin-left:auto;">connected</span>
+          </div>
+          <div style="padding-left:16px;color:#7c7872;font-size:11px;margin-bottom:8px;">12 tools &middot; project scope</div>
+          <div style="padding-left:16px;display:flex;gap:6px;">
+            <button style="background:transparent;border:1px solid #3d3b37;color:#a8a29e;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Disable</button>
+            <button style="background:transparent;border:1px solid #3d3b37;color:#a8a29e;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Reconnect</button>
+          </div>
+        </div>
+        <!-- Failed server -->
+        <div style="padding:12px 16px;border-bottom:1px solid #3d3b37;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f87171;flex-shrink:0;"></span>
+            <span style="color:#f87171;font-weight:500;font-size:13px;">database-mcp</span>
+            <span style="color:#f87171;font-size:11px;margin-left:auto;">failed</span>
+          </div>
+          <div style="padding-left:16px;color:#f87171;font-size:11px;margin-bottom:8px;">Connection refused</div>
+          <div style="padding-left:16px;display:flex;gap:6px;">
+            <button style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#f87171;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Reconnect</button>
+          </div>
+        </div>
+        <!-- Needs auth server -->
+        <div style="padding:12px 16px;border-bottom:1px solid #3d3b37;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#eab308;flex-shrink:0;"></span>
+            <span style="color:#eab308;font-weight:500;font-size:13px;">auth-server</span>
+            <span style="color:#eab308;font-size:11px;margin-left:auto;">needs-auth</span>
+          </div>
+          <div style="padding-left:16px;display:flex;gap:6px;margin-top:4px;">
+            <button style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);color:#eab308;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Authenticate</button>
+          </div>
+        </div>
+        <!-- Disabled server -->
+        <div style="padding:12px 16px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7c7872;opacity:.5;flex-shrink:0;"></span>
+            <span style="color:#7c7872;font-weight:500;font-size:13px;">legacy-api</span>
+            <span style="color:#7c7872;font-size:11px;margin-left:auto;">disabled</span>
+          </div>
+          <div style="padding-left:16px;display:flex;gap:6px;margin-top:4px;">
+            <button style="background:transparent;border:1px solid #3d3b37;color:#a8a29e;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Enable</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h4>入口位置</h4>
+  <p>状态栏右侧增加 MCP 图标，点击弹出面板。或在侧边栏底部增加 MCP 标签页。</p>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>包装 <code>mcpServerStatus()</code>, <code>toggleMcpServer()</code>, <code>reconnectMcpServer()</code></td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>新增 MCP 相关 C2S/S2C 消息（getMcpStatus, toggleMcp, reconnectMcp）</td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>MCP 请求路由</td></tr>
+    <tr><td><code>web/stores/connectionStore.ts</code></td><td>新增 <code>mcpServers: McpServerStatus[]</code></td></tr>
+    <tr><td><code>web/components/chat/McpPanel.tsx</code></td><td><strong>新增</strong>：MCP 管理面板</td></tr>
+    <tr><td><code>web/components/chat/StatusBar.tsx</code></td><td>MCP 图标 + 状态指示</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 4.4 Budget ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">4.4</span>
+    <span class="feature-title">Budget 控制</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 4</span>
+    <span>SDK: <code>maxTurns</code>, <code>maxBudgetUsd</code></span>
+  </div>
+
+  <h3>UI 表现</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">设置面板中</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:10px;padding:16px;">
+      <div style="font-weight:600;color:#e5e2db;font-size:13px;margin-bottom:14px;">Budget Controls</div>
+      <!-- Max Cost row -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <label style="color:#a8a29e;font-size:12px;width:80px;flex-shrink:0;">Max Cost</label>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;">
+          <div style="background:#1a1918;border:1px solid #3d3b37;border-radius:6px;padding:6px 10px;display:flex;align-items:center;width:90px;">
+            <span style="color:#7c7872;font-size:12px;margin-right:2px;">$</span>
+            <span style="color:#0ea5e9;font-size:13px;font-weight:500;">1.00</span>
+          </div>
+          <span style="color:#7c7872;font-size:11px;">per session</span>
+        </div>
+      </div>
+      <!-- Max Turns row -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <label style="color:#a8a29e;font-size:12px;width:80px;flex-shrink:0;">Max Turns</label>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;">
+          <div style="background:#1a1918;border:1px solid #3d3b37;border-radius:6px;padding:6px 10px;width:90px;">
+            <span style="color:#0ea5e9;font-size:13px;font-weight:500;">50</span>
+          </div>
+          <span style="color:#7c7872;font-size:11px;">turns</span>
+        </div>
+      </div>
+      <!-- Hint -->
+      <div style="color:#7c7872;font-size:11px;padding-top:8px;border-top:1px solid #3d3b37;">Leave empty for no limit</div>
+    </div>
+  </div>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>query options 中传入 <code>maxBudgetUsd</code> 和 <code>maxTurns</code></td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>C2S_SendMessage.options 增加 budget 字段</td></tr>
+    <tr><td><code>web/stores/settingsStore.ts</code></td><td>新增 budget 配置项</td></tr>
+    <tr><td><code>web/components/settings/BudgetSettings.tsx</code></td><td><strong>新增</strong>：Budget 设置组件（嵌入 ModesPopup 或设置页）</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 4.5 File Rewind ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">4.5</span>
+    <span class="feature-title">File Checkpoint / Rewind</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 5</span>
+    <span>SDK: <code>enableFileCheckpointing</code> + <code>rewindFiles(messageId)</code></span>
+  </div>
+
+  <h3>问题</h3>
+  <p>Agent 改了不满意的代码，想撤回到之前某个节点的文件状态。</p>
+
+  <h3>SDK API</h3>
+<pre>// 启用
+query({ options: { enableFileCheckpointing: true } })
+
+// 撤回
+const result = await query.rewindFiles(userMessageUUID, { dryRun: false })
+// → { canRewind: true, filesChanged: 3, insertions: 45, deletions: 12 }</pre>
+
+  <h3>UI 表现</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">用户消息 hover 状态</div>
+    <!-- User message with rewind button -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:10px;padding:12px 16px;position:relative;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <span style="color:#d97706;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">You</span>
+      </div>
+      <div style="color:#e5e2db;font-size:13px;">帮我重构这个函数</div>
+      <!-- Hover actions -->
+      <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);">
+        <button style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);color:#eab308;padding:4px 12px;border-radius:6px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:500;">
+          &#8630; Rewind here
+        </button>
+      </div>
+    </div>
+
+    <div class="mockup-label">点击后确认弹窗</div>
+    <!-- Rewind confirmation modal -->
+    <div style="background:rgba(0,0,0,.5);border-radius:10px;padding:20px;">
+      <div style="background:#242320;border:1px solid #3d3b37;border-radius:12px;padding:20px;max-width:380px;margin:0 auto;">
+        <!-- Modal header -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <span style="color:#eab308;font-size:18px;">&#8630;</span>
+          <span style="color:#eab308;font-weight:600;font-size:15px;">Rewind Files</span>
+        </div>
+        <!-- Description -->
+        <div style="color:#a8a29e;font-size:13px;margin-bottom:14px;">将恢复到此消息发送时的文件状态：</div>
+        <!-- Stats -->
+        <div style="background:#1a1918;border:1px solid #3d3b37;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+          <div style="color:#e5e2db;font-size:13px;margin-bottom:6px;">
+            <span style="color:#a8a29e;">3 files changed</span>
+          </div>
+          <div style="display:flex;gap:12px;font-size:13px;">
+            <span style="color:#a3e635;font-weight:500;">+45</span>
+            <span style="color:#f87171;font-weight:500;">-12</span>
+            <span style="color:#7c7872;">lines</span>
+          </div>
+        </div>
+        <!-- Warning -->
+        <div style="background:rgba(234,179,8,.06);border:1px solid rgba(234,179,8,.15);border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#eab308;">
+          This action cannot be undone. Files will be restored to their previous state.
+        </div>
+        <!-- Buttons -->
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button style="background:transparent;border:1px solid #3d3b37;color:#a8a29e;padding:6px 16px;border-radius:8px;font-size:13px;cursor:pointer;">取消</button>
+          <button style="background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.3);color:#eab308;padding:6px 16px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500;">确认撤回</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h4>流程</h4>
+  <ol style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>hover 用户消息 → 显示 Rewind 按钮</li>
+    <li>点击 → 先 <code>dryRun: true</code> 获取影响范围</li>
+    <li>显示确认弹窗（文件数、行数变化）</li>
+    <li>确认 → <code>dryRun: false</code> 执行撤回</li>
+    <li>成功 → toast 提示 "Files rewound to checkpoint"</li>
+  </ol>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>启用 <code>enableFileCheckpointing</code>；包装 <code>rewindFiles()</code></td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>新增 <code>C2S_RewindFiles</code>、<code>S2C_RewindResult</code></td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>处理 rewind 请求</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>user 消息 hover 显示 Rewind 按钮</td></tr>
+    <tr><td><code>web/components/chat/RewindDialog.tsx</code></td><td><strong>新增</strong>：确认弹窗</td></tr>
+  </table>
+</div>
+
+<div class="nav">
+  <a href="03-phase3-session-mgmt.html">&larr; Phase 3: 会话管理</a>
+  <a href="05-phase5-polish.html">Phase 5: 体验打磨 &rarr;</a>
+</div>
+</body>
+</html>

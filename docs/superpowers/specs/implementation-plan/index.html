@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Agent UI — 实施计划文档中心</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--tm:#8b949e;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
+  h1{font-size:2rem;margin-bottom:.3rem;background:linear-gradient(135deg,var(--a),var(--p));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center}
+  .sub{color:var(--tm);font-size:.9rem;margin-bottom:2.5rem;text-align:center}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;width:100%;max-width:1000px}
+  a.card{display:block;background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:1.25rem 1.5rem;text-decoration:none;color:var(--t);transition:all .2s}
+  a.card:hover{border-color:var(--a);transform:translateY(-2px);box-shadow:0 4px 20px rgba(88,166,255,.1)}
+  .card .tag{display:inline-block;padding:.1rem .5rem;border-radius:6px;font-size:.7rem;font-weight:700;margin-bottom:.5rem}
+  .card h2{font-size:1.1rem;margin-bottom:.4rem;color:var(--t)}
+  .card p{font-size:.8rem;color:var(--tm);margin-bottom:.5rem}
+  .card .meta{font-size:.75rem;color:var(--tm);display:flex;gap:.75rem}
+  .done{position:relative}.done::after{content:"DONE";position:absolute;top:12px;right:12px;background:var(--g);color:#000;font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:4px}
+  .sep{grid-column:1/-1;border-top:1px solid var(--bd);margin:.5rem 0}
+  footer{margin-top:2rem;color:var(--tm);font-size:.75rem;text-align:center}
+</style>
+</head>
+<body>
+
+<h1>Claude Agent UI</h1>
+<p class="sub">功能差距分析 + 分步实施计划 &nbsp;·&nbsp; 2026-04-03</p>
+
+<div class="grid">
+
+  <!-- 分析报告 -->
+  <a class="card" href="../2026-04-03-feature-gap-analysis.html">
+    <span class="tag" style="background:rgba(88,166,255,.15);color:var(--a)">ANALYSIS</span>
+    <h2>功能差距分析报告</h2>
+    <p>claude-agent-ui vs claude-code vs Agent SDK 全面对比。15 已完善 / 18 SDK 未对接 / 8 UI 缺失。SDK 利用率仅 39%。</p>
+    <div class="meta"><span>完整报告</span><span>含 SDK 能力矩阵</span></div>
+  </a>
+
+  <a class="card done" href="../2026-04-03-auto-mode-classifier-design.md" style="opacity:.6">
+    <span class="tag" style="background:rgba(63,185,80,.15);color:var(--g)">OBSOLETE</span>
+    <h2>Auto Mode 分类器设计</h2>
+    <p>原计划自研分类器，SDK v0.2.91 已原生支持。代码已修复，此文档仅供参考。</p>
+    <div class="meta"><span>已完成</span><span>无需实施</span></div>
+  </a>
+
+  <div class="sep"></div>
+
+  <!-- Phase 总览 -->
+  <a class="card" href="00-overview.html" style="grid-column:1/-1">
+    <span class="tag" style="background:rgba(188,140,255,.15);color:var(--p)">OVERVIEW</span>
+    <h2>实施计划总览</h2>
+    <p>5 个阶段、26 个功能点的全局视图。阶段依赖关系、优先级排序、导航索引。</p>
+    <div class="meta"><span>5 phases</span><span>26 features</span><span>~15 days</span></div>
+  </a>
+
+  <!-- Phase 1 -->
+  <a class="card" href="01-phase1-quick-wins.html" style="border-left:3px solid var(--g)">
+    <span class="tag" style="background:rgba(63,185,80,.15);color:var(--g)">PHASE 1</span>
+    <h2>快速接入</h2>
+    <p>SDK 消息转发 + 渲染。Auto Mode (已完成)、Tool Progress、Rate Limit、Compaction、Session Result、Account Info + 状态栏。</p>
+    <div class="meta"><span>6 功能 (1 已完成)</span><span>~2 天</span><span>最高 ROI</span></div>
+  </a>
+
+  <!-- Phase 2 -->
+  <a class="card" href="02-phase2-message-enhance.html" style="border-left:3px solid var(--c)">
+    <span class="tag" style="background:rgba(57,210,192,.15);color:var(--c)">PHASE 2</span>
+    <h2>消息增强</h2>
+    <p>Task 进度卡片、工具结果折叠、Diff 渲染、代码块复制、Prompt Suggestions、API Retry 提示。</p>
+    <div class="meta"><span>6 功能</span><span>~3 天</span><span>渲染质量</span></div>
+  </a>
+
+  <!-- Phase 3 -->
+  <a class="card" href="03-phase3-session-mgmt.html" style="border-left:3px solid var(--y)">
+    <span class="tag" style="background:rgba(210,153,34,.15);color:var(--y)">PHASE 3</span>
+    <h2>会话管理</h2>
+    <p>Session Resume、模型列表+动态切换、Effort 自适应、Session Fork、Permission Rules 持久化。</p>
+    <div class="meta"><span>5 功能</span><span>~3 天</span><span>SDK API 对接</span></div>
+  </a>
+
+  <!-- Phase 4 -->
+  <a class="card" href="04-phase4-advanced.html" style="border-left:3px solid var(--o)">
+    <span class="tag" style="background:rgba(240,136,62,.15);color:var(--o)">PHASE 4</span>
+    <h2>高级功能</h2>
+    <p>Sub-agent 可视化、Context Usage 面板、MCP 管理、Budget 控制、File Rewind。</p>
+    <div class="meta"><span>5 功能</span><span>~4 天</span><span>进阶能力</span></div>
+  </a>
+
+  <!-- Phase 5 -->
+  <a class="card" href="05-phase5-polish.html" style="border-left:3px solid var(--p)">
+    <span class="tag" style="background:rgba(188,140,255,.15);color:var(--p)">PHASE 5</span>
+    <h2>体验打磨</h2>
+    <p>消息搜索、主题系统（深色/浅色）、快捷键系统、Session 导出。</p>
+    <div class="meta"><span>4 功能</span><span>~3 天</span><span>纯 UI</span></div>
+  </a>
+
+</div>
+
+<footer>Claude Agent UI Implementation Plan &nbsp;·&nbsp; 7 documents &nbsp;·&nbsp; 2026-04-03</footer>
+</body>
+</html>

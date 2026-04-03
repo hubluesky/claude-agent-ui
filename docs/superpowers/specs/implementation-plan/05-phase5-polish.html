@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 5: 体验打磨 — 实施计划</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--tm:#8b949e;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;padding:2rem;max-width:1200px;margin:0 auto}
+  h1{font-size:1.6rem;margin-bottom:.3rem;color:var(--p)}
+  .sub{color:var(--tm);font-size:.85rem;margin-bottom:2rem;border-bottom:1px solid var(--bd);padding-bottom:1rem}
+  h3{font-size:1rem;margin:1.2rem 0 .5rem;color:var(--t)}
+  h4{font-size:.9rem;color:var(--p);margin:1rem 0 .4rem}
+  .feature{background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:1.5rem;margin:1.5rem 0}
+  .feature-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+  .feature-num{background:var(--p);color:#000;font-weight:700;font-size:.8rem;padding:.2rem .6rem;border-radius:6px}
+  .feature-title{font-size:1.15rem;font-weight:600}
+  .meta{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.8rem;color:var(--tm)}
+  .badge{display:inline-block;padding:.1rem .4rem;border-radius:9999px;font-size:.7rem;font-weight:600}
+  .b-g{background:rgba(63,185,80,.15);color:var(--g)}.b-y{background:rgba(210,153,34,.15);color:var(--y)}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.85rem}
+  th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--bd)}
+  th{background:var(--s2);color:var(--a);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+  code{background:var(--s2);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;color:var(--p);font-family:'SF Mono','Cascadia Code',monospace}
+  pre{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.8rem;line-height:1.5;margin:.75rem 0;font-family:'SF Mono','Cascadia Code',monospace}
+  a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+  .nav{display:flex;justify-content:space-between;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--bd);font-size:.85rem}
+
+  /* ===== Common mockup-frame style ===== */
+  .mockup-frame {
+    max-width: 520px;
+    margin: .75rem 0;
+    border: 1px solid #3d3b37;
+    border-radius: 10px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    background: #1a1918;
+    color: #e5e2db;
+  }
+</style>
+</head>
+<body>
+
+<h1>Phase 5: 体验打磨</h1>
+<p class="sub">纯 UI 层功能，不依赖 SDK，提升日常使用体验 &nbsp;|&nbsp; 4 个功能点</p>
+
+<!-- ==================== 5.1 消息搜索 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">5.1</span>
+    <span class="feature-title">消息搜索</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 4</span>
+    <span>纯 UI + 本地过滤</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>长对话中找不到之前讨论过的内容，只能手动滚动。</p>
+
+  <h3>UI 表现</h3>
+
+  <!-- Mockup: Search bar + highlight -->
+  <div class="mockup-frame">
+    <!-- Floating search bar -->
+    <div style="padding: 10px 16px; background: #242320; border-bottom: 1px solid #3d3b37; display: flex; align-items: center; gap: 8px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c7872" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+      </svg>
+      <div style="flex:1; background: #1a1918; border: 1px solid #3d3b37; border-radius: 6px; padding: 6px 10px; color: #e5e2db; font-size: 13px;">
+        authentication
+      </div>
+      <span style="font-size: 12px; color: #a8a29e; white-space: nowrap;">3/12 matches</span>
+      <div style="display: flex; gap: 4px; align-items: center;">
+        <button style="background: none; border: 1px solid #3d3b37; border-radius: 4px; color: #a8a29e; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px;">&#9650;</button>
+        <button style="background: none; border: 1px solid #3d3b37; border-radius: 4px; color: #a8a29e; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px;">&#9660;</button>
+        <button style="background: none; border: 1px solid #3d3b37; border-radius: 4px; color: #a8a29e; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px;">&#10005;</button>
+      </div>
+    </div>
+    <!-- Message area with highlights -->
+    <div style="padding: 16px;">
+      <!-- Normal message (faded) -->
+      <div style="padding: 10px 14px; margin-bottom: 10px; border-radius: 8px; background: #1e1d1a; color: #7c7872; font-size: 13px;">
+        Sure, I'll look into the login flow...
+      </div>
+      <!-- Message with search matches -->
+      <div style="padding: 10px 14px; margin-bottom: 10px; border-radius: 8px; background: #1e1d1a; font-size: 13px; color: #e5e2db; border-left: 3px solid #d97706;">
+        I've updated the <span style="background: rgba(210,153,34,0.3); color: #eab308; padding: 1px 3px; border-radius: 3px;">authentication</span> module, including the <span style="background: rgba(210,153,34,0.5); color: #eab308; padding: 1px 3px; border-radius: 3px; outline: 2px solid rgba(210,153,34,0.6);">authentication</span> token validation logic and session refresh...
+      </div>
+      <!-- Legend -->
+      <div style="font-size: 11px; color: #7c7872; display: flex; gap: 16px; margin-top: 8px;">
+        <span><span style="background: rgba(210,153,34,0.3); padding: 1px 6px; border-radius: 3px; color: #eab308; font-size: 11px;">match</span> matched text</span>
+        <span><span style="background: rgba(210,153,34,0.5); padding: 1px 6px; border-radius: 3px; color: #eab308; outline: 2px solid rgba(210,153,34,0.6); font-size: 11px;">focus</span> current focus</span>
+      </div>
+    </div>
+  </div>
+
+  <h4>实现要点</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>搜索范围：当前 session 已加载的消息（messageStore.messages）</li>
+    <li>搜索逻辑：简单字符串匹配（case-insensitive），不需要正则</li>
+    <li>匹配导航：上/下箭头在匹配项间跳转，自动滚动到对应消息</li>
+    <li>高亮：在 MarkdownRenderer 和 MessageComponent 中用 <code>&lt;mark&gt;</code> 包裹匹配文本</li>
+    <li>性能：debounce 300ms 输入，避免逐字搜索</li>
+    <li>Esc 关闭搜索栏</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/components/chat/SearchBar.tsx</code></td><td><strong>新增</strong>：浮动搜索栏组件</td></tr>
+    <tr><td><code>web/components/chat/ChatInterface.tsx</code></td><td>Ctrl+F 监听，渲染 SearchBar，传递搜索状态</td></tr>
+    <tr><td><code>web/components/chat/ChatMessagesPane.tsx</code></td><td>searchQuery prop，匹配高亮 + 自动滚动</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>文本内容中高亮匹配词</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 5.2 主题 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">5.2</span>
+    <span class="feature-title">主题系统</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 8+</span>
+    <span>纯 CSS + Store</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>仅有暗色主题，白天使用刺眼。</p>
+
+  <h3>方案</h3>
+  <p>用 CSS 变量定义主题 token，TailwindCSS 4 原生支持 <code>@theme</code>。通过切换 <code>&lt;html data-theme="light"&gt;</code> 实现。</p>
+
+  <h4>UI 表现 — 主题切换</h4>
+
+  <!-- Mockup: Theme toggle -->
+  <div class="mockup-frame">
+    <div style="padding: 14px 20px; background: #242320; display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-size: 13px; color: #a8a29e; font-weight: 500;">Theme</span>
+      <div style="display: flex; border: 1px solid #3d3b37; border-radius: 8px; overflow: hidden;">
+        <button style="background: #1a1918; border: none; color: #a8a29e; padding: 6px 14px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; border-right: 1px solid #3d3b37;">
+          <span style="font-size: 14px;">&#9789;</span> Dark
+        </button>
+        <button style="background: #1a1918; border: none; color: #a8a29e; padding: 6px 14px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; border-right: 1px solid #3d3b37;">
+          <span style="font-size: 14px;">&#9728;&#65039;</span> Light
+        </button>
+        <button style="background: rgba(139,92,246,0.15); border: none; color: #8b5cf6; padding: 6px 14px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 600;">
+          <span style="font-size: 14px;">&#9881;&#65039;</span> System
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <h4>颜色 Token 体系</h4>
+<pre>// CSS 变量
+:root[data-theme="dark"] {
+  --color-bg-primary: #0d1117;
+  --color-bg-surface: #161b22;
+  --color-bg-elevated: #1c2333;
+  --color-border: #30363d;
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-text-tertiary: #7c7872;
+  --color-accent: #d97706;
+  --color-success: #3fb950;
+  --color-warning: #d29922;
+  --color-error: #f85149;
+}
+
+:root[data-theme="light"] {
+  --color-bg-primary: #ffffff;
+  --color-bg-surface: #f6f8fa;
+  --color-bg-elevated: #ffffff;
+  --color-border: #d0d7de;
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #656d76;
+  --color-text-tertiary: #8b949e;
+  --color-accent: #b45309;
+  --color-success: #1a7f37;
+  --color-warning: #9a6700;
+  --color-error: #d1242f;
+}</pre>
+
+  <h4>实现策略</h4>
+  <ul style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>将所有组件中的硬编码颜色（如 <code>bg-[#1a1918]</code>）替换为 CSS 变量引用</li>
+    <li>这是最大的改动量 — 需要遍历所有组件更新颜色</li>
+    <li>分两步：先定义变量并替换核心组件，再逐步替换其余组件</li>
+    <li>System 模式监听 <code>prefers-color-scheme</code> media query</li>
+    <li>主题偏好存 localStorage + settings DB</li>
+  </ul>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/src/index.css</code></td><td>定义 CSS 变量（dark/light 两套）</td></tr>
+    <tr><td><code>web/stores/settingsStore.ts</code></td><td>新增 <code>theme: 'dark' | 'light' | 'system'</code></td></tr>
+    <tr><td><code>web/src/App.tsx</code></td><td>根据 theme 设置 <code>data-theme</code> 属性</td></tr>
+    <tr><td><code>web/components/**/*.tsx</code></td><td>硬编码颜色 → CSS 变量（约 8-10 个核心组件）</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 5.3 快捷键 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">5.3</span>
+    <span class="feature-title">快捷键系统</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 3</span>
+    <span>纯 UI</span>
+  </div>
+
+  <h3>快捷键清单</h3>
+  <table>
+    <tr><th>快捷键</th><th>功能</th><th>上下文</th></tr>
+    <tr><td><code>Ctrl+F</code></td><td>打开消息搜索</td><td>全局</td></tr>
+    <tr><td><code>Ctrl+N</code></td><td>新建 session</td><td>全局</td></tr>
+    <tr><td><code>Ctrl+L</code></td><td>清除对话（/clear）</td><td>全局</td></tr>
+    <tr><td><code>Escape</code></td><td>关闭搜索/弹窗，或 abort</td><td>上下文相关</td></tr>
+    <tr><td><code>Shift+Tab</code></td><td>切换权限模式</td><td>已有</td></tr>
+    <tr><td><code>Ctrl+Enter</code></td><td>发送消息</td><td>Composer 聚焦</td></tr>
+    <tr><td><code>Ctrl+B</code></td><td>切换侧边栏</td><td>全局</td></tr>
+    <tr><td><code>Ctrl+/</code></td><td>显示快捷键帮助</td><td>全局</td></tr>
+  </table>
+
+  <h3>UI 表现 — 快捷键帮助面板</h3>
+
+  <!-- Mockup: Keyboard shortcuts dialog -->
+  <div class="mockup-frame">
+    <!-- Backdrop overlay hint -->
+    <div style="background: rgba(0,0,0,0.5); padding: 20px; display: flex; justify-content: center;">
+      <!-- Modal -->
+      <div style="background: #242320; border: 1px solid #3d3b37; border-radius: 12px; width: 100%; max-width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="padding: 16px 20px; border-bottom: 1px solid #3d3b37; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 15px; font-weight: 600; color: #e5e2db;">Keyboard Shortcuts</span>
+          <button style="background: none; border: none; color: #7c7872; cursor: pointer; font-size: 18px; line-height: 1;">&#10005;</button>
+        </div>
+        <!-- Shortcut list -->
+        <div style="padding: 12px 20px;">
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">Search messages</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Ctrl</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">F</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">New session</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Ctrl</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">N</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">Clear conversation</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Ctrl</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">L</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">Toggle sidebar</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Ctrl</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">B</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">Cycle permission mode</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Shift</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Tab</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">Send message</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Ctrl</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Enter</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(61,59,55,0.5);">
+            <span style="color: #a8a29e; font-size: 13px;">Close / Abort</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Esc</kbd>
+            </div>
+          </div>
+          <!-- Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+            <span style="color: #a8a29e; font-size: 13px;">Show this help</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">Ctrl</kbd>
+              <span style="color: #7c7872; font-size: 11px; line-height: 22px;">+</span>
+              <kbd style="background: #1a1918; border: 1px solid #3d3b37; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #e5e2db; font-family: 'SF Mono','Cascadia Code',monospace; box-shadow: 0 1px 0 #3d3b37;">/</kbd>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/hooks/useKeyboardShortcuts.ts</code></td><td><strong>新增</strong>：全局快捷键监听 hook</td></tr>
+    <tr><td><code>web/components/chat/ShortcutsDialog.tsx</code></td><td><strong>新增</strong>：快捷键帮助弹窗</td></tr>
+    <tr><td><code>web/components/chat/ChatInterface.tsx</code></td><td>挂载 useKeyboardShortcuts</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 5.4 导出 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">5.4</span>
+    <span class="feature-title">Session 导出</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 3</span>
+    <span>纯 UI + REST API</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>用户想把对话内容分享给同事或保存到文档。</p>
+
+  <h3>支持格式</h3>
+  <table>
+    <tr><th>格式</th><th>用途</th><th>内容</th></tr>
+    <tr><td>Markdown</td><td>文档/博客</td><td>结构化的对话 markdown（user/assistant 分段，代码块保留）</td></tr>
+    <tr><td>JSON</td><td>数据分析</td><td>原始消息数据（含 tool_use、tool_result、metadata）</td></tr>
+  </table>
+
+  <h3>UI 表现</h3>
+
+  <!-- Mockup: Export context menu -->
+  <div class="mockup-frame">
+    <div style="padding: 16px; position: relative;">
+      <!-- Faded session card behind -->
+      <div style="background: #1e1d1a; border: 1px solid #3d3b37; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; opacity: 0.5;">
+        <div style="width: 8px; height: 8px; border-radius: 50%; background: #3fb950; flex-shrink: 0;"></div>
+        <div>
+          <div style="font-size: 13px; color: #e5e2db; font-weight: 500;">Fix login bug</div>
+          <div style="font-size: 11px; color: #7c7872;">8 turns &middot; 2 min ago</div>
+        </div>
+      </div>
+      <!-- Context menu popup -->
+      <div style="position: absolute; top: 32px; right: 24px; background: #242320; border: 1px solid #3d3b37; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); min-width: 200px; padding: 4px 0; z-index: 10;">
+        <!-- Menu item -->
+        <div style="padding: 8px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; color: #e5e2db;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Export as Markdown
+        </div>
+        <!-- Menu item -->
+        <div style="padding: 8px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; color: #e5e2db; background: rgba(139,92,246,0.08);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Export as JSON
+        </div>
+        <!-- Divider -->
+        <div style="height: 1px; background: #3d3b37; margin: 4px 0;"></div>
+        <!-- Menu item -->
+        <div style="padding: 8px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; color: #e5e2db;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          Rename
+        </div>
+        <!-- Menu item -->
+        <div style="padding: 8px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; color: #f87171;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Delete
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h4>Markdown 导出格式</h4>
+<pre># Session: 修复登录 bug
+**Date**: 2026-04-03 | **Model**: claude-sonnet-4-6 | **Turns**: 8
+
+---
+
+## User
+帮我修复登录页面的验证 bug
+
+## Assistant
+我来看一下代码...
+
+```typescript
+// 修复后的代码
+```
+
+使用了以下工具:
+- **Grep**: 搜索 "authenticate" (5 matches)
+- **Edit**: src/auth/login.ts (3 insertions, 1 deletion)
+
+---
+
+## User
+运行测试看看
+
+...</pre>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/routes/sessions.ts</code></td><td>新增 <code>GET /api/sessions/:id/export?format=md|json</code></td></tr>
+    <tr><td><code>server/utils/exportSession.ts</code></td><td><strong>新增</strong>：消息 → Markdown/JSON 转换逻辑</td></tr>
+    <tr><td><code>web/components/sidebar/SessionCard.tsx</code></td><td>右键菜单增加导出选项，触发下载</td></tr>
+  </table>
+</div>
+
+<div class="nav">
+  <a href="04-phase4-advanced.html">&larr; Phase 4: 高级功能</a>
+  <a href="00-overview.html">返回总览 &rarr;</a>
+</div>
+</body>
+</html>

@@ -4,11 +4,13 @@ import { useConnectionStore } from '../../stores/connectionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useCommandStore } from '../../stores/commandStore'
 import { useSessionStore } from '../../stores/sessionStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { useToastStore } from './Toast'
 import { SlashCommandPopup } from './SlashCommandPopup'
 import { FileReferencePopup } from './FileReferencePopup'
 import { ImagePreviewBar } from './ImagePreviewBar'
-import { ComposerToolbar } from './ComposerToolbar'
+import { ComposerToolbar, useModesPopupState } from './ComposerToolbar'
+import { ModesPopup } from './ModesPopup'
 import type { FileItem } from './FileReferencePopup'
 import type { AttachedImage } from './ImagePreviewBar'
 import type { LocalSlashCommand } from '../../stores/commandStore'
@@ -65,11 +67,13 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
+  const { showModes, setShowModes } = useModesPopupState()
+  const { permissionMode, effort, setPermissionMode, setEffort } = useSettingsStore()
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
   const isLockHolder = lockStatus === 'locked_self'
   const inputDisabled = isLocked
-  const { releaseLock } = useWebSocket()
+  const { releaseLock, send } = useWebSocket()
 
   const handleReleaseLock = useCallback(() => {
     const sid = useSessionStore.getState().currentSessionId
@@ -77,6 +81,22 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
       releaseLock(sid)
     }
   }, [isLockHolder, releaseLock])
+
+  const handleModeChange = useCallback((newMode: typeof permissionMode) => {
+    setPermissionMode(newMode)
+    const sid = useSessionStore.getState().currentSessionId
+    if (sid && sid !== '__new__') {
+      send({ type: 'set-mode', sessionId: sid, mode: newMode })
+    }
+  }, [setPermissionMode, send])
+
+  const handleEffortChange = useCallback((newEffort: typeof effort) => {
+    setEffort(newEffort)
+    const sid = useSessionStore.getState().currentSessionId
+    if (sid && sid !== '__new__') {
+      send({ type: 'set-effort', sessionId: sid, effort: newEffort })
+    }
+  }, [setEffort, send])
 
   // Slash command detection (cursor-based, like @ trigger)
   const filteredCommands = useMemo(() => {
@@ -352,6 +372,17 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
         <ImagePreviewBar images={images} onRemove={removeImage} />
 
         {/* Popups — outside overflow context so they aren't clipped */}
+        {showModes && (
+          <div className="relative">
+            <ModesPopup
+              currentMode={permissionMode}
+              currentEffort={effort}
+              onModeChange={handleModeChange}
+              onEffortChange={handleEffortChange}
+              onClose={() => setShowModes(false)}
+            />
+          </div>
+        )}
         {showPopup && (
           <div className="relative">
             <SlashCommandPopup
@@ -412,7 +443,10 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
           isRunning={isRunning}
           isLockHolder={isLockHolder}
           onReleaseLock={handleReleaseLock}
+          showModes={showModes}
+          setShowModes={setShowModes}
         />
+
       </div>
 
       {/* Hidden file input */}

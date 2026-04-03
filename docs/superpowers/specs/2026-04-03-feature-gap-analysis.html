@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Agent UI — 功能差距分析报告</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --orange: #f0883e;
+    --cyan: #39d2c0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    margin: 2.5rem 0 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  h2 .icon { font-size: 1.2rem; }
+  h3 {
+    font-size: 1.1rem;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--purple);
+  }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .summary-card .number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .summary-card .label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+  }
+  .green { color: var(--green); }
+  .yellow { color: var(--yellow); }
+  .red { color: var(--red); }
+  .purple { color: var(--purple); }
+  .cyan { color: var(--cyan); }
+  .orange { color: var(--orange); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  tr:hover td { background: rgba(88, 166, 255, 0.05); }
+  td:first-child { white-space: nowrap; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .badge-done { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+  .badge-partial { background: rgba(210, 153, 34, 0.15); color: var(--yellow); }
+  .badge-missing { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+  .badge-sdk { background: rgba(188, 140, 255, 0.15); color: var(--purple); }
+  .badge-ui { background: rgba(57, 210, 192, 0.15); color: var(--cyan); }
+  .badge-p0 { background: rgba(248, 81, 73, 0.2); color: var(--red); border: 1px solid rgba(248, 81, 73, 0.3); }
+  .badge-p1 { background: rgba(240, 136, 62, 0.15); color: var(--orange); }
+  .badge-p2 { background: rgba(88, 166, 255, 0.1); color: var(--accent); }
+
+  /* Priority sections */
+  .priority-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin: 1rem 0;
+  }
+  .priority-section h3 {
+    margin-top: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Flow diagram */
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.8;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text-muted);
+  }
+  .flow .hl { color: var(--green); font-weight: 600; }
+  .flow .warn { color: var(--yellow); font-weight: 600; }
+  .flow .err { color: var(--red); font-weight: 600; }
+  .flow .info { color: var(--accent); }
+
+  /* Architecture comparison */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 900px) { .arch-grid { grid-template-columns: 1fr; } }
+  .arch-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .arch-box h4 {
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+  .arch-box ul {
+    list-style: none;
+    padding: 0;
+  }
+  .arch-box li {
+    padding: 0.3rem 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .arch-box li::before { font-size: 0.7rem; }
+  .arch-box.ours { border-color: var(--accent); }
+  .arch-box.theirs { border-color: var(--purple); }
+
+  .tag-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0.25rem 0;
+  }
+
+  /* ROI indicator */
+  .roi {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .roi-bar {
+    display: inline-block;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--green);
+  }
+
+  .note {
+    background: rgba(88, 166, 255, 0.08);
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  /* Scrollable table wrapper */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .table-wrap table { margin: 0; }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Claude Agent UI — 功能差距分析报告</h1>
+<p class="subtitle">对比 claude-code (CLI) + Claude Agent SDK，识别改进方向与缺失功能 &nbsp;|&nbsp; 2026-04-03</p>
+
+<!-- ========== Summary ========== -->
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number green">15</div>
+    <div class="label">已完善功能</div>
+  </div>
+  <div class="summary-card">
+    <div class="number yellow">8</div>
+    <div class="label">可改进功能</div>
+  </div>
+  <div class="summary-card">
+    <div class="number purple">18</div>
+    <div class="label">SDK 已支持但未对接</div>
+  </div>
+  <div class="summary-card">
+    <div class="number cyan">8</div>
+    <div class="label">需 UI 层独立实现</div>
+  </div>
+  <div class="summary-card">
+    <div class="number green">0</div>
+    <div class="label">安全隐患 (P0)</div>
+  </div>
+</div>
+
+<!-- ========== 已完善 ========== -->
+<h2><span class="icon">&#10003;</span> 一、已实现且基本完善的功能</h2>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>功能</th><th>状态</th><th>备注</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>WebSocket 实时同步</td><td><span class="badge badge-done">完善</span></td><td>多客户端广播、锁机制、重连</td></tr>
+    <tr><td>会话管理 (CRUD)</td><td><span class="badge badge-done">完善</span></td><td>创建/重命名/列表/分页消息</td></tr>
+    <tr><td>项目分组</td><td><span class="badge badge-done">完善</span></td><td>按 cwd 聚合，搜索过滤</td></tr>
+    <tr><td>工具审批 (Allow/Deny/AlwaysAllow)</td><td><span class="badge badge-done">完善</span></td><td>含 readonly 观察者模式</td></tr>
+    <tr><td>AskUserQuestion</td><td><span class="badge badge-done">完善</span></td><td>数字选择 + 自定义输入</td></tr>
+    <tr><td>Plan 审批</td><td><span class="badge badge-done">完善</span></td><td>全屏模态 + 反馈</td></tr>
+    <tr><td>权限模式切换</td><td><span class="badge badge-done">完善</span></td><td>6 种模式 UI</td></tr>
+    <tr><td>流式消息渲染</td><td><span class="badge badge-done">完善</span></td><td>RAF 节流 delta 更新</td></tr>
+    <tr><td>Thinking 块显示</td><td><span class="badge badge-done">完善</span></td><td>有已知 bug 在追踪中</td></tr>
+    <tr><td>图片附件上传</td><td><span class="badge badge-done">完善</span></td><td>预览 + 拖拽</td></tr>
+    <tr><td>Markdown 渲染</td><td><span class="badge badge-done">完善</span></td><td>代码块语法高亮</td></tr>
+    <tr><td>斜杠命令补全</td><td><span class="badge badge-done">完善</span></td><td>键盘导航</td></tr>
+    <tr><td>文件引用 (@file)</td><td><span class="badge badge-done">完善</span></td><td>gitignore 过滤</td></tr>
+    <tr><td>响应式布局</td><td><span class="badge badge-done">完善</span></td><td>移动端适配</td></tr>
+    <tr><td>侧边栏可调整</td><td><span class="badge badge-done">完善</span></td><td>拖拽 + 折叠</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ========== 可改进 ========== -->
+<h2><span class="icon">&#9881;</span> 二、可改进的现有功能</h2>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>编号</th><th>功能</th><th>当前状态</th><th>claude-code 做法</th><th>改进建议</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>I-1</td>
+      <td>工具结果折叠</td>
+      <td>平铺展示</td>
+      <td>可折叠/展开，长结果默认折叠</td>
+      <td>添加折叠/展开 UI</td>
+    </tr>
+    <tr>
+      <td>I-2</td>
+      <td>Diff 显示</td>
+      <td>纯文本显示 edit 结果</td>
+      <td>语法高亮 unified diff（红/绿）</td>
+      <td>实现 diff 渲染组件</td>
+    </tr>
+    <tr>
+      <td>I-3</td>
+      <td>工具审批详情</td>
+      <td>显示工具名和参数</td>
+      <td>文件路径、diff 预览、命令预览</td>
+      <td>审批卡片增加 diff 预览</td>
+    </tr>
+    <tr>
+      <td>I-4</td>
+      <td>状态栏</td>
+      <td>无底部状态栏</td>
+      <td>StatusLine：模型、token 用量、session 信息</td>
+      <td>添加状态栏组件</td>
+    </tr>
+    <tr>
+      <td>I-5</td>
+      <td>Token/Cost 追踪</td>
+      <td>无</td>
+      <td>实时 token 用量和费用</td>
+      <td>添加 cost 追踪显示</td>
+    </tr>
+    <tr>
+      <td>I-6</td>
+      <td>消息搜索</td>
+      <td>无</td>
+      <td>历史消息搜索</td>
+      <td>添加消息搜索功能</td>
+    </tr>
+    <tr>
+      <td>I-7</td>
+      <td>Abort 反馈</td>
+      <td>仅发信号</td>
+      <td>进度和确认 UI</td>
+      <td>改进 abort 视觉反馈</td>
+    </tr>
+    <tr>
+      <td>I-8</td>
+      <td>错误处理 UI</td>
+      <td>基础 toast</td>
+      <td>分类错误（rate limit/auth/network）</td>
+      <td>精细错误分类 + 重试 UI</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ========== SDK 已支持 ========== -->
+<h2><span class="icon">&#9889;</span> 三、SDK 已支持但未对接的功能（最高 ROI）</h2>
+
+<div class="note">
+  <strong>关键发现：</strong>以下 18 项功能，SDK 已经做了重活（提供了 API 和消息类型），我们只需在 server 层转发 + web 层渲染即可获得。这是投入产出比最高的方向。
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>编号</th><th>功能</th><th>SDK API</th><th>需要做什么</th><th>ROI</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>S-1</td>
+      <td><strong>Context Usage 可视化</strong></td>
+      <td><code>query.getContextUsage()</code></td>
+      <td>状态栏/面板展示 token 分布</td>
+      <td><span class="roi"><span class="roi-bar" style="width:60px"></span> 极高</span></td>
+    </tr>
+    <tr>
+      <td>S-2</td>
+      <td><strong>Session Resume UI</strong></td>
+      <td><code>options.resume</code>, <code>options.continue</code></td>
+      <td>侧边栏"恢复交互"按钮</td>
+      <td><span class="roi"><span class="roi-bar" style="width:60px"></span> 极高</span></td>
+    </tr>
+    <tr>
+      <td>S-3</td>
+      <td><strong>MCP 服务器管理</strong></td>
+      <td><code>mcpServerStatus()</code>, <code>toggleMcpServer()</code>, <code>setMcpServers()</code></td>
+      <td>MCP 管理面板</td>
+      <td><span class="roi"><span class="roi-bar" style="width:45px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-4</td>
+      <td><strong>Task 进度消息</strong></td>
+      <td><code>SDKTaskStartedMessage</code>, <code>SDKTaskProgressMessage</code>, <code>SDKTaskNotificationMessage</code></td>
+      <td>渲染 Task 进度卡片</td>
+      <td><span class="roi"><span class="roi-bar" style="width:55px"></span> 极高</span></td>
+    </tr>
+    <tr>
+      <td>S-5</td>
+      <td><strong>Sub-agent 可视化</strong></td>
+      <td><code>getSubagentMessages()</code>, <code>listSubagents()</code></td>
+      <td>子 Agent 面板/树形展示</td>
+      <td><span class="roi"><span class="roi-bar" style="width:40px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-6</td>
+      <td><strong>Compaction 事件</strong></td>
+      <td><code>SDKCompactBoundaryMessage</code>, <code>SDKStatusMessage</code></td>
+      <td>compact 状态提示 + 分界线</td>
+      <td><span class="roi"><span class="roi-bar" style="width:50px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-7</td>
+      <td><strong>Hook 事件流</strong></td>
+      <td><code>includeHookEvents</code>, <code>SDKHookStarted/Progress/Response</code></td>
+      <td>hook 执行状态显示</td>
+      <td><span class="roi"><span class="roi-bar" style="width:30px"></span> 中</span></td>
+    </tr>
+    <tr>
+      <td>S-8</td>
+      <td><strong>账户信息</strong></td>
+      <td><code>accountInfo()</code></td>
+      <td>状态栏显示账户/模型</td>
+      <td><span class="roi"><span class="roi-bar" style="width:35px"></span> 中</span></td>
+    </tr>
+    <tr>
+      <td>S-9</td>
+      <td><strong>Rate Limit 事件</strong></td>
+      <td><code>SDKRateLimitEvent</code></td>
+      <td>限流提示 + 重试倒计时</td>
+      <td><span class="roi"><span class="roi-bar" style="width:50px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-10</td>
+      <td><strong>Prompt Suggestions</strong></td>
+      <td><code>promptSuggestions</code>, <code>SDKPromptSuggestionMessage</code></td>
+      <td>对话结束推荐下一步</td>
+      <td><span class="roi"><span class="roi-bar" style="width:35px"></span> 中</span></td>
+    </tr>
+    <tr>
+      <td>S-11</td>
+      <td><strong>模型列表</strong></td>
+      <td><code>supportedModels()</code></td>
+      <td>模型选择器</td>
+      <td><span class="roi"><span class="roi-bar" style="width:40px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-12</td>
+      <td><strong>Tool Progress 流式</strong></td>
+      <td><code>SDKToolProgressMessage</code> (elapsed_time)</td>
+      <td>工具执行耗时指示器</td>
+      <td><span class="roi"><span class="roi-bar" style="width:50px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-13</td>
+      <td><strong>File Checkpoint/Rewind</strong></td>
+      <td><code>rewindFiles(messageId)</code></td>
+      <td>"撤回到此消息"按钮</td>
+      <td><span class="roi"><span class="roi-bar" style="width:30px"></span> 中</span></td>
+    </tr>
+    <tr>
+      <td>S-14</td>
+      <td><strong>Budget 控制</strong></td>
+      <td><code>maxTurns</code>, <code>maxBudgetUsd</code>, <code>taskBudget</code></td>
+      <td>设置面板加预算配置</td>
+      <td><span class="roi"><span class="roi-bar" style="width:30px"></span> 中</span></td>
+    </tr>
+    <tr>
+      <td>S-15</td>
+      <td><strong>Agent Progress Summaries</strong></td>
+      <td><code>agentProgressSummaries</code></td>
+      <td>子 Agent 进度摘要</td>
+      <td><span class="roi"><span class="roi-bar" style="width:35px"></span> 中</span></td>
+    </tr>
+    <tr>
+      <td>S-16</td>
+      <td><strong>MCP Elicitation</strong></td>
+      <td><code>onElicitation</code> 回调</td>
+      <td>MCP 认证/表单 UI</td>
+      <td><span class="roi"><span class="roi-bar" style="width:25px"></span> 低</span></td>
+    </tr>
+    <tr>
+      <td>S-17</td>
+      <td><strong>动态模型切换</strong></td>
+      <td><code>query.setModel()</code></td>
+      <td>对话中切换模型</td>
+      <td><span class="roi"><span class="roi-bar" style="width:40px"></span> 高</span></td>
+    </tr>
+    <tr>
+      <td>S-18</td>
+      <td><strong>Session Fork</strong></td>
+      <td><code>forkSession()</code></td>
+      <td>"从此处分叉"功能</td>
+      <td><span class="roi"><span class="roi-bar" style="width:25px"></span> 低</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ========== 纯 UI ========== -->
+<h2><span class="icon">&#127912;</span> 四、需 UI 层独立实现的功能</h2>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>编号</th><th>功能</th><th>说明</th><th>复杂度</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>U-1</td><td>工具审批 Diff 预览</td><td>SDK 给了 tool input，diff 渲染是纯 UI</td><td><span class="badge badge-partial">中</span></td></tr>
+    <tr><td>U-2</td><td>消息搜索</td><td>本地消息过滤/全文搜索</td><td><span class="badge badge-partial">中</span></td></tr>
+    <tr><td>U-3</td><td>主题系统</td><td>深色/浅色/自定义颜色</td><td><span class="badge badge-partial">中</span></td></tr>
+    <tr><td>U-4</td><td>快捷键系统</td><td>全局快捷键 + 可配置</td><td><span class="badge badge-partial">中</span></td></tr>
+    <tr><td>U-5</td><td>Session 导出</td><td>导出为 Markdown/JSON</td><td><span class="badge badge-done">低</span></td></tr>
+    <tr><td>U-6</td><td>代码块增强</td><td>复制/应用/diff 按钮</td><td><span class="badge badge-done">低</span></td></tr>
+    <tr><td>U-7</td><td>多端同步优化</td><td>WebSocket 层性能调优</td><td><span class="badge badge-partial">中</span></td></tr>
+    <tr><td>U-8</td><td>状态栏</td><td>底部信息栏：模型、token、session</td><td><span class="badge badge-done">低</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ========== Auto Mode ========== -->
+<h2><span class="icon">&#10003;</span> 五、Auto Mode — 已修复</h2>
+
+<div class="priority-section" style="border-color: var(--green); opacity: 0.6;">
+  <h3 style="color: var(--green);"><span class="badge badge-done">DONE</span> Auto Mode 已接入 SDK 原生分类器</h3>
+
+  <div class="arch-grid">
+    <div class="arch-box ours">
+      <h4 style="color: var(--green);">当前实现（已修复）</h4>
+      <ul>
+        <li>&#10004; <code>getAutoDecision('auto')</code> 返回 <code>null</code>，交给 SDK 分类器</li>
+        <li>&#10004; <code>setPermissionMode('auto')</code> 直接传给 SDK</li>
+        <li>&#10004; SDK v0.2.91 内置 AI 分类器，安全操作自动放行，危险操作拦截</li>
+        <li>&#10004; 无需自研分类器</li>
+      </ul>
+    </div>
+    <div class="arch-box theirs">
+      <h4 style="color: var(--green);">claude-code 实现</h4>
+      <ul>
+        <li>&#10004; 本地安全白名单（只读工具直接放行）</li>
+        <li>&#10004; Stage 1 快速分类（64 tokens, ~200ms）</li>
+        <li>&#10004; Stage 2 深度推理（4096 tokens，仅危险时触发）</li>
+        <li>&#10004; 危险规则剥离（Bash(*) 等进入 auto 时移除）</li>
+        <li>&#10004; 拒绝追踪（最近 20 条拦截记录）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h4 style="margin-top: 1rem; color: var(--text);">分类器决策流程</h4>
+  <div class="flow"><span class="info">工具请求 (canUseTool)</span>
+    │
+    ├─ <span class="hl">安全白名单?</span> ── YES ──▶ <span class="hl">直接放行</span> (0ms, 无 API 调用)
+    │     FileRead, Grep, Glob, LSP, TaskList, TaskGet, TodoRead,
+    │     AskUserQuestion, EnterPlanMode, SendMessage, Skill ...
+    │
+    NO
+    │
+    ├─ <span class="warn">Stage 1: 快速分类</span>
+    │     Claude API · 64 tokens · temperature=0 · stop=['&lt;/block&gt;']
+    │     ├─ &lt;block&gt;no&lt;/block&gt;  ──▶ <span class="hl">放行</span>
+    │     ├─ &lt;block&gt;yes&lt;/block&gt; ──▶ 升级 Stage 2
+    │     └─ 解析失败         ──▶ 升级 Stage 2
+    │
+    ├─ <span class="err">Stage 2: 深度推理</span>
+    │     Claude API · 4096 tokens · temperature=0 · &lt;thinking&gt; 推理
+    │     ├─ &lt;block&gt;no&lt;/block&gt;  ──▶ <span class="hl">放行</span>
+    │     ├─ &lt;block&gt;yes&lt;/block&gt; ──▶ <span class="err">拦截</span> → 弹审批给 lock holder（可覆盖）
+    │     └─ 解析失败         ──▶ <span class="err">拦截</span> (fail-closed)
+    │
+    └─ <span class="info">错误降级</span>: API 失败/超时 → 降级为用户手动审批</div>
+
+  <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+    <strong>设计决策（已确认）：</strong>
+    API Key 复用 SDK 的 key · 模型与主模型相同 · 两阶段完整复刻 · 拦截但可覆盖（lock holder 可强制放行）
+  </p>
+  <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">
+    详见 <code>docs/superpowers/specs/2026-04-03-auto-mode-classifier-design.md</code>
+  </p>
+</div>
+
+<!-- ========== 优先级排序 ========== -->
+<h2><span class="icon">&#128640;</span> 六、推荐实施路线图</h2>
+
+<div class="priority-section" style="border-color: var(--red);">
+  <h3><span class="badge badge-p0">P0</span> 安全 + 核心体验（立即）</h3>
+  <table>
+    <tbody>
+      <tr style="opacity:.5"><td style="width:60px"><span class="badge badge-done">DONE</span></td><td><s><strong>Auto Mode</strong> — SDK 原生支持，代码已修复</s></td><td><span class="badge badge-done">已完成</span></td></tr>
+      <tr><td><span class="badge badge-p0">P0</span></td><td><strong>S-1 Context Usage</strong> — 用户最需要知道上下文占用</td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p0">P0</span></td><td><strong>S-4 Task 进度</strong> — Agent 高频使用 Task 系统</td><td><span class="badge badge-sdk">SDK 消息</span></td></tr>
+      <tr><td><span class="badge badge-p0">P0</span></td><td><strong>S-12 Tool Progress</strong> — Bash 命令不再黑盒等待</td><td><span class="badge badge-sdk">SDK 消息</span></td></tr>
+      <tr><td><span class="badge badge-p0">P0</span></td><td><strong>S-9 Rate Limit</strong> — 用户需知道为什么卡住</td><td><span class="badge badge-sdk">SDK 事件</span></td></tr>
+      <tr><td><span class="badge badge-p0">P0</span></td><td><strong>S-6 Compaction</strong> — 长对话必须有 compact 提示</td><td><span class="badge badge-sdk">SDK 消息</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="priority-section" style="border-color: var(--orange);">
+  <h3><span class="badge badge-p1">P1</span> 重要功能补齐（短期）</h3>
+  <table>
+    <tbody>
+      <tr><td style="width:60px"><span class="badge badge-p1">P1</span></td><td><strong>S-2 Session Resume</strong> — 恢复历史会话交互</td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>S-11 + S-17 模型列表/切换</strong> — 动态选择模型</td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>S-5 + S-15 Sub-agent 可视化</strong> — Agent 层级和进度</td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>S-3 MCP 管理</strong> — 服务器状态/开关/配置</td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>I-2 Diff 渲染</strong> — 文件编辑 unified diff 显示</td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>I-4 + U-8 状态栏</strong> — 底部信息栏</td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>S-8 账户信息</strong> — 显示当前用户/组织</td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p1">P1</span></td><td><strong>S-10 Prompt Suggestions</strong> — 推荐下一步操作</td><td><span class="badge badge-sdk">SDK 消息</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="priority-section" style="border-color: var(--accent);">
+  <h3><span class="badge badge-p2">P2</span> 体验增强（中期）</h3>
+  <table>
+    <tbody>
+      <tr><td style="width:60px"><span class="badge badge-p2">P2</span></td><td><strong>I-1 工具结果折叠</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>I-3 审批 Diff 预览</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>S-13 File Rewind</strong></td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>S-14 Budget 控制</strong></td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>S-18 Session Fork</strong></td><td><span class="badge badge-sdk">SDK API</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>U-2 消息搜索</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>U-3 主题系统</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>U-4 快捷键</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>U-5 Session 导出</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>U-6 代码块增强</strong></td><td><span class="badge badge-ui">纯 UI</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>S-7 Hook 事件</strong></td><td><span class="badge badge-sdk">SDK 事件</span></td></tr>
+      <tr><td><span class="badge badge-p2">P2</span></td><td><strong>S-16 MCP Elicitation</strong></td><td><span class="badge badge-sdk">SDK 回调</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ========== SDK 能力矩阵 ========== -->
+<h2><span class="icon">&#128300;</span> 七、SDK 能力利用率</h2>
+
+<div class="note">
+  SDK (v0.2.90) 提供了大量 API 和消息类型，以下是我们当前的利用情况。<span style="color: var(--red);">红色</span> = 完全未使用，<span style="color: var(--yellow);">黄色</span> = 部分使用。
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>SDK 能力</th><th>API</th><th>利用状态</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>基础 Query</td><td><code>query()</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>消息流式</td><td><code>for await (msg of query)</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>工具审批</td><td><code>canUseTool</code> 回调</td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>Session 恢复</td><td><code>options.resume</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>Effort 控制</td><td><code>options.effort</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>Thinking 控制</td><td><code>options.thinking</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>Abort</td><td><code>query.interrupt()</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>斜杠命令</td><td><code>supportedCommands()</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>Session 列表</td><td><code>listSessions()</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr><td>Session 重命名</td><td><code>renameSession()</code></td><td><span class="badge badge-done">已用</span></td></tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Context Usage</td><td><code>getContextUsage()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>模型列表</td><td><code>supportedModels()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>动态切换模型</td><td><code>setModel()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>MCP 管理</td><td><code>mcpServerStatus()</code>, <code>toggleMcpServer()</code>, <code>setMcpServers()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Sub-agent 消息</td><td><code>listSubagents()</code>, <code>getSubagentMessages()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Account 信息</td><td><code>accountInfo()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>File Rewind</td><td><code>rewindFiles()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Session Fork</td><td><code>forkSession()</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Budget 控制</td><td><code>maxBudgetUsd</code>, <code>maxTurns</code>, <code>taskBudget</code></td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Prompt Suggestions</td><td><code>promptSuggestions</code> option</td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Agent Summaries</td><td><code>agentProgressSummaries</code> option</td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>Hook 事件</td><td><code>includeHookEvents</code> option</td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>MCP Elicitation</td><td><code>onElicitation</code> 回调</td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.05);">
+      <td>File Checkpointing</td><td><code>enableFileCheckpointing</code> option</td><td><span class="badge badge-missing">未用</span></td>
+    </tr>
+    <tr style="background: rgba(210, 153, 34, 0.05);">
+      <td>SDK 消息类型覆盖</td><td>SDKTaskStarted/Progress/Notification, SDKCompactBoundary, SDKRateLimit, SDKToolProgress, SDKPromptSuggestion, SDKHook*</td><td><span class="badge badge-partial">部分</span> 仅处理 assistant/result/system.init</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="summary-grid" style="margin-top: 1.5rem;">
+  <div class="summary-card">
+    <div class="number green">9</div>
+    <div class="label">已使用 SDK API</div>
+  </div>
+  <div class="summary-card">
+    <div class="number red">14</div>
+    <div class="label">未使用 SDK API</div>
+  </div>
+  <div class="summary-card">
+    <div class="number yellow">39%</div>
+    <div class="label">SDK 利用率</div>
+  </div>
+</div>
+
+<footer>
+  Generated by Claude Agent UI Analysis &nbsp;·&nbsp; 2026-04-03 &nbsp;·&nbsp; claude-agent-ui vs claude-code + Agent SDK
+</footer>
+
+</body>
+</html>

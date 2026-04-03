@@ -67,14 +67,17 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
   const [otherText, setOtherText] = useState('')
   const [previewKey, setPreviewKey] = useState<string | null>(null)
 
-  // Reset state when config changes (new request)
+  // Reset state when the underlying pending request changes
+  const requestIdentity = config.type === 'tool-approval' ? pendingApproval?.requestId
+    : config.type === 'ask-user' ? pendingAskUser?.requestId
+    : pendingPlanApproval?.requestId
   useEffect(() => {
     setSelectedKeys(new Set())
     setFeedback('')
     setShowOther(false)
     setOtherText('')
     setPreviewKey(null)
-  }, [config.type, config.title])
+  }, [requestIdentity])
 
   const fireDecision = useCallback((key: string, extra?: string) => {
     if (!canInteract) return
@@ -94,12 +97,13 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
       // Toggle preview
       setPreviewKey((prev) => prev === opt.key ? null : (opt.preview ? opt.key : prev))
     } else {
-      // Single select — fire immediately unless it's the feedbackField submitKey
+      // Single select — fire immediately
+      // For feedbackField.submitKey options (deny/feedback), pass feedback text if present
       if (config.feedbackField && opt.key === config.feedbackField.submitKey) {
-        // Clicking the "feedback" option just focuses the feedback input
-        return
+        fireDecision(opt.key, feedback.trim() || undefined)
+      } else {
+        fireDecision(opt.key)
       }
-      fireDecision(opt.key)
     }
   }, [canInteract, config, fireDecision])
 
@@ -137,6 +141,10 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
       if (e.key === 'Enter' && config.multiSelect && selectedKeys.size > 0) {
         e.preventDefault()
         handleMultiSubmit()
+      }
+      if (e.key === 'Escape' && config.otherField && !showOther) {
+        e.preventDefault()
+        setShowOther(true)
       }
     }
     window.addEventListener('keydown', handler)

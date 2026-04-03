@@ -39,6 +39,7 @@ const READ_ONLY_TOOLS: Set<string> = new Set([
 
 interface PendingApproval {
   toolName: string
+  toolInput: Record<string, unknown>
   resolve: (decision: ToolApprovalDecision) => void
 }
 
@@ -242,7 +243,7 @@ export class V1QuerySession extends AgentSession {
     const requestId = randomUUID()
 
     const decision = await new Promise<ToolApprovalDecision>((resolve) => {
-      this.pendingApprovals.set(requestId, { toolName, resolve })
+      this.pendingApprovals.set(requestId, { toolName, toolInput: input, resolve })
       this.emit('tool-approval', {
         requestId,
         toolName,
@@ -268,8 +269,8 @@ export class V1QuerySession extends AgentSession {
   private getAutoDecision(toolName: string, input: Record<string, unknown>): { behavior: string; message?: string } | null {
     switch (this._permissionMode) {
       case 'auto':
-        // SDK native auto mode uses a model classifier — don't intercept here
-        return null
+        // Auto mode: allow all — SDK handles risk classification internally
+        return { behavior: 'allow' }
 
       case 'bypassPermissions':
         if (isSafetySensitive(toolName, input)) return null  // → prompt user
@@ -439,8 +440,14 @@ export class V1QuerySession extends AgentSession {
       switch (mode) {
         // Fully permissive: allow everything
         case 'auto':
-        case 'bypassPermissions':
           decision = { behavior: 'allow' }
+          break
+
+        // Bypass: allow unless safety-sensitive
+        case 'bypassPermissions':
+          if (!isSafetySensitive(pending.toolName, pending.toolInput)) {
+            decision = { behavior: 'allow' }
+          }
           break
 
         // Edit-permissive: allow only edit tools, keep others pending

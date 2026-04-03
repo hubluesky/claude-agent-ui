@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 3: 会话管理 — 实施计划</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--tm:#8b949e;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;padding:2rem;max-width:1200px;margin:0 auto}
+  h1{font-size:1.6rem;margin-bottom:.3rem;color:var(--y)}
+  .sub{color:var(--tm);font-size:.85rem;margin-bottom:2rem;border-bottom:1px solid var(--bd);padding-bottom:1rem}
+  h3{font-size:1rem;margin:1.2rem 0 .5rem;color:var(--t)}
+  h4{font-size:.9rem;color:var(--p);margin:1rem 0 .4rem}
+  .feature{background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:1.5rem;margin:1.5rem 0}
+  .feature-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+  .feature-num{background:var(--y);color:#000;font-weight:700;font-size:.8rem;padding:.2rem .6rem;border-radius:6px}
+  .feature-title{font-size:1.15rem;font-weight:600}
+  .meta{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.8rem;color:var(--tm)}
+  .badge{display:inline-block;padding:.1rem .4rem;border-radius:9999px;font-size:.7rem;font-weight:600}
+  .b-g{background:rgba(63,185,80,.15);color:var(--g)}.b-y{background:rgba(210,153,34,.15);color:var(--y)}.b-r{background:rgba(248,81,73,.15);color:var(--r)}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.85rem}
+  th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--bd)}
+  th{background:var(--s2);color:var(--a);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+  code{background:var(--s2);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;color:var(--p);font-family:'SF Mono','Cascadia Code',monospace}
+  pre{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.8rem;line-height:1.5;margin:.75rem 0;font-family:'SF Mono','Cascadia Code',monospace}
+  .note{background:rgba(88,166,255,.08);border-left:3px solid var(--a);padding:.6rem .8rem;border-radius:0 6px 6px 0;font-size:.85rem;color:var(--tm);margin:.75rem 0}
+  a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+  .nav{display:flex;justify-content:space-between;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--bd);font-size:.85rem}
+
+  /* ---- Common mockup-frame styles ---- */
+  .mockup-frame{max-width:520px;background:#1a1918;border:1px solid #3d3b37;border-radius:10px;padding:16px;margin:.75rem 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#e5e2db}
+  .mockup-frame *{box-sizing:border-box}
+  .mockup-label{font-size:11px;color:#7c7872;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+  .mockup-sep{border:none;border-top:1px dashed #3d3b37;margin:14px 0}
+  .mockup-caption{font-size:11px;color:#7c7872;margin-top:8px;font-style:italic}
+</style>
+</head>
+<body>
+
+<h1>Phase 3: 会话管理</h1>
+<p class="sub">补齐会话生命周期功能，对接 SDK 会话 API &nbsp;|&nbsp; 5 个功能点</p>
+
+<!-- ==================== 3.1 Session Resume ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">3.1</span>
+    <span class="feature-title">Session Resume（恢复历史会话交互）</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 5</span>
+    <span>SDK: <code>options.resume</code>（已部分使用）</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>当前点击历史会话只能查看消息记录，无法继续对话。SDK 的 <code>resume</code> 选项已在 <code>v1-session.ts</code> 中使用，但仅用于同一 session 内的连续消息。缺少从侧边栏恢复历史会话的 UI 入口。</p>
+
+  <h3>方案</h3>
+  <p>在 SessionCard 上区分"查看历史"和"恢复交互"两种操作。</p>
+
+  <h4>UI 表现 — 侧边栏 SessionCard</h4>
+  <div class="mockup-frame">
+    <div class="mockup-label">Sidebar SessionCard (hover state)</div>
+    <!-- Session card -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:12px 14px;position:relative;cursor:pointer;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="font-size:14px;font-weight:600;color:#e5e2db;">修复登录 bug</div>
+      </div>
+      <div style="font-size:12px;color:#7c7872;margin-top:4px;">2h ago &middot; 15 messages</div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:#d97706;color:#fff;border:none;border-radius:6px;padding:6px 0;font-size:12px;font-weight:600;cursor:pointer;">
+          &#9654; 继续对话
+        </button>
+        <button style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;color:#a8a29e;border:1px solid #3d3b37;border-radius:6px;padding:6px 0;font-size:12px;font-weight:500;cursor:pointer;">
+          &#128065; 查看历史
+        </button>
+      </div>
+    </div>
+    <div class="mockup-caption">hover 时显示两个操作按钮</div>
+  </div>
+
+  <h4>UI 表现 — ChatInterface 消息区</h4>
+  <div class="mockup-frame">
+    <div class="mockup-label">History Mode &mdash; read-only view</div>
+    <!-- History messages (simplified) -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+      <div style="font-size:11px;color:#7c7872;margin-bottom:4px;">user</div>
+      <div style="font-size:13px;color:#a8a29e;">帮我修复登录页面的 bug</div>
+    </div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+      <div style="font-size:11px;color:#7c7872;margin-bottom:4px;">assistant</div>
+      <div style="font-size:13px;color:#a8a29e;">我来检查登录页面的代码...</div>
+    </div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:10px 14px;margin-bottom:8px;opacity:.5;">
+      <div style="font-size:11px;color:#7c7872;margin-bottom:4px;">assistant</div>
+      <div style="font-size:13px;color:#a8a29e;">已完成修复，问题出在 token 过期逻辑...</div>
+    </div>
+
+    <!-- Composer replacement banner -->
+    <div style="background:#1e1d1a;border:1px solid #3d3b37;border-radius:8px;padding:14px 16px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;color:#a8a29e;">这是历史会话。</span>
+      <button style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;">
+        &#9654; 恢复交互
+      </button>
+    </div>
+    <div class="mockup-caption">Composer 位置显示恢复提示</div>
+
+    <hr class="mockup-sep">
+
+    <div class="mockup-label">Resumed &mdash; active session</div>
+    <div style="background:#1e1d1a;border:1px solid #3d3b37;border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:8px;">
+      <input type="text" placeholder="继续提问..." style="flex:1;background:transparent;border:none;outline:none;color:#e5e2db;font-size:13px;" readonly>
+      <div style="width:28px;height:28px;background:#d97706;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#fff;font-size:14px;">&#8593;</span>
+      </div>
+    </div>
+    <div class="mockup-caption">恢复后 Composer 激活，可继续输入</div>
+  </div>
+
+  <h4>流程</h4>
+  <ol style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>点击"继续对话" &rarr; 发送 <code>C2S_SendMessage</code> 时带 <code>resumeSessionId</code></li>
+    <li>Server 端创建 <code>V1QuerySession({ resumeSessionId })</code></li>
+    <li>SDK 通过 resume 恢复上下文，用户可继续提问</li>
+    <li>点击"查看历史" &rarr; 仅加载消息，不创建活跃 session</li>
+  </ol>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/components/sidebar/SessionCard.tsx</code></td><td>hover 显示两个操作按钮</td></tr>
+    <tr><td><code>web/stores/sessionStore.ts</code></td><td>新增 <code>isHistoryMode: boolean</code> 状态</td></tr>
+    <tr><td><code>web/components/chat/ChatInterface.tsx</code></td><td>history mode 时 Composer 替换为恢复提示</td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>C2S_SendMessage 增加 <code>resumeSessionId</code> 可选字段</td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>handleSendMessage 支持 resumeSessionId</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 3.2 模型切换 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">3.2</span>
+    <span class="feature-title">模型列表 + 动态切换</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 6</span>
+    <span>SDK: <code>supportedModels()</code> + <code>query.setModel()</code></span>
+  </div>
+
+  <h3>SDK API</h3>
+<pre>// supportedModels() 返回
+[{ value: 'claude-sonnet-4-6-20250514',
+   displayName: 'Claude Sonnet 4.6',
+   description: 'Fast, intelligent model',
+   supportsExtendedThinking: true,
+   supportsAutoMode: true,
+   supportedEffortLevels: ['low','medium','high','max'] }]
+
+// 动态切换
+await query.setModel('claude-opus-4-6-20250514')</pre>
+
+  <h3>UI 表现 — 状态栏模型选择器</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">StatusBar model trigger (click to open)</div>
+    <div style="background:#1e1d1a;border:1px solid #3d3b37;border-radius:8px;padding:8px 14px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+      <span style="width:8px;height:8px;background:#3fb950;border-radius:50%;display:inline-block;"></span>
+      <span style="font-size:13px;color:#e5e2db;font-weight:500;">claude-sonnet-4-6</span>
+      <span style="font-size:10px;color:#7c7872;">&#9660;</span>
+    </div>
+
+    <!-- Dropdown popup -->
+    <div style="background:#1a1918;border:1px solid #3d3b37;border-radius:10px;margin-top:8px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4);">
+      <!-- Active model -->
+      <div style="padding:10px 14px;display:flex;align-items:flex-start;gap:10px;background:rgba(217,119,6,.08);border-left:3px solid #d97706;cursor:pointer;">
+        <span style="color:#3fb950;font-size:14px;margin-top:2px;">&#10003;</span>
+        <div>
+          <div style="font-size:13px;color:#e5e2db;font-weight:600;">Claude Sonnet 4.6</div>
+          <div style="font-size:11px;color:#7c7872;margin-top:2px;">Fast, intelligent &middot; Auto &#10003; &middot; Thinking &#10003;</div>
+        </div>
+      </div>
+      <!-- Other model -->
+      <div style="padding:10px 14px;display:flex;align-items:flex-start;gap:10px;border-top:1px solid #3d3b37;cursor:pointer;">
+        <span style="color:transparent;font-size:14px;margin-top:2px;">&#10003;</span>
+        <div>
+          <div style="font-size:13px;color:#d97706;font-weight:600;">Claude Opus 4.6</div>
+          <div style="font-size:11px;color:#7c7872;margin-top:2px;">Most capable &middot; Auto &#10003; &middot; Thinking &#10003;</div>
+        </div>
+      </div>
+      <!-- Another model -->
+      <div style="padding:10px 14px;display:flex;align-items:flex-start;gap:10px;border-top:1px solid #3d3b37;cursor:pointer;">
+        <span style="color:transparent;font-size:14px;margin-top:2px;">&#10003;</span>
+        <div>
+          <div style="font-size:13px;color:#a8a29e;font-weight:500;">Claude Haiku 4.5</div>
+          <div style="font-size:11px;color:#7c7872;margin-top:2px;">Fastest &middot; Auto &#10007; &middot; Thinking &#10007;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>init 后调用 <code>supportedModels()</code>，通过事件发送到客户端；新增 <code>setModel()</code> 方法</td></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>新增 <code>S2C_Models</code>、<code>C2S_SetModel</code> 消息类型</td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>处理 models 事件广播和 C2S_SetModel 路由</td></tr>
+    <tr><td><code>web/stores/connectionStore.ts</code></td><td>新增 <code>models: ModelInfo[]</code>、<code>currentModel: string</code></td></tr>
+    <tr><td><code>web/components/chat/ModelSelector.tsx</code></td><td><strong>新增</strong>：模型选择弹出菜单</td></tr>
+    <tr><td><code>web/components/chat/StatusBar.tsx</code></td><td>模型名区域可点击，打开 ModelSelector</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 3.3 Effort 自适应 ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">3.3</span>
+    <span class="feature-title">Effort 自适应</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-g">低</span></span>
+    <span>改动文件: 2</span>
+    <span>依赖 3.2 模型列表</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>用户可以设置 effort 级别，但不知道当前模型支持哪些级别。设了不支持的级别可能报错。</p>
+
+  <h3>方案</h3>
+  <p>根据 <code>ModelInfo.supportedEffortLevels</code> 禁用不支持的选项。</p>
+
+  <h4>UI 表现</h4>
+  <div class="mockup-frame">
+    <div class="mockup-label">ModesPopup &mdash; Effort level selector</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:14px 16px;">
+      <div style="font-size:12px;color:#7c7872;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Effort Level</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <!-- Low - active -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;">
+          <div style="width:32px;height:32px;border-radius:50%;background:#d97706;display:flex;align-items:center;justify-content:center;">
+            <span style="color:#fff;font-size:11px;font-weight:700;">L</span>
+          </div>
+          <span style="font-size:10px;color:#d97706;font-weight:600;">Low</span>
+        </div>
+        <!-- Medium -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;">
+          <div style="width:32px;height:32px;border-radius:50%;background:#3d3b37;display:flex;align-items:center;justify-content:center;">
+            <span style="color:#a8a29e;font-size:11px;font-weight:700;">M</span>
+          </div>
+          <span style="font-size:10px;color:#a8a29e;">Medium</span>
+        </div>
+        <!-- High -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;">
+          <div style="width:32px;height:32px;border-radius:50%;background:#3d3b37;display:flex;align-items:center;justify-content:center;">
+            <span style="color:#a8a29e;font-size:11px;font-weight:700;">H</span>
+          </div>
+          <span style="font-size:10px;color:#a8a29e;">High</span>
+        </div>
+        <!-- Max - disabled -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:not-allowed;opacity:.35;" title="当前模型不支持">
+          <div style="width:32px;height:32px;border-radius:50%;background:#3d3b37;display:flex;align-items:center;justify-content:center;">
+            <span style="color:#7c7872;font-size:11px;font-weight:700;">X</span>
+          </div>
+          <span style="font-size:10px;color:#7c7872;">Max</span>
+        </div>
+      </div>
+      <div class="mockup-caption" style="margin-top:10px;">Max 灰色禁用，tooltip: "当前模型不支持"</div>
+    </div>
+  </div>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>web/components/chat/ModesPopup.tsx</code></td><td>读取 connectionStore.models 中当前模型的 supportedEffortLevels，禁用不支持项</td></tr>
+    <tr><td><code>web/stores/settingsStore.ts</code></td><td>切换模型时自动降级 effort（如果当前选择不支持）</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 3.4 Session Fork ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">3.4</span>
+    <span class="feature-title">Session Fork</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 5</span>
+    <span>SDK: <code>forkSession(sessionId)</code></span>
+  </div>
+
+  <h3>问题</h3>
+  <p>用户想从某个历史节点"分叉"出新对话方向，保留之前的上下文但走不同路径。</p>
+
+  <h3>UI 表现</h3>
+  <div class="mockup-frame">
+    <div class="mockup-label">Message hover &mdash; Fork button</div>
+    <!-- Assistant message with fork button -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:12px 14px;position:relative;">
+      <div style="font-size:11px;color:#7c7872;margin-bottom:6px;">assistant</div>
+      <div style="font-size:13px;color:#e5e2db;line-height:1.5;">我已经完成了登录功能的修复，主要改动包括 token 刷新逻辑和错误处理...</div>
+      <!-- Fork button (hover state) -->
+      <div style="position:absolute;top:10px;right:10px;">
+        <button style="background:#1e1d1a;border:1px solid #3d3b37;border-radius:6px;padding:4px 10px;font-size:11px;color:#0ea5e9;cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:500;">
+          &#9906; Fork
+        </button>
+      </div>
+    </div>
+
+    <hr class="mockup-sep">
+
+    <div class="mockup-label">Sidebar &mdash; forked session appears</div>
+    <!-- Forked session card -->
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:8px;padding:12px 14px;border-left:3px solid #0ea5e9;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="color:#0ea5e9;font-size:14px;">&#9906;</span>
+        <span style="font-size:14px;font-weight:600;color:#e5e2db;">修复登录 bug (fork)</span>
+      </div>
+      <div style="font-size:12px;color:#7c7872;margin-top:4px;">just now &middot; forked</div>
+    </div>
+  </div>
+
+  <h4>流程</h4>
+  <ol style="font-size:.85rem;color:var(--tm);padding-left:1.2rem;margin:.5rem 0">
+    <li>hover assistant 消息 &rarr; 显示 Fork 按钮</li>
+    <li>点击 &rarr; 调用 <code>C2S_ForkSession { sessionId, atMessageId }</code></li>
+    <li>Server 调用 SDK <code>forkSession(sessionId, { atMessageUUID })</code></li>
+    <li>返回新 sessionId &rarr; 自动切换到新 session</li>
+    <li>新 session 包含 fork 点之前的所有消息上下文</li>
+  </ol>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>shared/protocol.ts</code></td><td>新增 <code>C2S_ForkSession</code>、<code>S2C_SessionForked</code></td></tr>
+    <tr><td><code>server/ws/handler.ts</code></td><td>处理 fork 请求，调用 SDK，返回新 sessionId</td></tr>
+    <tr><td><code>web/components/chat/MessageComponent.tsx</code></td><td>assistant 消息 hover 显示 Fork 按钮</td></tr>
+    <tr><td><code>web/hooks/useWebSocket.ts</code></td><td>处理 session-forked 消息，切换到新 session</td></tr>
+    <tr><td><code>web/stores/sessionStore.ts</code></td><td>fork 后刷新 session 列表</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 3.5 Permission Rules ==================== -->
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-num">3.5</span>
+    <span class="feature-title">Permission Rules 持久化</span>
+  </div>
+  <div class="meta">
+    <span>复杂度: <span class="badge b-y">中</span></span>
+    <span>改动文件: 4</span>
+    <span>SDK: <code>PermissionUpdate</code> + settings</span>
+  </div>
+
+  <h3>问题</h3>
+  <p>"Always Allow" 按钮仅在当次 session 生效。关闭后权限丢失，每次重新审批。</p>
+
+  <h3>方案</h3>
+  <p>将 AlwaysAllow 的 permission 规则持久化到 SQLite（通过 settings API），下次 query 时作为 <code>allowedTools</code> 传给 SDK。</p>
+
+  <h4>UI 表现</h4>
+  <div class="mockup-frame">
+    <div class="mockup-label">Settings &mdash; Permission Rules panel</div>
+    <div style="background:#242320;border:1px solid #3d3b37;border-radius:10px;overflow:hidden;">
+      <!-- Header -->
+      <div style="padding:14px 16px;border-bottom:1px solid #3d3b37;display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:14px;font-weight:600;color:#0ea5e9;">Permission Rules</span>
+        <span style="font-size:11px;color:#7c7872;">4 rules</span>
+      </div>
+      <!-- Rule: allowed -->
+      <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #3d3b37;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#3fb950;font-size:14px;">&#10003;</span>
+          <code style="background:#1a1918;padding:2px 8px;border-radius:4px;font-size:12px;color:#e5e2db;font-family:'SF Mono','Cascadia Code',monospace;">Bash(npm install)</code>
+        </div>
+        <button style="background:transparent;border:1px solid #3d3b37;border-radius:5px;padding:3px 8px;font-size:11px;color:#7c7872;cursor:pointer;">&#10005; Remove</button>
+      </div>
+      <!-- Rule: allowed with wildcard -->
+      <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #3d3b37;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#3fb950;font-size:14px;">&#10003;</span>
+          <code style="background:#1a1918;padding:2px 8px;border-radius:4px;font-size:12px;color:#e5e2db;font-family:'SF Mono','Cascadia Code',monospace;">Bash(pnpm *)</code>
+        </div>
+        <button style="background:transparent;border:1px solid #3d3b37;border-radius:5px;padding:3px 8px;font-size:11px;color:#7c7872;cursor:pointer;">&#10005; Remove</button>
+      </div>
+      <!-- Rule: allowed with glob -->
+      <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #3d3b37;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#3fb950;font-size:14px;">&#10003;</span>
+          <code style="background:#1a1918;padding:2px 8px;border-radius:4px;font-size:12px;color:#e5e2db;font-family:'SF Mono','Cascadia Code',monospace;">Edit(src/**)</code>
+        </div>
+        <button style="background:transparent;border:1px solid #3d3b37;border-radius:5px;padding:3px 8px;font-size:11px;color:#7c7872;cursor:pointer;">&#10005; Remove</button>
+      </div>
+      <!-- Rule: denied -->
+      <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#f87171;font-size:14px;">&#10007;</span>
+          <code style="background:#1a1918;padding:2px 8px;border-radius:4px;font-size:12px;color:#e5e2db;font-family:'SF Mono','Cascadia Code',monospace;">Bash(rm -rf *)</code>
+        </div>
+        <button style="background:transparent;border:1px solid #3d3b37;border-radius:5px;padding:3px 8px;font-size:11px;color:#7c7872;cursor:pointer;">&#10005; Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <h4>文件变更</h4>
+  <table>
+    <tr><th>文件</th><th>改动</th></tr>
+    <tr><td><code>server/db/schema.ts</code></td><td>新增 <code>permission_rules</code> 表</td></tr>
+    <tr><td><code>server/routes/settings.ts</code></td><td>新增 CRUD API for permission rules</td></tr>
+    <tr><td><code>server/agent/v1-session.ts</code></td><td>query 前加载规则，传入 <code>allowedTools</code></td></tr>
+    <tr><td><code>web/components/settings/PermissionRulesPanel.tsx</code></td><td><strong>新增</strong>：规则管理面板</td></tr>
+  </table>
+</div>
+
+<div class="nav">
+  <a href="02-phase2-message-enhance.html">&larr; Phase 2: 消息增强</a>
+  <a href="04-phase4-advanced.html">Phase 4: 高级功能 &rarr;</a>
+</div>
+</body>
+</html>
