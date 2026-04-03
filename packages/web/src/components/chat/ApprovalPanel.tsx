@@ -105,7 +105,7 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
         fireDecision(opt.key)
       }
     }
-  }, [canInteract, config, fireDecision])
+  }, [canInteract, config, fireDecision, feedback])
 
   const handleMultiSubmit = useCallback(() => {
     if (selectedKeys.size === 0) return

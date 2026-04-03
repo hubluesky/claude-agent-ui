@@ -1,0 +1,116 @@
+<h2>Cocos 嵌入方案对比</h2>
+<p class="subtitle">Web UI 如何被 Cocos 预览页面的 iframe 加载？</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">方案 A：嵌入模式（URL 参数切换）</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px;">
+      <div style="background: #1a1a2e; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <div style="color: #8b8ba7; font-size: 11px; margin-bottom: 4px;">iframe URL</div>
+        <code style="color: #e0def4; font-size: 12px;">http://localhost:5173<strong style="color:#f6c177;">?embed=true&cwd=/path/to/cocos-project</strong></code>
+      </div>
+
+      <div style="color: #e0def4; margin-bottom: 8px;"><strong>工作原理：</strong></div>
+      <ul style="color: #908caa; line-height: 1.8; padding-left: 20px;">
+        <li>同一份代码，同一个构建产物</li>
+        <li>通过 URL 参数 <code>embed=true</code> 激活嵌入模式</li>
+        <li>嵌入模式下隐藏项目选择，锁定 <code>cwd</code></li>
+        <li>顶部 bar、会话列表等功能保持不变</li>
+      </ul>
+
+      <div style="margin-top: 12px; padding: 10px; background: #26233a; border-radius: 6px;">
+        <div style="color: #c4a7e7; font-size: 11px; margin-bottom: 4px;">代码改动</div>
+        <div style="color: #908caa; font-size: 12px;">
+          App.tsx 读取 URL 参数 → sessionStore 锁定 cwd → 条件渲染隐藏项目切换
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">方案 B：独立入口点（单独打包）</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px;">
+      <div style="background: #1a1a2e; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <div style="color: #8b8ba7; font-size: 11px; margin-bottom: 4px;">iframe URL</div>
+        <code style="color: #e0def4; font-size: 12px;">http://localhost:5173<strong style="color:#f6c177;">/cocos.html</strong></code>
+      </div>
+
+      <div style="color: #e0def4; margin-bottom: 8px;"><strong>工作原理：</strong></div>
+      <ul style="color: #908caa; line-height: 1.8; padding-left: 20px;">
+        <li>Vite 多入口：<code>index.html</code> + <code>cocos.html</code></li>
+        <li>Cocos 入口有独立的 App 组件（CocosApp）</li>
+        <li>不包含项目选择逻辑，硬编码单项目模式</li>
+        <li>共享 components/stores/hooks，只是组装不同</li>
+      </ul>
+
+      <div style="margin-top: 12px; padding: 10px; background: #26233a; border-radius: 6px;">
+        <div style="color: #c4a7e7; font-size: 11px; margin-bottom: 4px;">代码改动</div>
+        <div style="color: #908caa; font-size: 12px;">
+          新增 cocos.html + CocosApp.tsx → 独立路由树 → 复用底层组件
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px;">
+  <h3>详细对比</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #e0def4;">
+    <thead>
+      <tr style="border-bottom: 1px solid #393552;">
+        <th style="text-align: left; padding: 8px; color: #908caa;">维度</th>
+        <th style="text-align: left; padding: 8px; color: #c4a7e7;">A — 嵌入模式</th>
+        <th style="text-align: left; padding: 8px; color: #f6c177;">B — 独立入口</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid #2a273f;">
+        <td style="padding: 8px; color: #908caa;">代码量</td>
+        <td style="padding: 8px;">少，条件判断 ~50 行</td>
+        <td style="padding: 8px;">中，新入口 + App ~150 行</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #2a273f;">
+        <td style="padding: 8px; color: #908caa;">维护成本</td>
+        <td style="padding: 8px;">低，一份代码自动同步</td>
+        <td style="padding: 8px;">中，两个入口需同步更新</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #2a273f;">
+        <td style="padding: 8px; color: #908caa;">产物体积</td>
+        <td style="padding: 8px;">相同（全量加载）</td>
+        <td style="padding: 8px;">可 tree-shake 掉项目选择代码</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #2a273f;">
+        <td style="padding: 8px; color: #908caa;">灵活性</td>
+        <td style="padding: 8px;">受限于主 App 的结构</td>
+        <td style="padding: 8px;">可自由定制 Cocos 特有 UI</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #2a273f;">
+        <td style="padding: 8px; color: #908caa;">Cocos 模板集成</td>
+        <td style="padding: 8px;">改 iframe URL 加参数即可</td>
+        <td style="padding: 8px;">改 iframe URL 指向 /cocos.html</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; color: #908caa;">未来扩展</td>
+        <td style="padding: 8px;">如需更多差异化会越来越多 if/else</td>
+        <td style="padding: 8px;">天然隔离，Cocos 可独立演进</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="options" style="margin-top: 24px;">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>嵌入模式（推荐）</h3>
+      <p>最小改动，URL 参数控制。适合 Cocos 端和 Web 端功能高度一致的场景。你说的"其他功能和 web 保持一样"正好符合这个方案。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>独立入口点</h3>
+      <p>更干净的隔离，适合 Cocos 端将来需要大量差异化功能的场景。初期成本稍高但扩展性更好。</p>
+    </div>
+  </div>
+</div>
