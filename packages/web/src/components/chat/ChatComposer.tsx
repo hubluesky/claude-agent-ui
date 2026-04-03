@@ -68,6 +68,9 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
   const isLockHolder = lockStatus === 'locked_self'
+  // Disable input when session is awaiting approval/user-input (like CLI behavior)
+  const isAwaiting = sessionStatus === 'awaiting_approval' || sessionStatus === 'awaiting_user_input'
+  const inputDisabled = isLocked || isAwaiting
   const { releaseLock } = useWebSocket()
 
   const handleReleaseLock = useCallback(() => {
@@ -197,7 +200,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }, [onSend, text, slashCursorStart])
 
-  const canSend = (text.trim().length > 0 || images.length > 0) && !isLocked
+  const canSend = (text.trim().length > 0 || images.length > 0) && !inputDisabled
 
   const handleSubmit = useCallback(() => {
     if (!canSend) return
@@ -342,7 +345,9 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     ? 'border-[#d97706] animate-[glow_2s_ease-in-out_infinite]'
     : isLocked
       ? 'border-[#b91c1c]'
-      : 'border-[#3d3b37]'
+      : isAwaiting
+        ? 'border-[#eab30840]'
+        : 'border-[#3d3b37]'
 
   return (
     <div className="px-4 py-3 shrink-0">
@@ -372,13 +377,19 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
 
         {/* Textarea */}
         <div>
-          {isLocked ? (
-            <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[#f87171]">
-              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              Session locked by another client
+          {inputDisabled ? (
+            <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[#7c7872]">
+              {isLocked ? (
+                <>
+                  <svg className="w-3.5 h-3.5 shrink-0 text-[#f87171]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span className="text-[#f87171]">Session locked by another client</span>
+                </>
+              ) : (
+                <span>Respond above to continue...</span>
+              )}
             </div>
           ) : (
             <textarea
@@ -407,7 +418,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
           onAbort={onAbort}
           canSend={canSend}
           fileRefs={fileRefs}
-          isLocked={isLocked}
+          isLocked={inputDisabled}
           isRunning={isRunning}
           isLockHolder={isLockHolder}
           onReleaseLock={handleReleaseLock}
