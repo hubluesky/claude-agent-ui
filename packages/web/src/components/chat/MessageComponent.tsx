@@ -17,6 +17,51 @@ function parseCommandXml(text: string): string | null {
   return args ? `${name} ${args}` : name
 }
 
+/** Fast visibility check — mirrors the null-return paths of MessageComponent.
+ *  Used by ChatMessagesPane to pre-filter messages so Virtuoso never sees zero-height items. */
+export function isMessageVisible(message: AgentMessage): boolean {
+  if (message.type === 'user') return true
+
+  if (message.type === 'assistant') {
+    const contentBlocks = (message as any).message?.content ?? []
+    return contentBlocks.some((block: any) => {
+      if (block.type === 'text') return !!block.text
+      if (block.type === 'tool_use' || block.type === 'server_tool_use') return true
+      if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return true
+      if (block.type === 'redacted_thinking') return true
+      if (block.type === 'thinking') return !!(block.thinking || block.text)
+      return false
+    })
+  }
+
+  if (message.type === 'result') {
+    const subtype = (message as any).subtype ?? ''
+    return subtype.startsWith('error')
+  }
+
+  if ((message as any).type === '_streaming_block') {
+    const blockType = (message as any)._blockType
+    return blockType === 'text' || blockType === 'thinking'
+  }
+
+  if (message.type === 'system') {
+    const sub = (message as any).subtype
+    if (sub === 'api_retry') return true
+    if (sub === 'status' && (message as any).status === 'compacting') return true
+    if (sub === 'task_started') return true
+    if (sub === 'task_progress') return !!(message as any).content || !!(message as any).message
+    if (sub === 'task_notification') return true
+    if (sub === 'local_command_output') return !!((message as any).output ?? (message as any).content)
+    return false
+  }
+
+  if (message.type === 'tool_use_summary') return true
+  if (message.type === 'tool_progress') return !!(message as any).content
+  if (message.type === 'rate_limit_event') return true
+
+  return false
+}
+
 export const MessageComponent = memo(function MessageComponent({ message }: MessageComponentProps) {
   const isOptimistic = (message as any)._optimistic
 

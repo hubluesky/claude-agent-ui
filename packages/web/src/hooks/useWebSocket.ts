@@ -122,31 +122,61 @@ function handleServerMessage(msg: S2CMessage) {
       } else if (msg.message.type === 'assistant') {
         // Flush any buffered streaming text before replacing streaming blocks
         flushStreamingDelta()
-        // Deduplicate by API message ID — partial and final share the same message.id
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
 
-        // Collect thinking content from streaming blocks before removing them,
-        // in case the final assistant message doesn't include thinking blocks.
-        const streamedThinking: { type: string; thinking: string }[] = []
+        // Collect ALL streamed content by block index before removing streaming blocks.
+        // The SDK may yield assistant messages with empty text/thinking fields —
+        // actual content only appeared during streaming via content_block_delta events.
+        const streamedByIndex = new Map<number, { blockType: string; content: string }>()
         for (const m of current) {
-          if ((m as any).type === '_streaming_block' && (m as any)._blockType === 'thinking' && (m as any)._content) {
-            streamedThinking.push({ type: 'thinking', thinking: (m as any)._content })
+          if ((m as any).type === '_streaming_block' && (m as any)._content) {
+            streamedByIndex.set((m as any)._index, {
+              blockType: (m as any)._blockType,
+              content: (m as any)._content,
+            })
           }
         }
 
+        // Deduplicate: remove streaming blocks and previous assistant msg with same API id
         const cleaned = current.filter((m: any) => {
           if (m.type === '_streaming_block') return false
           if (apiId && m.type === 'assistant' && (m as any).message?.id === apiId) return false
           return true
         })
 
-        // If the final assistant message lacks thinking blocks, prepend them from stream
+        // Patch empty content blocks in the final message with streamed content
         const finalMsg = msg.message as any
         const contentBlocks: any[] = finalMsg.message?.content ?? []
+
+        if (streamedByIndex.size > 0 && contentBlocks.length > 0) {
+          for (let i = 0; i < contentBlocks.length; i++) {
+            const block = contentBlocks[i]
+            const streamed = streamedByIndex.get(i)
+            if (!streamed) continue
+            // Fill empty text blocks from stream
+            if (block.type === 'text' && !block.text && streamed.blockType === 'text') {
+              block.text = streamed.content
+            }
+            // Fill empty thinking blocks from stream
+            if (block.type === 'thinking' && !block.thinking && streamed.blockType === 'thinking') {
+              block.thinking = streamed.content
+            }
+          }
+        }
+
+        // If no thinking blocks exist at all in final message, prepend from stream
         const hasThinking = contentBlocks.some((b: any) => b.type === 'thinking' && b.thinking)
-        if (!hasThinking && streamedThinking.length > 0 && finalMsg.message?.content) {
-          finalMsg.message.content = [...streamedThinking, ...contentBlocks]
+        if (!hasThinking) {
+          const streamedThinking: any[] = []
+          for (const [, s] of streamedByIndex) {
+            if (s.blockType === 'thinking' && s.content) {
+              streamedThinking.push({ type: 'thinking', thinking: s.content })
+            }
+          }
+          if (streamedThinking.length > 0 && finalMsg.message?.content) {
+            finalMsg.message.content = [...streamedThinking, ...contentBlocks]
+          }
         }
 
         useMessageStore.setState({ messages: [...cleaned, msg.message] })

@@ -270,8 +270,13 @@ export function createWsHandler(deps: HandlerDeps) {
         }
       }
 
-      // Skip user messages from SDK — we already broadcast them in handleSendMessage.
-      if (msg.type === 'user') return
+      // Skip user-typed messages from SDK — we already broadcast them in handleSendMessage.
+      // But DO broadcast auto-generated user messages (tool_result) so clients see tool output.
+      if (msg.type === 'user') {
+        const content = msg.message?.content
+        const isToolResult = Array.isArray(content) && content.some((b: any) => b.type === 'tool_result')
+        if (!isToolResult) return
+      }
 
       // Broadcast all other messages to ALL clients.
       wsHub.broadcast(realSessionId, {

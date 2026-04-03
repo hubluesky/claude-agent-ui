@@ -1,7 +1,7 @@
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useMessageStore } from '../../stores/messageStore'
-import { MessageComponent } from './MessageComponent'
+import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { AskUserPanel } from './AskUserPanel'
 import { PlanApprovalCard } from './PlanApprovalCard'
@@ -12,7 +12,8 @@ interface ChatMessagesPaneProps {
 }
 
 export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
-  const messages = useMessageStore((s) => s.messages)
+  const rawMessages = useMessageStore((s) => s.messages)
+  const messages = useMemo(() => rawMessages.filter(isMessageVisible), [rawMessages])
   const hasMore = useMessageStore((s) => s.hasMore)
   const isLoadingHistory = useMessageStore((s) => s.isLoadingHistory)
   const isLoadingMore = useMessageStore((s) => s.isLoadingMore)
