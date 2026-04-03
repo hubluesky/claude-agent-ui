@@ -17,6 +17,20 @@ function parseCommandXml(text: string): string | null {
   return args ? `${name} ${args}` : name
 }
 
+/** Strip SDK internal XML tags (local-command-stdout, etc.) and check if text is a compact summary */
+function classifyText(text: string): 'compact-summary' | 'internal-output' | 'normal' {
+  if (!text) return 'normal'
+  // Compact summary detection
+  if (/continued from a previous conversation|ran out of context|summary below covers the earlier portion/i.test(text.slice(0, 300))) {
+    return 'compact-summary'
+  }
+  // SDK internal output (hook stdout, etc.)
+  if (/^<local-command-stdout>/i.test(text.trim())) {
+    return 'internal-output'
+  }
+  return 'normal'
+}
+
 /** Fast visibility check — mirrors the null-return paths of MessageComponent.
  *  Used by ChatMessagesPane to pre-filter messages so Virtuoso never sees zero-height items. */
 export function isMessageVisible(message: AgentMessage): boolean {
@@ -82,6 +96,9 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
               )
             }
             if (block.type === 'text') {
+              const textClass = classifyText(block.text)
+              // Hide internal SDK output in user messages
+              if (textClass === 'internal-output') return null
               const cmdText = parseCommandXml(block.text)
               if (cmdText) {
                 return (
@@ -108,6 +125,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       )
     }
     const rawText = typeof content === 'string' ? content : JSON.stringify(content)
+    if (classifyText(rawText) === 'internal-output') return null
     const cmdText = parseCommandXml(rawText)
     if (cmdText) {
       return (
@@ -150,8 +168,9 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
         <div className="flex-1 min-w-0 space-y-2">
           {contentBlocks.map((block: any, i: number) => {
             if (block.type === 'text') {
-              // Detect compact summary and render as collapsible
-              if (block.text && /continued from a previous conversation|ran out of context/i.test(block.text.slice(0, 200))) {
+              const textClass = classifyText(block.text)
+              if (textClass === 'internal-output') return null
+              if (textClass === 'compact-summary') {
                 return (
                   <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
                     <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
