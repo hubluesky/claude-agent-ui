@@ -4,13 +4,23 @@ import { ChatInterface } from './components/chat/ChatInterface'
 import { ToastContainer } from './components/chat/Toast'
 import { useSessionStore } from './stores/sessionStore'
 import { useCommandStore } from './stores/commandStore'
+import { useEmbedStore } from './stores/embedStore'
 
 export function App() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
+  const isEmbed = useEmbedStore((s) => s.isEmbed)
+  const embedCwd = useEmbedStore((s) => s.embedCwd)
 
   useEffect(() => {
+    useEmbedStore.getState().initFromUrl()
     useCommandStore.getState().load()
   }, [])
+
+  useEffect(() => {
+    if (isEmbed && embedCwd) {
+      useSessionStore.getState().selectProject(embedCwd)
+    }
+  }, [isEmbed, embedCwd])
 
   return (
     <>

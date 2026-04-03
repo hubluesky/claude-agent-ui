@@ -1,10 +1,12 @@
 import { type ReactNode, useRef, useCallback } from 'react'
 import { SessionList } from '../sidebar/SessionList'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useEmbedStore } from '../../stores/embedStore'
 import { TopBar } from './TopBar'
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { sidebarWidth, sidebarOpen, setSidebarWidth, setSidebarOpen } = useSettingsStore()
+  const isEmbed = useEmbedStore((s) => s.isEmbed)
   const resizing = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
@@ -37,7 +39,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="h-dvh flex bg-[#2b2a27]">
       {/* Mobile overlay */}
-      {sidebarOpen && (
+      {!isEmbed && sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -45,20 +47,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* Sidebar */}
-      <div
-        className={`shrink-0 border-r border-[#3d3b37] z-40 transition-transform duration-200 md:transition-none
-          fixed md:relative h-full
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
-        style={{ width: sidebarWidth }}
-      >
-        <SessionList onSessionSelect={() => setSidebarOpen(false)} />
-      </div>
+      {!isEmbed && (
+        <div
+          className={`shrink-0 border-r border-[#3d3b37] z-40 transition-transform duration-200 md:transition-none
+            fixed md:relative h-full
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+          style={{ width: sidebarWidth }}
+        >
+          <SessionList onSessionSelect={() => setSidebarOpen(false)} />
+        </div>
+      )}
 
       {/* Resize handle */}
-      <div
-        className="hidden md:block w-1 shrink-0 cursor-col-resize hover:bg-[#d9770640] active:bg-[#d9770660] transition-colors"
-        onMouseDown={handleMouseDown}
-      />
+      {!isEmbed && (
+        <div
+          className="hidden md:block w-1 shrink-0 cursor-col-resize hover:bg-[#d9770640] active:bg-[#d9770660] transition-colors"
+          onMouseDown={handleMouseDown}
+        />
+      )}
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">

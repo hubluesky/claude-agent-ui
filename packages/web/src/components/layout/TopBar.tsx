@@ -1,11 +1,15 @@
 import { useState, useRef, useCallback } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useEmbedStore } from '../../stores/embedStore'
 import { HistoryPanel } from './HistoryPanel'
 
 export function TopBar() {
   const { currentSessionId, currentProjectCwd, sessions, selectSession, renameSession } = useSessionStore()
   const { setSidebarOpen } = useSettingsStore()
+  const isEmbed = useEmbedStore((s) => s.isEmbed)
+  const embedCwd = useEmbedStore((s) => s.embedCwd)
+  const projectName = isEmbed && embedCwd ? embedCwd.split(/[/\\]/).pop() : null
   const [showHistory, setShowHistory] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
@@ -53,39 +57,50 @@ export function TopBar() {
     <div className="flex items-center justify-between h-10 shrink-0 px-3 border-b border-[#3d3b37] relative">
       {/* 左侧：汉堡 + 会话标题 */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872] shrink-0"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
-
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleTitleSubmit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleTitleSubmit()
-              if (e.key === 'Escape') setEditing(false)
-            }}
-            className="flex-1 min-w-0 bg-[#1e1d1a] border border-[#d97706] rounded px-2 py-0.5 text-xs text-[#e5e2db] outline-none"
-          />
+        {isEmbed ? (
+          <>
+            <div className="w-5 h-5 bg-[#d97706] rounded flex items-center justify-center shrink-0">
+              <span className="text-[10px] font-bold text-[#1c1b18]">C</span>
+            </div>
+            <span className="text-xs text-[#e5e2db] truncate">{projectName}</span>
+          </>
         ) : (
-          <span
-            onClick={handleTitleClick}
-            className={`text-xs truncate ${
-              isNewSession || !currentSessionId
-                ? 'text-[#7c7872]'
-                : 'text-[#e5e2db] cursor-pointer hover:text-[#d97706]'
-            }`}
-            title={isNewSession || !currentSessionId ? undefined : '点击编辑标题'}
-          >
-            {sessionTitle || 'Select a session'}
-          </span>
+          <>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872] shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+
+            {editing ? (
+              <input
+                ref={inputRef}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleTitleSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleTitleSubmit()
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                className="flex-1 min-w-0 bg-[#1e1d1a] border border-[#d97706] rounded px-2 py-0.5 text-xs text-[#e5e2db] outline-none"
+              />
+            ) : (
+              <span
+                onClick={handleTitleClick}
+                className={`text-xs truncate ${
+                  isNewSession || !currentSessionId
+                    ? 'text-[#7c7872]'
+                    : 'text-[#e5e2db] cursor-pointer hover:text-[#d97706]'
+                }`}
+                title={isNewSession || !currentSessionId ? undefined : '点击编辑标题'}
+              >
+                {sessionTitle || 'Select a session'}
+              </span>
+            )}
+          </>
         )}
       </div>
 
