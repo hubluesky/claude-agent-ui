@@ -9,11 +9,11 @@ interface ModesPopupProps {
 }
 
 export const MODES: { mode: PermissionMode; label: string; desc: string; icon: string }[] = [
-  { mode: 'default', label: 'Ask before edits', desc: 'Claude will ask for approval before making each edit', icon: 'shield' },
-  { mode: 'acceptEdits', label: 'Edit automatically', desc: 'Claude will edit your selected text or the whole file', icon: 'code' },
-  { mode: 'auto', label: 'Auto mode', desc: 'Claude handles permissions automatically — safe actions execute, risky ones are blocked', icon: 'auto' },
-  { mode: 'plan', label: 'Plan mode', desc: 'Claude will explore the code and present a plan before editing', icon: 'doc' },
-  { mode: 'bypassPermissions', label: 'Bypass permissions', desc: 'Claude will not ask for approval before running potentially dangerous commands', icon: 'bolt' },
+  { mode: 'default', label: '编辑前询问', desc: 'Claude 在每次编辑前征求你的同意', icon: 'shield' },
+  { mode: 'acceptEdits', label: '自动接受编辑', desc: 'Claude 自动执行文件编辑，危险操作仍需审批', icon: 'code' },
+  { mode: 'auto', label: '自动模式', desc: 'Claude 自动处理权限 — 安全操作直接执行，风险操作阻止', icon: 'auto' },
+  { mode: 'plan', label: '计划模式', desc: 'Claude 先探索代码并提出计划，审批后再编辑', icon: 'doc' },
+  { mode: 'bypassPermissions', label: '跳过权限', desc: '跳过大部分权限检查（⚠ 安全敏感操作仍需审批）', icon: 'bolt' },
 ]
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'max']
@@ -22,14 +22,14 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute bottom-full right-0 mb-2 w-[320px] bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
+      <div className="fixed bottom-[52px] left-2 right-2 mx-auto max-w-[320px] bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">Modes</span>
+          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">模式</span>
           <div className="flex items-center gap-1 text-[10px] text-[#5c5952]">
             <kbd className="px-1 py-0.5 bg-[#3d3b37] rounded text-[9px]">⇧</kbd>
             <span>+</span>
             <kbd className="px-1 py-0.5 bg-[#3d3b37] rounded text-[9px]">tab</kbd>
-            <span className="ml-0.5">to switch</span>
+            <span className="ml-0.5">切换</span>
           </div>
         </div>
 
@@ -60,7 +60,7 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
         </div>
 
         <div className="border-t border-[#3d3b37] px-4 pt-3 pb-4">
-          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">Effort</span>
+          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">推理强度</span>
           <div className="flex items-center justify-between mt-3">
             {EFFORTS.map((e) => {
               const isActive = e === currentEffort

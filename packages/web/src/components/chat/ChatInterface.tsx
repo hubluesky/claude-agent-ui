@@ -1,9 +1,8 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { ChatMessagesPane } from './ChatMessagesPane'
 import { ChatComposer } from './ChatComposer'
-import { PermissionBanner } from './PermissionBanner'
-import { AskUserPanel } from './AskUserPanel'
-import { PlanApprovalActions } from './PlanApprovalActions'
+import { ApprovalPanel } from './ApprovalPanel'
+import { buildToolApprovalConfig, buildPlanApprovalConfig, buildAskUserConfig } from './approval-configs'
 import { PlanModal } from './PlanModal'
 import { ConnectionBanner } from './ConnectionBanner'
 import { useWebSocket } from '../../hooks/useWebSocket'
@@ -11,9 +10,10 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useConnectionStore } from '../../stores/connectionStore'
+import type { ApprovalPanelConfig } from './ApprovalPanel'
 
 export function ChatInterface() {
-  const { sendMessage, joinSession, abort } = useWebSocket()
+  const { sendMessage, joinSession, abort, respondToolApproval, respondAskUser, respondPlanApproval } = useWebSocket()
   const { currentSessionId, currentProjectCwd } = useSessionStore()
   const pendingAskUser = useConnectionStore((s) => s.pendingAskUser)
   const pendingApproval = useConnectionStore((s) => s.pendingApproval)
@@ -60,6 +60,34 @@ export function ChatInterface() {
     if (currentSessionId && !isNewSession) abort(currentSessionId)
   }, [currentSessionId, abort, isNewSession])
 
+  const approvalConfig = useMemo((): ApprovalPanelConfig | null => {
+    if (pendingAskUser) {
+      return buildAskUserConfig(
+        pendingAskUser.requestId,
+        pendingAskUser.questions,
+        respondAskUser,
+      )
+    }
+    if (pendingApproval) {
+      return buildToolApprovalConfig(
+        pendingApproval.requestId,
+        pendingApproval.toolName,
+        pendingApproval.toolInput,
+        pendingApproval.title,
+        pendingApproval.description,
+        respondToolApproval,
+      )
+    }
+    if (pendingPlanApproval) {
+      return buildPlanApprovalConfig(
+        pendingPlanApproval.requestId,
+        pendingPlanApproval.contextUsagePercent,
+        respondPlanApproval,
+      )
+    }
+    return null
+  }, [pendingAskUser, pendingApproval, pendingPlanApproval, respondToolApproval, respondAskUser, respondPlanApproval])
+
   if (!currentSessionId) return null
 
   return (
@@ -75,12 +103,8 @@ export function ChatInterface() {
       ) : (
         <ChatMessagesPane sessionId={currentSessionId} />
       )}
-      {pendingAskUser ? (
-        <AskUserPanel />
-      ) : pendingApproval ? (
-        <PermissionBanner />
-      ) : pendingPlanApproval ? (
-        <PlanApprovalActions />
+      {approvalConfig ? (
+        <ApprovalPanel config={approvalConfig} />
       ) : (
         <ChatComposer onSend={handleSend} onAbort={handleAbort} />
       )}

@@ -222,6 +222,7 @@ function handleServerMessage(msg: S2CMessage) {
         planFilePath: msg.planFilePath,
         allowedPrompts: msg.allowedPrompts,
         readonly: msg.readonly,
+        contextUsagePercent: (msg as any).contextUsagePercent,
       })
       break
 
@@ -243,6 +244,9 @@ function handleServerMessage(msg: S2CMessage) {
         case 'clear-and-accept':
         case 'auto-accept':
           settings.setPermissionMode('acceptEdits')
+          break
+        case 'bypass':
+          settings.setPermissionMode('bypassPermissions')
           break
         case 'manual':
           settings.setPermissionMode('default')

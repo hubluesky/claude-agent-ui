@@ -17,7 +17,7 @@ interface ConnectionState {
   sessionStatus: SessionStatus
   pendingApproval: (ToolApprovalRequest & { readonly: boolean }) | null
   pendingAskUser: (AskUserRequest & { readonly: boolean }) | null
-  pendingPlanApproval: (PlanApprovalRequest & { readonly: boolean }) | null
+  pendingPlanApproval: (PlanApprovalRequest & { readonly: boolean; contextUsagePercent?: number }) | null
   resolvedPlanApproval: ResolvedPlanApproval | null
   planModalOpen: boolean
 }
@@ -30,7 +30,7 @@ interface ConnectionActions {
   setSessionStatus(status: SessionStatus): void
   setPendingApproval(req: (ToolApprovalRequest & { readonly: boolean }) | null): void
   setPendingAskUser(req: (AskUserRequest & { readonly: boolean }) | null): void
-  setPendingPlanApproval(req: (PlanApprovalRequest & { readonly: boolean }) | null): void
+  setPendingPlanApproval(req: (PlanApprovalRequest & { readonly: boolean; contextUsagePercent?: number }) | null): void
   setResolvedPlanApproval(req: ResolvedPlanApproval | null): void
   setPlanModalOpen(open: boolean): void
   reset(): void
