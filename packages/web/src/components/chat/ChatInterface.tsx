@@ -2,16 +2,22 @@ import { useCallback, useEffect } from 'react'
 import { ChatMessagesPane } from './ChatMessagesPane'
 import { ChatComposer } from './ChatComposer'
 import { PermissionBanner } from './PermissionBanner'
+import { AskUserPanel } from './AskUserPanel'
+import { PlanApprovalActions } from './PlanApprovalActions'
 import { PlanModal } from './PlanModal'
 import { ConnectionBanner } from './ConnectionBanner'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useConnectionStore } from '../../stores/connectionStore'
 
 export function ChatInterface() {
   const { sendMessage, joinSession, abort } = useWebSocket()
   const { currentSessionId, currentProjectCwd } = useSessionStore()
+  const pendingAskUser = useConnectionStore((s) => s.pendingAskUser)
+  const pendingApproval = useConnectionStore((s) => s.pendingApproval)
+  const pendingPlanApproval = useConnectionStore((s) => s.pendingPlanApproval)
 
   const isNewSession = currentSessionId === '__new__'
 
@@ -69,8 +75,15 @@ export function ChatInterface() {
       ) : (
         <ChatMessagesPane sessionId={currentSessionId} />
       )}
-      <PermissionBanner />
-      <ChatComposer onSend={handleSend} onAbort={handleAbort} />
+      {pendingAskUser ? (
+        <AskUserPanel />
+      ) : pendingApproval ? (
+        <PermissionBanner />
+      ) : pendingPlanApproval ? (
+        <PlanApprovalActions />
+      ) : (
+        <ChatComposer onSend={handleSend} onAbort={handleAbort} />
+      )}
       <PlanModal />
     </div>
   )

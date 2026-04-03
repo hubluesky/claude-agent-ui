@@ -3,7 +3,6 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useMessageStore } from '../../stores/messageStore'
 import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
-import { AskUserPanel } from './AskUserPanel'
 import { PlanApprovalCard } from './PlanApprovalCard'
 import { useConnectionStore } from '../../stores/connectionStore'
 
@@ -20,8 +19,6 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
   const loadInitial = useMessageStore((s) => s.loadInitial)
   const loadMore = useMessageStore((s) => s.loadMore)
   const sessionStatus = useConnectionStore((s) => s.sessionStatus)
-  const pendingAskUser = useConnectionStore((s) => s.pendingAskUser)
-  const pendingApproval = useConnectionStore((s) => s.pendingApproval)
   const pendingPlanApproval = useConnectionStore((s) => s.pendingPlanApproval)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const isLoadingMoreRef = useRef(false)
@@ -35,7 +32,7 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
     loadInitial(sessionId)
   }, [sessionId, loadInitial])
 
-  // Scroll to bottom when Footer content changes (AskUserPanel, ThinkingIndicator, PermissionBanner)
+  // Scroll to bottom when Footer content changes (PlanApprovalCard, ThinkingIndicator)
   useEffect(() => {
     if (isAtBottomRef.current) {
       // Small delay to let Footer render before scrolling
@@ -43,7 +40,7 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
         virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: 'smooth' })
       })
     }
-  }, [pendingAskUser?.requestId, pendingApproval?.requestId, pendingPlanApproval?.requestId, sessionStatus])
+  }, [pendingPlanApproval?.requestId, sessionStatus])
 
   // Scroll to bottom on initial message load
   const prevMessageCountRef = useRef(0)
@@ -100,7 +97,6 @@ export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
                   <ThinkingIndicator />
                 </div>
               )}
-              <AskUserPanel />
               <PlanApprovalCard />
             </>
           ),

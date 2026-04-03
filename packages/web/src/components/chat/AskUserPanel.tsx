@@ -65,10 +65,11 @@ export function AskUserPanel() {
   const { questions } = pendingAskUser
 
   return (
-    <div className={`mx-10 mb-4 p-5 rounded-lg border ${
+    <div className="px-4 py-3 shrink-0">
+    <div className={`rounded-xl border p-5 ${
       canInteract
-        ? 'bg-[#2a2418] border-[#d9770640]'
-        : 'bg-[#78787214] border-[#3d3b37]'
+        ? 'bg-[#1a1918] border-[#d9770640]'
+        : 'bg-[#1a1918] border-[#3d3b37]'
     }`}>
       <div className="flex items-center gap-2 mb-4">
         {canInteract ? (
@@ -162,6 +163,7 @@ export function AskUserPanel() {
           ? `1-${questions[0]?.options.length} to select, Esc for other`
           : 'Another terminal is responding'}
       </div>
+    </div>
     </div>
   )
 }

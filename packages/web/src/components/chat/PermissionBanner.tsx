@@ -33,10 +33,11 @@ export function PermissionBanner() {
   }
 
   return (
-    <div className={`mx-10 mb-4 rounded-lg border ${
+    <div className="px-4 py-3 shrink-0">
+    <div className={`rounded-xl border ${
       readonly
-        ? 'bg-[#78787214] border-[#3d3b37]'
-        : 'bg-[#d977060a] border-[#d9770626]'
+        ? 'bg-[#1a1918] border-[#3d3b37]'
+        : 'bg-[#1a1918] border-[#d9770626]'
     }`}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
@@ -99,6 +100,7 @@ export function PermissionBanner() {
           >Allow</button>
         </div>
       )}
+    </div>
     </div>
   )
 }

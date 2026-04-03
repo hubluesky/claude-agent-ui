@@ -1,15 +1,9 @@
 import { useState } from 'react'
 import { useConnectionStore } from '../../stores/connectionStore'
-import { useWebSocket } from '../../hooks/useWebSocket'
-import { useClaimLock } from '../../hooks/useClaimLock'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import type { PlanApprovalDecisionType } from '@claude-agent-ui/shared'
 
 export function PlanApprovalCard() {
-  const { pendingPlanApproval, lockStatus } = useConnectionStore()
-  const { respondPlanApproval } = useWebSocket()
-  const handleClaim = useClaimLock()
-  const [feedback, setFeedback] = useState('')
+  const { pendingPlanApproval } = useConnectionStore()
   const [collapsed, setCollapsed] = useState(false)
 
   // Only show in Footer when pending — resolved state is part of message history
@@ -17,29 +11,7 @@ export function PlanApprovalCard() {
 
   const { planContent, planFilePath, allowedPrompts } = pendingPlanApproval
   const readonly = pendingPlanApproval.readonly
-  const isIdle = lockStatus === 'idle'
-  const canClaim = readonly && isIdle
-  const canInteract = !readonly || canClaim
   const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
-
-  const handleDecision = (decision: PlanApprovalDecisionType) => {
-    if (!pendingPlanApproval) return
-    if (canClaim) handleClaim()
-    if (decision === 'feedback') {
-      if (!feedback.trim()) return
-      respondPlanApproval(pendingPlanApproval!.requestId, 'feedback', feedback.trim())
-    } else {
-      respondPlanApproval(pendingPlanApproval!.requestId, decision)
-    }
-    setFeedback('')
-  }
-
-  const handleFeedbackKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleDecision('feedback')
-    }
-  }
 
   const openModal = () => {
     useConnectionStore.getState().setPlanModalOpen(true)
@@ -103,40 +75,6 @@ export function PlanApprovalCard() {
         </>
       )}
 
-      {/* Action buttons — show when user can interact (owns lock or can claim) */}
-      {canInteract && (
-        <div className="px-4 pb-3.5">
-          <div className="flex gap-2 items-center flex-wrap">
-            <button
-              onClick={() => handleDecision('clear-and-accept')}
-              className="px-3 py-1.5 text-[11px] font-semibold text-[#22c55e] bg-[#22c55e15] border border-[#22c55e30] rounded-md hover:bg-[#22c55e25] transition-colors"
-            >
-              清除上下文并自动接受
-            </button>
-            <button
-              onClick={() => handleDecision('auto-accept')}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#d97706] bg-[#d9770615] border border-[#d9770630] rounded-md hover:bg-[#d9770625] transition-colors"
-            >
-              自动接受编辑
-            </button>
-            <button
-              onClick={() => handleDecision('manual')}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#a8a29e] border border-[#3d3b37] rounded-md hover:bg-[#3d3b37] transition-colors"
-            >
-              手动审批
-            </button>
-            <div className="flex-1 min-w-[140px]">
-              <input
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                onKeyDown={handleFeedbackKeyDown}
-                placeholder="告诉 Claude 需要修改什么..."
-                className="w-full px-3 py-1.5 text-[11px] bg-[#1e1d1a] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#7c7872] outline-none focus:border-[#d97706] transition-colors"
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
