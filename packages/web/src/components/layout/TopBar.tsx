@@ -1,13 +1,19 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useEmbedStore } from '../../stores/embedStore'
 import { HistoryPanel } from './HistoryPanel'
 
 export function TopBar() {
-  const { currentSessionId, currentProjectCwd, sessions, selectSession, renameSession } = useSessionStore()
-  const { sidebarOpen, setSidebarOpen } = useSettingsStore()
+  const currentSessionId = useSessionStore((s) => s.currentSessionId)
+  const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
+  const currentSessions = useSessionStore((s) => s.currentProjectCwd ? s.sessions.get(s.currentProjectCwd) ?? [] : [])
+  const selectSession = useSessionStore((s) => s.selectSession)
+  const renameSession = useSessionStore((s) => s.renameSession)
+  const sidebarOpen = useSettingsStore((s) => s.sidebarOpen)
+  const setSidebarOpen = useSettingsStore((s) => s.setSidebarOpen)
   const isEmbed = useEmbedStore((s) => s.isEmbed)
+
   const [showHistory, setShowHistory] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
@@ -15,12 +21,12 @@ export function TopBar() {
 
   const isNewSession = currentSessionId === '__new__'
 
-  // 获取当前会话标题
-  const currentSessions = currentProjectCwd ? sessions.get(currentProjectCwd) ?? [] : []
-  const currentSession = currentSessions.find((s) => s.sessionId === currentSessionId)
+  const currentSession = useMemo(
+    () => currentSessions.find((s) => s.sessionId === currentSessionId),
+    [currentSessions, currentSessionId],
+  )
   const sessionTitle = currentSession?.title || (isNewSession ? 'New conversation' : '')
 
-  // 标题点击编辑
   const handleTitleClick = useCallback(() => {
     if (isNewSession || !currentSessionId) return
     setEditValue(currentSession?.title || '')
@@ -36,14 +42,12 @@ export function TopBar() {
     setEditing(false)
   }, [editValue, currentSession, currentSessionId, isNewSession, renameSession])
 
-  // 新建会话
   const handleNewSession = useCallback(() => {
     if (currentProjectCwd) {
       selectSession('__new__', currentProjectCwd)
     }
   }, [currentProjectCwd, selectSession])
 
-  // 历史面板中选择会话
   const handleSelectHistory = useCallback((sessionId: string) => {
     if (currentProjectCwd) {
       selectSession(sessionId, currentProjectCwd)
@@ -51,11 +55,11 @@ export function TopBar() {
     setShowHistory(false)
   }, [currentProjectCwd, selectSession])
 
+  const handleCloseHistory = useCallback(() => setShowHistory(false), [])
+
   return (
     <div className="flex items-center justify-between h-10 shrink-0 px-3 border-b border-[#3d3b37] relative">
-      {/* 左侧：汉堡 + 会话标题 */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {/* 左侧按钮：embed 用 C logo，正常用汉堡 */}
         {isEmbed ? (
           <div className="w-5 h-5 bg-[#d97706] rounded flex items-center justify-center shrink-0">
             <span className="text-[10px] font-bold text-[#1c1b18]">C</span>
@@ -71,7 +75,6 @@ export function TopBar() {
           </button>
         )}
 
-        {/* 会话标题：所有模式统一逻辑 */}
         {editing ? (
           <input
             ref={inputRef}
@@ -99,7 +102,6 @@ export function TopBar() {
         )}
       </div>
 
-      {/* 右侧：历史 + 新建 */}
       <div className="flex items-center gap-1 shrink-0">
         <button
           onClick={() => setShowHistory(!showHistory)}
@@ -125,11 +127,10 @@ export function TopBar() {
         </button>
       </div>
 
-      {/* 历史面板 */}
       {showHistory && (
         <HistoryPanel
           onSelect={handleSelectHistory}
-          onClose={() => setShowHistory(false)}
+          onClose={handleCloseHistory}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
 import { fetchProjects, fetchSessions } from '../lib/api'
+import { isVisibleSession } from '../lib/time'
 
 interface SessionState {
   projects: ProjectInfo[]
@@ -10,7 +11,6 @@ interface SessionState {
   currentSessionId: string | null
   currentProjectCwd: string | null
   searchQuery: string
-  sidebarScreen: 'projects' | 'sessions'
 }
 
 interface SessionActions {
@@ -18,7 +18,6 @@ interface SessionActions {
   loadProjectSessions(cwd: string): Promise<void>
   selectProject(cwd: string): void
   selectSession(sessionId: string, cwd: string): void
-  goBackToProjects(): void
   setSearchQuery(query: string): void
   setCurrentSessionId(id: string | null): void
   renameSession(sessionId: string, title: string): Promise<void>
@@ -32,7 +31,6 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   currentSessionId: null,
   currentProjectCwd: null,
   searchQuery: '',
-  sidebarScreen: 'projects',
 
   async loadProjects() {
     set({ projectsLoading: true })
@@ -63,13 +61,10 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   },
 
   selectProject(cwd: string) {
-    set({ currentProjectCwd: cwd, sidebarScreen: 'sessions', searchQuery: '' })
+    set({ currentProjectCwd: cwd, searchQuery: '' })
     get().loadProjectSessions(cwd).then(() => {
       const sessions = get().sessions.get(cwd) ?? []
-      const latest = sessions.find((s) => {
-        const title = s.title ?? ''
-        return title !== '/clear' && title !== 'clear'
-      })
+      const latest = sessions.find((s) => isVisibleSession(s.title))
       if (latest) {
         set({ currentSessionId: latest.sessionId })
       }
@@ -78,10 +73,6 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   selectSession(sessionId: string, cwd: string) {
     set({ currentSessionId: sessionId, currentProjectCwd: cwd })
-  },
-
-  goBackToProjects() {
-    set({ sidebarScreen: 'projects', searchQuery: '' })
   },
 
   setSearchQuery(query: string) {
@@ -95,7 +86,6 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
       })
-      // Update local cache
       const sessions = new Map(get().sessions)
       for (const [cwd, list] of sessions) {
         const updated = list.map((s) => s.sessionId === sessionId ? { ...s, title } : s)

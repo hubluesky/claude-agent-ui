@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import { fetchSessions } from '../../lib/api'
+import { relativeTime, isVisibleSession } from '../../lib/time'
 import type { SessionSummary } from '@claude-agent-ui/shared'
 
 interface HistoryPanelProps {
@@ -10,60 +11,51 @@ interface HistoryPanelProps {
 
 const PAGE_SIZE = 20
 
-function relativeTime(isoDate?: string): string {
-  if (!isoDate) return ''
-  const diff = Date.now() - new Date(isoDate).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}天前`
-  return `${Math.floor(days / 30)}个月前`
-}
-
 export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
   const [search, setSearch] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const { currentProjectCwd, currentSessionId } = useSessionStore()
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
-  // 独立的会话列表状态（不影响 sessionStore）
+  const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
+  const currentSessionId = useSessionStore((s) => s.currentSessionId)
+
   const [allSessions, setAllSessions] = useState<SessionSummary[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const loadingRef = useRef(false)
+  const offsetRef = useRef(0)
 
-  // 初始加载
   useEffect(() => {
     if (!currentProjectCwd) return
     setLoading(true)
+    offsetRef.current = 0
     fetchSessions(currentProjectCwd, { limit: PAGE_SIZE, offset: 0 }).then((res) => {
       setAllSessions(res.sessions)
       setHasMore(res.hasMore)
+      offsetRef.current = res.sessions.length
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [currentProjectCwd])
 
-  // 加载更多
   const loadMore = useCallback(async () => {
-    if (!currentProjectCwd || !hasMore || loadingRef.current) return
+    if (!currentProjectCwd || loadingRef.current) return
     loadingRef.current = true
     setLoading(true)
     try {
       const res = await fetchSessions(currentProjectCwd, {
         limit: PAGE_SIZE,
-        offset: allSessions.length,
+        offset: offsetRef.current,
       })
       setAllSessions((prev) => [...prev, ...res.sessions])
       setHasMore(res.hasMore)
+      offsetRef.current += res.sessions.length
     } catch { /* ignore */ }
     setLoading(false)
     loadingRef.current = false
-  }, [currentProjectCwd, hasMore, allSessions.length])
+  }, [currentProjectCwd])
 
-  // 滚动到底部时加载更多
   const handleScroll = useCallback(() => {
     const el = listRef.current
     if (!el || !hasMore || loadingRef.current) return
@@ -72,39 +64,36 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
     }
   }, [hasMore, loadMore])
 
-  // 客户端搜索过滤
-  const filtered = allSessions.filter((s) => {
-    const title = s.title ?? ''
-    if (title === '/clear' || title === 'clear') return false
-    return title.toLowerCase().includes(search.toLowerCase())
-  })
+  const filtered = useMemo(() => {
+    const lowerSearch = search.toLowerCase()
+    return allSessions.filter((s) => {
+      if (!isVisibleSession(s.title)) return false
+      return (s.title ?? '').toLowerCase().includes(lowerSearch)
+    })
+  }, [allSessions, search])
 
-  // 点击外部关闭
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose()
+        onCloseRef.current()
       }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
-
-  // Escape 关闭
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current()
     }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 
   return (
     <div
       ref={panelRef}
       className="absolute top-10 right-2 w-80 bg-[#1c1b18] border border-[#3d3b37] rounded-b-lg shadow-2xl z-50"
     >
-      {/* 搜索框 */}
       <div className="p-2">
         <input
           value={search}
@@ -115,7 +104,6 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
         />
       </div>
 
-      {/* 会话列表 */}
       <div
         ref={listRef}
         onScroll={handleScroll}
