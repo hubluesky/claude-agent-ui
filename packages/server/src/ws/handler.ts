@@ -429,7 +429,7 @@ export function createWsHandler(deps: HandlerDeps) {
 
   async function handleResolvePlanApproval(
     connectionId: string,
-    sessionId: string,
+    _sessionId: string,
     requestId: string,
     decision: PlanApprovalDecision['decision'],
     feedback?: string
@@ -453,6 +453,9 @@ export function createWsHandler(deps: HandlerDeps) {
         case 'auto-accept':
           await session.setPermissionMode('acceptEdits')
           break
+        case 'bypass':
+          await session.setPermissionMode('bypassPermissions')
+          break
         case 'manual':
           await session.setPermissionMode('default')
           break
@@ -474,14 +477,10 @@ export function createWsHandler(deps: HandlerDeps) {
       decision,
     })
 
-    // 4. For clear-and-accept: send /compact to clear context after tool completes
-    if (decision === 'clear-and-accept') {
-      setTimeout(() => {
-        const activeSession = sessionManager.getActive(entry.sessionId)
-        if (activeSession) {
-          activeSession.send('/compact')
-        }
-      }, 500)
+    // 4. For clear-and-accept: mark session to start fresh (no resume) on next query
+    //    This matches CLI behavior: clear context = new session without old conversation history
+    if (decision === 'clear-and-accept' && session instanceof V1QuerySession) {
+      session.markStartFresh()
     }
   }
 
