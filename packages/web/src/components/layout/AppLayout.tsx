@@ -38,7 +38,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="h-dvh flex bg-[#2b2a27]">
-      {/* Mobile overlay */}
+      {/* Overlay (mobile: dim background when sidebar open) */}
       {!isEmbed && sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
@@ -46,20 +46,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
         />
       )}
 
-      {/* Sidebar */}
-      {!isEmbed && (
+      {/* Sidebar — 桌面和移动端都受 sidebarOpen 控制 */}
+      {!isEmbed && sidebarOpen && (
         <div
-          className={`shrink-0 border-r border-[#3d3b37] z-40 transition-transform duration-200 md:transition-none
-            fixed md:relative h-full
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+          className="shrink-0 border-r border-[#3d3b37] z-40 fixed md:relative h-full"
           style={{ width: sidebarWidth }}
         >
-          <SessionList onSessionSelect={() => setSidebarOpen(false)} />
+          <SessionList />
         </div>
       )}
 
       {/* Resize handle */}
-      {!isEmbed && (
+      {!isEmbed && sidebarOpen && (
         <div
           className="hidden md:block w-1 shrink-0 cursor-col-resize hover:bg-[#d9770640] active:bg-[#d9770660] transition-colors"
           onMouseDown={handleMouseDown}

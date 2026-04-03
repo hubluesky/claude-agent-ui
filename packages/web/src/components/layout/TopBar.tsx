@@ -6,7 +6,7 @@ import { HistoryPanel } from './HistoryPanel'
 
 export function TopBar() {
   const { currentSessionId, currentProjectCwd, sessions, selectSession, renameSession } = useSessionStore()
-  const { setSidebarOpen } = useSettingsStore()
+  const { sidebarOpen, setSidebarOpen } = useSettingsStore()
   const isEmbed = useEmbedStore((s) => s.isEmbed)
   const embedCwd = useEmbedStore((s) => s.embedCwd)
   const projectName = isEmbed && embedCwd ? embedCwd.split(/[/\\]/).pop() : null
@@ -67,7 +67,7 @@ export function TopBar() {
         ) : (
           <>
             <button
-              onClick={() => setSidebarOpen(true)}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
               className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872] shrink-0"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -124,8 +124,8 @@ export function TopBar() {
           title="新建会话"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2 12c0-4.418 4.03-8 9-8s9 3.582 9 8-4.03 8-9 8c-1.065 0-2.08-.164-3.012-.463L3 21l1.338-3.346C2.842 16.078 2 14.12 2 12z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M12 9v6" />
           </svg>
         </button>
       </div>

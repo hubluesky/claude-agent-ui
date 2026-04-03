@@ -64,7 +64,16 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   selectProject(cwd: string) {
     set({ currentProjectCwd: cwd, sidebarScreen: 'sessions', searchQuery: '' })
-    get().loadProjectSessions(cwd)
+    get().loadProjectSessions(cwd).then(() => {
+      const sessions = get().sessions.get(cwd) ?? []
+      const latest = sessions.find((s) => {
+        const title = s.title ?? ''
+        return title !== '/clear' && title !== 'clear'
+      })
+      if (latest) {
+        set({ currentSessionId: latest.sessionId })
+      }
+    })
   },
 
   selectSession(sessionId: string, cwd: string) {

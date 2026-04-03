@@ -22,7 +22,7 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
+      <div className="absolute bottom-full right-0 w-80 mb-1 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">模式</span>
           <div className="flex items-center gap-1 text-[10px] text-[#5c5952]">
