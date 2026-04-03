@@ -49,3 +49,27 @@ export const TOOL_COLORS: Record<ToolCategory, string> = {
 }
 
 export const PLAN_TOOL = 'ExitPlanMode'
+
+/** Paths that bypass-permissions mode still requires approval for */
+export const SAFETY_SENSITIVE_PATTERNS = [
+  '.git/',
+  '.claude/',
+  '.bashrc',
+  '.bash_profile',
+  '.zshrc',
+  '.profile',
+  '.env',
+  'credentials',
+] as const
+
+export function isSafetySensitive(toolName: string, input: Record<string, unknown>): boolean {
+  const pathFields = ['file_path', 'path', 'command']
+  for (const field of pathFields) {
+    const value = input[field]
+    if (typeof value !== 'string') continue
+    for (const pattern of SAFETY_SENSITIVE_PATTERNS) {
+      if (value.includes(pattern)) return true
+    }
+  }
+  return false
+}

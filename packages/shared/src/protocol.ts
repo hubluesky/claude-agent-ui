@@ -198,6 +198,7 @@ export interface S2C_PlanApproval {
   planFilePath: string
   allowedPrompts: { tool: string; prompt: string }[]
   readonly: boolean
+  contextUsagePercent?: number
 }
 
 export interface S2C_PlanApprovalResolved {

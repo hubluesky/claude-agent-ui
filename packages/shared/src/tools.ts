@@ -35,7 +35,7 @@ export interface AskUserResponse {
   answers: Record<string, string>
 }
 
-export type PlanApprovalDecisionType = 'clear-and-accept' | 'auto-accept' | 'manual' | 'feedback'
+export type PlanApprovalDecisionType = 'clear-and-accept' | 'auto-accept' | 'bypass' | 'manual' | 'feedback'
 
 export interface PlanApprovalRequest {
   requestId: string
