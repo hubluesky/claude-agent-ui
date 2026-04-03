@@ -1,6 +1,7 @@
 import { type ReactNode, useRef, useCallback } from 'react'
 import { SessionList } from '../sidebar/SessionList'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { TopBar } from './TopBar'
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { sidebarWidth, sidebarOpen, setSidebarWidth, setSidebarOpen } = useSettingsStore()
@@ -61,18 +62,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Mobile hamburger */}
-        <div className="md:hidden flex items-center h-10 shrink-0 px-3 border-b border-[#3d3b37]">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872]"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </button>
-          <span className="text-xs text-[#7c7872] ml-2">Claude Agent UI</span>
-        </div>
+        {/* 常驻顶部 bar */}
+        <TopBar />
         {children}
       </div>
     </div>
