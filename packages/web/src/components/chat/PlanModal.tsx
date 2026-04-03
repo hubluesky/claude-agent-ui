@@ -43,6 +43,7 @@ export function PlanModal() {
       respondPlanApproval(requestId, decision)
     }
     setFeedback('')
+    closeModal()
   }
 
   const handleFeedbackKeyDown = (e: React.KeyboardEvent) => {
