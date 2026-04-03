@@ -20,9 +20,13 @@ interface ComposerToolbarProps {
   onReleaseLock: () => void
 }
 
-export function useModesPopupState() {
-  const [showModes, setShowModes] = useState(false)
-  return { showModes, setShowModes }
+// modeColorClass is module-level so it's not recreated on every render
+const modeColorClass: Record<string, { text: string; hover: string; hoverBg: string }> = {
+  default: { text: 'text-[#a8a29e]', hover: 'hover:text-[#e5e2db]', hoverBg: 'hover:bg-[#3d3b3780]' },
+  acceptEdits: { text: 'text-[#60a5fa]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
+  auto: { text: 'text-[#d97706]', hover: 'hover:text-[#f59e0b]', hoverBg: 'hover:bg-[#d977061a]' },
+  plan: { text: 'text-[#a78bfa]', hover: 'hover:text-[#c4b5fd]', hoverBg: 'hover:bg-[#a78bfa1a]' },
+  bypassPermissions: { text: 'text-[#f87171]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
 }
 
 export function ComposerToolbar({
@@ -54,13 +58,6 @@ export function ComposerToolbar({
 
   const currentModeInfo = MODES.find((m) => m.mode === permissionMode) ?? MODES[0]
 
-  const modeColorClass: Record<string, { text: string; hover: string; hoverBg: string }> = {
-    default: { text: 'text-[#a8a29e]', hover: 'hover:text-[#e5e2db]', hoverBg: 'hover:bg-[#3d3b3780]' },
-    acceptEdits: { text: 'text-[#60a5fa]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
-    auto: { text: 'text-[#d97706]', hover: 'hover:text-[#f59e0b]', hoverBg: 'hover:bg-[#d977061a]' },
-    plan: { text: 'text-[#a78bfa]', hover: 'hover:text-[#c4b5fd]', hoverBg: 'hover:bg-[#a78bfa1a]' },
-    bypassPermissions: { text: 'text-[#f87171]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
-  }
   const modeColor = modeColorClass[permissionMode] ?? modeColorClass.default
 
   // Shift+Tab cycles through permission modes

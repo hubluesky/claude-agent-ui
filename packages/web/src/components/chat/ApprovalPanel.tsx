@@ -15,6 +15,10 @@ export interface ApprovalOption {
 export interface ApprovalPanelConfig {
   /** Which pending request type this panel is for */
   type: 'tool-approval' | 'ask-user' | 'plan-approval'
+  /** Whether this client is in readonly mode (not the lock holder) */
+  readonly: boolean
+  /** Request ID used to reset panel state when a new request arrives */
+  requestId: string
   /** Panel header title */
   title: string
   /** Optional badge text shown in top-right corner */
@@ -48,15 +52,10 @@ const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: stri
 }
 
 export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
-  const { lockStatus, pendingApproval, pendingAskUser, pendingPlanApproval } = useConnectionStore()
+  const { lockStatus } = useConnectionStore()
   const handleClaim = useClaimLock()
 
-  // Determine readonly/canClaim based on the pending request type
-  let readonly = true
-  if (config.type === 'tool-approval' && pendingApproval) readonly = pendingApproval.readonly
-  else if (config.type === 'ask-user' && pendingAskUser) readonly = pendingAskUser.readonly
-  else if (config.type === 'plan-approval' && pendingPlanApproval) readonly = pendingPlanApproval.readonly
-
+  const readonly = config.readonly
   const isIdle = lockStatus === 'idle'
   const canClaim = readonly && isIdle
   const canInteract = !readonly || canClaim
@@ -67,17 +66,14 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
   const [otherText, setOtherText] = useState('')
   const [previewKey, setPreviewKey] = useState<string | null>(null)
 
-  // Reset state when the underlying pending request changes
-  const requestIdentity = config.type === 'tool-approval' ? pendingApproval?.requestId
-    : config.type === 'ask-user' ? pendingAskUser?.requestId
-    : pendingPlanApproval?.requestId
+  // Reset state when a new request arrives
   useEffect(() => {
     setSelectedKeys(new Set())
     setFeedback('')
     setShowOther(false)
     setOtherText('')
     setPreviewKey(null)
-  }, [requestIdentity])
+  }, [config.requestId])
 
   const fireDecision = useCallback((key: string, extra?: string) => {
     if (!canInteract) return

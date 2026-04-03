@@ -9,7 +9,7 @@ import { useToastStore } from './Toast'
 import { SlashCommandPopup } from './SlashCommandPopup'
 import { FileReferencePopup } from './FileReferencePopup'
 import { ImagePreviewBar } from './ImagePreviewBar'
-import { ComposerToolbar, useModesPopupState } from './ComposerToolbar'
+import { ComposerToolbar } from './ComposerToolbar'
 import { ModesPopup } from './ModesPopup'
 import type { FileItem } from './FileReferencePopup'
 import type { AttachedImage } from './ImagePreviewBar'
@@ -67,7 +67,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
-  const { showModes, setShowModes } = useModesPopupState()
+  const [showModes, setShowModes] = useState(false)
   const { permissionMode, effort, setPermissionMode, setEffort } = useSettingsStore()
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'

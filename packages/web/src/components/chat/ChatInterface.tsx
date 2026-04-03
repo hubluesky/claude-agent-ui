@@ -66,6 +66,7 @@ export function ChatInterface() {
         pendingAskUser.requestId,
         pendingAskUser.questions,
         respondAskUser,
+        pendingAskUser.readonly,
       )
     }
     if (pendingApproval) {
@@ -76,6 +77,7 @@ export function ChatInterface() {
         pendingApproval.title,
         pendingApproval.description,
         respondToolApproval,
+        pendingApproval.readonly,
       )
     }
     if (pendingPlanApproval) {
@@ -83,6 +85,7 @@ export function ChatInterface() {
         pendingPlanApproval.requestId,
         pendingPlanApproval.contextUsagePercent,
         respondPlanApproval,
+        pendingPlanApproval.readonly,
       )
     }
     return null

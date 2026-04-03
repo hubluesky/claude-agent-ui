@@ -487,6 +487,19 @@ export class V1QuerySession extends AgentSession {
   }
 
   close(): void {
+    // Reject all pending approvals
+    for (const [, pending] of this.pendingApprovals) {
+      pending.resolve({ behavior: 'deny', message: 'Session closed' })
+    }
+    this.pendingApprovals.clear()
+    for (const [, pending] of this.pendingAskUser) {
+      pending.resolve({ answers: {} })
+    }
+    this.pendingAskUser.clear()
+    for (const [, pending] of this.pendingPlanApprovals) {
+      pending.resolve({ decision: 'feedback', feedback: 'Session closed' })
+    }
+    this.pendingPlanApprovals.clear()
     this.queryInstance?.close?.()
     this.queryInstance = null
   }
