@@ -22,7 +22,7 @@ function loadClaudeEnv(): Record<string, string> {
 
 const claudeEnv = loadClaudeEnv()
 import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
-import { TOOL_CATEGORIES } from '@claude-agent-ui/shared'
+import { TOOL_CATEGORIES, isSafetySensitive } from '@claude-agent-ui/shared'
 import type { ToolApprovalDecision, AskUserRequest, AskUserResponse, PlanApprovalDecision, SendOptions, SessionResult } from '@claude-agent-ui/shared'
 import { AgentSession } from './session.js'
 
@@ -40,20 +40,15 @@ const READ_ONLY_TOOLS: Set<string> = new Set([
 interface PendingApproval {
   toolName: string
   resolve: (decision: ToolApprovalDecision) => void
-  timeout: ReturnType<typeof setTimeout>
 }
 
 interface PendingAskUser {
   resolve: (response: AskUserResponse) => void
-  timeout: ReturnType<typeof setTimeout>
 }
 
 interface PendingPlanApproval {
   resolve: (decision: PlanApprovalDecision) => void
-  timeout: ReturnType<typeof setTimeout>
 }
-
-const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 export class V1QuerySession extends AgentSession {
   private sessionId: string | null = null
@@ -66,6 +61,9 @@ export class V1QuerySession extends AgentSession {
   private _projectCwd: string
   private resumeSessionId: string | null
   private _permissionMode: PermissionMode = 'default'
+  private _startFresh = false
+  private _prePlanMode: PermissionMode | null = null
+  private _lastInputTokens = 0
 
   constructor(cwd: string, options?: { resumeSessionId?: string }) {
     super()
@@ -77,6 +75,9 @@ export class V1QuerySession extends AgentSession {
   get projectCwd(): string { return this._projectCwd }
   get status(): SessionStatus { return this._status }
   get permissionMode(): PermissionMode { return this._permissionMode }
+
+  /** Mark session to start fresh (no resume) on next send — used by clear-and-accept */
+  markStartFresh(): void { this._startFresh = true }
 
   private setStatus(status: SessionStatus): void {
     this._status = status
@@ -96,9 +97,14 @@ export class V1QuerySession extends AgentSession {
     }
 
     // Resume existing session or use previously captured ID
-    const resumeId = this.resumeSessionId ?? this.sessionId
-    if (resumeId) {
-      queryOptions.resume = resumeId
+    // If _startFresh is set (clear-and-accept), skip resume to start a new context
+    if (this._startFresh) {
+      this._startFresh = false
+    } else {
+      const resumeId = this.resumeSessionId ?? this.sessionId
+      if (resumeId) {
+        queryOptions.resume = resumeId
+      }
     }
 
     if (options?.effort) {
@@ -109,6 +115,11 @@ export class V1QuerySession extends AgentSession {
       queryOptions.thinking = options.thinkingMode === 'disabled'
         ? { type: 'disabled' }
         : { type: 'adaptive' }
+    }
+
+    // Pass current permission mode to SDK so it applies from the start
+    if (this._permissionMode && this._permissionMode !== 'default') {
+      queryOptions.permissionMode = this._permissionMode
     }
 
     // Start the query in background
@@ -164,6 +175,10 @@ export class V1QuerySession extends AgentSession {
 
         // Handle result
         if ((msg as any).type === 'result') {
+          const usage = (msg as any).usage
+          if (usage?.input_tokens) {
+            this._lastInputTokens = usage.input_tokens
+          }
           const result: SessionResult = {
             subtype: (msg as any).subtype ?? 'success',
             result: (msg as any).result,
@@ -219,7 +234,7 @@ export class V1QuerySession extends AgentSession {
     }
 
     // Check if current mode auto-resolves this tool call
-    const autoDecision = this.getAutoDecision(toolName)
+    const autoDecision = this.getAutoDecision(toolName, input)
     if (autoDecision) return { ...autoDecision, updatedInput: input }
 
     // Default / other modes: prompt user for approval
@@ -227,11 +242,7 @@ export class V1QuerySession extends AgentSession {
     const requestId = randomUUID()
 
     const decision = await new Promise<ToolApprovalDecision>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.pendingApprovals.delete(requestId)
-        resolve({ behavior: 'deny', message: 'Approval timed out' })
-      }, APPROVAL_TIMEOUT_MS)
-      this.pendingApprovals.set(requestId, { toolName, resolve, timeout })
+      this.pendingApprovals.set(requestId, { toolName, resolve })
       this.emit('tool-approval', {
         requestId,
         toolName,
@@ -254,10 +265,14 @@ export class V1QuerySession extends AgentSession {
   }
 
   /** Decide if the current mode auto-resolves this tool without user prompt */
-  private getAutoDecision(toolName: string): { behavior: string; message?: string } | null {
+  private getAutoDecision(toolName: string, input: Record<string, unknown>): { behavior: string; message?: string } | null {
     switch (this._permissionMode) {
       case 'auto':
+        // SDK native auto mode uses a model classifier — don't intercept here
+        return null
+
       case 'bypassPermissions':
+        if (isSafetySensitive(toolName, input)) return null  // → prompt user
         return { behavior: 'allow' }
 
       case 'acceptEdits':
@@ -293,11 +308,7 @@ export class V1QuerySession extends AgentSession {
     }
 
     const response = await new Promise<AskUserResponse>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.pendingAskUser.delete(requestId)
-        resolve({ answers: {} })
-      }, APPROVAL_TIMEOUT_MS)
-      this.pendingAskUser.set(requestId, { resolve, timeout })
+      this.pendingAskUser.set(requestId, { resolve })
       this.emit('ask-user', req)
     })
 
@@ -326,18 +337,19 @@ export class V1QuerySession extends AgentSession {
       }
     }
 
-    const decision = await new Promise<PlanApprovalDecision>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.pendingPlanApprovals.delete(requestId)
-        resolve({ decision: 'feedback', feedback: 'Approval timed out' })
-      }, APPROVAL_TIMEOUT_MS)
+    // Calculate context usage from last known input tokens
+    const contextPercent = this._lastInputTokens > 0
+      ? Math.round((this._lastInputTokens / 200000) * 100)
+      : undefined
 
-      this.pendingPlanApprovals.set(requestId, { resolve, timeout })
+    const decision = await new Promise<PlanApprovalDecision>((resolve) => {
+      this.pendingPlanApprovals.set(requestId, { resolve })
       this.emit('plan-approval', {
         requestId,
         planContent,
         planFilePath,
         allowedPrompts: ((input as any).allowedPrompts as { tool: string; prompt: string }[]) || [],
+        contextUsagePercent: contextPercent,
       })
     })
 
@@ -353,7 +365,6 @@ export class V1QuerySession extends AgentSession {
   resolveToolApproval(requestId: string, decision: ToolApprovalDecision): void {
     const pending = this.pendingApprovals.get(requestId)
     if (pending) {
-      clearTimeout(pending.timeout)
       pending.resolve(decision)
       this.pendingApprovals.delete(requestId)
     }
@@ -362,7 +373,6 @@ export class V1QuerySession extends AgentSession {
   resolveAskUser(requestId: string, response: AskUserResponse): void {
     const pending = this.pendingAskUser.get(requestId)
     if (pending) {
-      clearTimeout(pending.timeout)
       pending.resolve(response)
       this.pendingAskUser.delete(requestId)
     }
@@ -371,7 +381,6 @@ export class V1QuerySession extends AgentSession {
   resolvePlanApproval(requestId: string, decision: PlanApprovalDecision): void {
     const pending = this.pendingPlanApprovals.get(requestId)
     if (pending) {
-      clearTimeout(pending.timeout)
       pending.resolve(decision)
       this.pendingPlanApprovals.delete(requestId)
     }
@@ -386,17 +395,14 @@ export class V1QuerySession extends AgentSession {
     }
     // Clear all pending
     for (const [, pending] of this.pendingApprovals) {
-      clearTimeout(pending.timeout)
       pending.resolve({ behavior: 'deny', message: 'Session aborted' })
     }
     this.pendingApprovals.clear()
     for (const [, pending] of this.pendingAskUser) {
-      clearTimeout(pending.timeout)
       pending.resolve({ answers: {} })
     }
     this.pendingAskUser.clear()
     for (const [, pending] of this.pendingPlanApprovals) {
-      clearTimeout(pending.timeout)
       pending.resolve({ decision: 'feedback', feedback: 'Session aborted' })
     }
     this.pendingPlanApprovals.clear()
@@ -404,12 +410,21 @@ export class V1QuerySession extends AgentSession {
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
-    this._permissionMode = mode
+    // Save current mode before entering plan
+    if (mode === 'plan' && this._permissionMode !== 'plan') {
+      this._prePlanMode = this._permissionMode
+    }
+    // Restore pre-plan mode when leaving plan
+    if (mode !== 'plan' && this._permissionMode === 'plan' && this._prePlanMode) {
+      if (mode === 'default') {
+        mode = this._prePlanMode
+      }
+      this._prePlanMode = null
+    }
 
-    // Resolve pending tool approvals based on the new mode
+    this._permissionMode = mode
     this.resolvePendingForMode(mode)
 
-    // 'auto' is our UI-only mode; don't pass it to SDK (which doesn't recognize it)
     if (mode !== 'auto') {
       await this.queryInstance?.setPermissionMode?.(mode as any)
     }
@@ -447,7 +462,6 @@ export class V1QuerySession extends AgentSession {
       }
 
       if (decision) {
-        clearTimeout(pending.timeout)
         pending.resolve(decision)
         this.pendingApprovals.delete(requestId)
       }
@@ -456,11 +470,9 @@ export class V1QuerySession extends AgentSession {
     // Also resolve pending plan approvals when switching modes
     for (const [requestId, pending] of this.pendingPlanApprovals) {
       if (mode === 'auto' || mode === 'bypassPermissions') {
-        clearTimeout(pending.timeout)
         pending.resolve({ decision: 'auto-accept' })
         this.pendingPlanApprovals.delete(requestId)
       } else if (mode === 'dontAsk') {
-        clearTimeout(pending.timeout)
         pending.resolve({ decision: 'feedback', feedback: `Denied by ${mode} mode` })
         this.pendingPlanApprovals.delete(requestId)
       }
