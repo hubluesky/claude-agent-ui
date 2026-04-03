@@ -97,8 +97,15 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
             }
             if (block.type === 'text') {
               const textClass = classifyText(block.text)
-              // Hide internal SDK output in user messages
               if (textClass === 'internal-output') return null
+              if (textClass === 'compact-summary') {
+                return (
+                  <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+                    <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
+                    <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{block.text}</div>
+                  </details>
+                )
+              }
               const cmdText = parseCommandXml(block.text)
               if (cmdText) {
                 return (
@@ -125,7 +132,16 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       )
     }
     const rawText = typeof content === 'string' ? content : JSON.stringify(content)
-    if (classifyText(rawText) === 'internal-output') return null
+    const rawTextClass = classifyText(rawText)
+    if (rawTextClass === 'internal-output') return null
+    if (rawTextClass === 'compact-summary') {
+      return (
+        <details className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+          <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
+          <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{rawText}</div>
+        </details>
+      )
+    }
     const cmdText = parseCommandXml(rawText)
     if (cmdText) {
       return (
