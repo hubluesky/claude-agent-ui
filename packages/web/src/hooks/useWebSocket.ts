@@ -15,6 +15,40 @@ let reconnectTimer = 0
 let reconnectAttempt = 0
 let initCount = 0 // track how many components have mounted
 
+let heartbeatTimer = 0  // timeout: no ping received for 60s → reconnect
+const HEARTBEAT_TIMEOUT = 60_000
+
+function resetHeartbeatTimer() {
+  if (heartbeatTimer) clearTimeout(heartbeatTimer)
+  heartbeatTimer = window.setTimeout(() => {
+    // No ping from server for 60s — connection is likely dead
+    console.warn('[WS] Heartbeat timeout — forcing reconnect')
+    ws?.close()
+  }, HEARTBEAT_TIMEOUT)
+}
+
+function clearHeartbeatTimer() {
+  if (heartbeatTimer) {
+    clearTimeout(heartbeatTimer)
+    heartbeatTimer = 0
+  }
+}
+
+// ── Page visibility: fast reconnect on foreground ─────────────
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Page came back to foreground — check if WebSocket is still alive
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        // Connection is dead, reconnect immediately (skip backoff delay)
+        if (reconnectTimer) clearTimeout(reconnectTimer)
+        reconnectAttempt = 0
+        connect()
+      }
+    }
+  })
+}
+
 function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
@@ -36,8 +70,11 @@ function connect() {
 
     const sessionId = useSessionStore.getState().currentSessionId
     if (sessionId && sessionId !== '__new__') {
-      socket.send(JSON.stringify({ type: 'join-session', sessionId }))
+      const lastSeq = useConnectionStore.getState().lastSeq
+      socket.send(JSON.stringify({ type: 'join-session', sessionId, lastSeq }))
     }
+
+    resetHeartbeatTimer()
   }
 
   socket.onmessage = (event) => {
@@ -47,6 +84,7 @@ function connect() {
 
   socket.onclose = () => {
     ws = null
+    clearHeartbeatTimer()
     useConnectionStore.getState().setConnectionStatus('reconnecting')
     scheduleReconnect()
   }
@@ -103,10 +141,10 @@ function handleServerMessage(msg: S2CMessage) {
             sess.loadProjectSessions(sess.currentProjectCwd)
           }
         }
-        // Sync permission mode from SDK init
-        if ((msg.message as any).permissionMode) {
-          useSettingsStore.getState().setPermissionMode((msg.message as any).permissionMode)
-        }
+        // NOTE: Do NOT sync permissionMode from SDK init messages here.
+        // The SDK may report a stale/default mode that overwrites the user's
+        // manual selection. The server broadcasts authoritative mode changes
+        // via 'mode-change' and 'session-state' messages instead.
         // Capture model name from init
         if ((msg.message as any).model) {
           const prev = conn.accountInfo
@@ -114,10 +152,9 @@ function handleServerMessage(msg: S2CMessage) {
         }
       }
 
-      // Sync permission mode when SDK reports status changes (e.g. Agent enters/exits plan mode)
-      if (msg.message.type === 'system' && (msg.message as any).subtype === 'status' && (msg.message as any).permissionMode) {
-        useSettingsStore.getState().setPermissionMode((msg.message as any).permissionMode)
-      }
+      // NOTE: Do NOT sync permissionMode from SDK status messages here.
+      // The SDK may report a stale mode that overwrites the user's selection.
+      // Plan mode transitions are handled by plan-approval/plan-approval-resolved flow.
 
       if (msg.message.type === 'stream_event') {
         msgs.appendStreamDelta(msg.message)
@@ -374,6 +411,41 @@ function handleServerMessage(msg: S2CMessage) {
       break
     }
 
+    case 'ping':
+      // Respond with pong and reset heartbeat timer
+      send({ type: 'pong' } as any)
+      resetHeartbeatTimer()
+      break
+
+    case 'stream-snapshot': {
+      // Reconnection: apply accumulated stream content as synthetic streaming blocks
+      const snapshot = msg as any
+      const msgStore = useMessageStore.getState()
+      for (const block of snapshot.blocks ?? []) {
+        msgStore.appendStreamDelta({
+          type: 'stream_event',
+          uuid: snapshot.messageId,
+          event: {
+            type: 'content_block_start',
+            index: block.index,
+            content_block: { type: block.type },
+          },
+        } as any)
+        msgStore.appendStreamDelta({
+          type: 'stream_event',
+          uuid: snapshot.messageId,
+          event: {
+            type: 'content_block_delta',
+            index: block.index,
+            delta: block.type === 'text'
+              ? { type: 'text_delta', text: block.content }
+              : { type: 'thinking_delta', thinking: block.content },
+          },
+        } as any)
+      }
+      break
+    }
+
     case 'error':
       console.error('[WS Error]', msg.message, msg.code)
       useToastStore.getState().add(msg.message, 'error')
@@ -396,13 +468,15 @@ function sendMessage(
     images?: { data: string; mediaType: string }[]
     thinkingMode?: 'adaptive' | 'enabled' | 'disabled'
     effort?: 'low' | 'medium' | 'high' | 'max'
+    permissionMode?: string
   }
 ) {
-  send({ type: 'send-message', sessionId, prompt, options })
+  send({ type: 'send-message', sessionId, prompt, options: options as any })
 }
 
 function joinSession(sessionId: string) {
-  send({ type: 'join-session', sessionId })
+  const lastSeq = useConnectionStore.getState().lastSeq
+  send({ type: 'join-session', sessionId, lastSeq } as any)
 }
 
 function respondToolApproval(requestId: string, decision: ToolApprovalDecision) {

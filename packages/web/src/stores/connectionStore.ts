@@ -50,6 +50,7 @@ interface ConnectionState {
   models: ModelInfo[]
   contextUsage: ContextUsage | null
   mcpServers: McpServerInfo[]
+  lastSeq: number
   rewindPreview: { filesChanged?: string[]; insertions?: number; deletions?: number; canRewind?: boolean; error?: string } | null
   subagentMessages: { agentId: string; messages: any[] } | null
 }
@@ -69,6 +70,7 @@ interface ConnectionActions {
   setModels(models: ModelInfo[]): void
   setContextUsage(usage: ContextUsage | null): void
   setMcpServers(servers: McpServerInfo[]): void
+  setLastSeq(seq: number): void
   setRewindPreview(preview: ConnectionState['rewindPreview']): void
   setSubagentMessages(data: ConnectionState['subagentMessages']): void
   reset(): void
@@ -89,6 +91,7 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   models: [],
   contextUsage: null,
   mcpServers: [],
+  lastSeq: 0,
   rewindPreview: null,
   subagentMessages: null,
 
@@ -106,6 +109,7 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   setModels: (models) => set({ models }),
   setContextUsage: (usage) => set({ contextUsage: usage }),
   setMcpServers: (servers) => set({ mcpServers: servers }),
+  setLastSeq: (seq) => set({ lastSeq: seq }),
   setRewindPreview: (preview) => set({ rewindPreview: preview }),
   setSubagentMessages: (data) => set({ subagentMessages: data }),
   reset: () => set({
