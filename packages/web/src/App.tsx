@@ -8,6 +8,7 @@ import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCommandStore } from './stores/commandStore'
 import { useEmbedStore } from './stores/embedStore'
+import { useMultiPanelStore } from './stores/multiPanelStore'
 
 export function App() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
@@ -25,6 +26,23 @@ export function App() {
       useSessionStore.getState().selectProject(embedCwd)
     }
   }, [isEmbed, embedCwd])
+
+  // Auto-add visited sessions to Multi panel list
+  useEffect(() => {
+    if (!currentSessionId || currentSessionId === '__new__') return
+    const { currentProjectCwd, sessions, projects } = useSessionStore.getState()
+    if (!currentProjectCwd) return
+    const sessionList = sessions.get(currentProjectCwd) ?? []
+    const session = sessionList.find((s) => s.sessionId === currentSessionId)
+    const project = projects.find((p) => p.cwd === currentProjectCwd)
+    const projectName = project?.name ?? currentProjectCwd.split(/[/\\]/).pop() ?? ''
+    useMultiPanelStore.getState().addPanel(currentSessionId, {
+      sessionId: currentSessionId,
+      title: session?.title ?? '',
+      projectCwd: currentProjectCwd,
+      projectName,
+    })
+  }, [currentSessionId])
 
   return (
     <>
