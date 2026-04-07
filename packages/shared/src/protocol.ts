@@ -8,6 +8,7 @@ import type { SessionResult } from './session.js'
 export interface C2S_JoinSession {
   type: 'join-session'
   sessionId: string
+  lastSeq?: number  // 客户端已收到的最大序号，用于断线补发
 }
 
 export interface C2S_SendMessage {
@@ -19,6 +20,7 @@ export interface C2S_SendMessage {
     images?: { data: string; mediaType: string }[]
     thinkingMode?: 'adaptive' | 'enabled' | 'disabled'
     effort?: EffortLevel
+    permissionMode?: PermissionMode
   }
 }
 
@@ -334,11 +336,32 @@ export interface C2S_GetSubagentMessages {
   offset?: number
 }
 
+// ---- Heartbeat ----
+
+export interface C2S_Pong {
+  type: 'pong'
+}
+
 export interface S2C_SubagentMessages {
   type: 'subagent-messages'
   sessionId: string
   agentId: string
   messages: AgentMessage[]
+}
+
+// ---- Heartbeat ----
+
+export interface S2C_Ping {
+  type: 'ping'
+}
+
+// ---- Stream Snapshot (for reconnection) ----
+
+export interface S2C_StreamSnapshot {
+  type: 'stream-snapshot'
+  sessionId: string
+  messageId: string
+  blocks: { index: number; type: 'text' | 'thinking'; content: string }[]
 }
 
 export type C2SMessage =
@@ -363,6 +386,7 @@ export type C2SMessage =
   | C2S_ReconnectMcpServer
   | C2S_RewindFiles
   | C2S_GetSubagentMessages
+  | C2S_Pong
 
 export type S2CMessage =
   | S2C_Init
@@ -387,4 +411,6 @@ export type S2CMessage =
   | S2C_McpStatus
   | S2C_RewindResult
   | S2C_SubagentMessages
+  | S2C_Ping
+  | S2C_StreamSnapshot
   | S2C_Error
