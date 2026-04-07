@@ -20,8 +20,10 @@ export function ViewModeToggle() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.code === 'Backquote') {
         e.preventDefault()
-        const next = useSettingsStore.getState().viewMode === 'single' ? 'multi' : 'single'
-        handleSwitch(next)
+        const { viewMode: current, setViewMode: set, setReturnToMulti: setRtm } = useSettingsStore.getState()
+        const next = current === 'single' ? 'multi' : 'single'
+        set(next)
+        if (next === 'multi') setRtm(false)
       }
     }
     window.addEventListener('keydown', handler)
