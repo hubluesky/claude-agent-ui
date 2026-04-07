@@ -3,14 +3,30 @@ import { useConnectionStore } from '../../stores/connectionStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 
-/** Format raw model ID into friendly short name: "claude-opus-4-6" → "Opus 4.6" */
+/** Extract short name from SDK displayName + description.
+ *  "Opus (1M context)" + "Opus 4.6 with 1M context..." → "Opus 4.6" */
+function formatDisplayName(displayName: string, description?: string): string {
+  // Try to extract "Model X.Y" from description (e.g. "Opus 4.6 with 1M context")
+  const verMatch = description?.match(/(\w+)\s+(\d+\.\d+)/)
+  if (verMatch) return `${verMatch[1]} ${verMatch[2]}`
+  // Fallback: strip parenthetical from displayName: "Opus (1M context)" → "Opus"
+  return displayName.replace(/\s*\(.*\)$/, '')
+}
+
+/** Format raw model ID into friendly short name */
 function formatModelId(id: string | undefined): string | undefined {
   if (!id) return undefined
-  // claude-opus-4-6 → Opus 4.6, claude-sonnet-4-6 → Sonnet 4.6, claude-haiku-4-5-20251001 → Haiku 4.5
-  const m = id.match(/claude-(\w+)-(\d+)-(\d+)/)
-  if (m) {
-    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1)
-    return `${name} ${m[2]}.${m[3]}`
+  // "claude-opus-4-6" → "Opus 4.6"
+  const full = id.match(/claude-(\w+)-(\d+)-(\d+)/)
+  if (full) {
+    const name = full[1].charAt(0).toUpperCase() + full[1].slice(1)
+    return `${name} ${full[2]}.${full[3]}`
+  }
+  // "opus[1m]" → "Opus", "sonnet[1m]" → "Sonnet", "haiku" → "Haiku"
+  const short = id.match(/^(\w+?)(?:\[.*\])?$/)
+  if (short) {
+    const name = short[1].charAt(0).toUpperCase() + short[1].slice(1)
+    return name
   }
   return id
 }
@@ -24,9 +40,12 @@ export function ModelSelector() {
   const { send } = useWebSocket()
   const sessionId = useSessionStore((s) => s.currentSessionId)
 
-  // Always show short model name in status bar (Opus 4.6, Sonnet 4.6, etc.)
+  // Show short model name: prefer extracting from models list, fallback to ID parsing
   const hasModels = models.length > 0
-  const displayName = formatModelId(currentModel)
+  const matchedModel = models.find((m) => m.value === currentModel)
+  const displayName = matchedModel
+    ? formatDisplayName(matchedModel.displayName, matchedModel.description)
+    : formatModelId(currentModel)
 
   const handleSelect = (model: string) => {
     if (sessionId && sessionId !== '__new__' && model !== currentModel) {
