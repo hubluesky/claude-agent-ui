@@ -7,7 +7,7 @@ import { HistoryPanel } from './HistoryPanel'
 export function TopBar() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
-  const currentSessions = useSessionStore((s) => s.currentProjectCwd ? s.sessions.get(s.currentProjectCwd) ?? [] : [])
+  const currentSessions = useSessionStore((s) => s.currentProjectCwd ? s.sessions.get(s.currentProjectCwd) : undefined) ?? []
   const selectSession = useSessionStore((s) => s.selectSession)
   const renameSession = useSessionStore((s) => s.renameSession)
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen)

@@ -10,7 +10,7 @@ claude-agent-ui — 基于 Claude Agent SDK 的多终端实时同步 Agent UI。
 
 ```bash
 pnpm install          # 安装依赖
-pnpm dev              # 同时启动 server (3456) + web (5173)
+pnpm dev              # 同时启动 server (4000) + web (5173)
 pnpm build            # 构建所有包 (shared → server → web)
 pnpm lint             # 全包 TypeScript 类型检查
 
@@ -53,7 +53,7 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 - **锁机制**：LockManager 保证单写者语义，锁持有者收到可写审批请求，其他客户端为只读
 - **Agent 会话**：V1QuerySession 调用 SDK query()，通过 canUseTool hook 拦截工具请求，支持 resume（resumeSessionId）
 - **审批超时**：工具审批和 AskUserQuestion 响应超时 5 分钟
-- **Vite 代理**：dev 模式下 /api 和 /ws 代理到 localhost:3456
+- **Vite 代理**：dev 模式下 /api 和 /ws 代理到 localhost:4000
 
 ## Tech Stack
 
@@ -67,6 +67,6 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 
 ## Environment
 
-- Server 默认端口 3456（`PORT` 环境变量可覆盖）
+- Server 默认端口 4000（`PORT` 环境变量可覆盖）
 - SQLite 数据库默认路径 `~/.claude-agent-ui/settings.db`（`DB_PATH` 可覆盖）
 - 无 .env 文件，配置通过环境变量或 `packages/server/src/config.ts` 默认值

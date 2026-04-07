@@ -91,10 +91,12 @@ export class V1QuerySession extends AgentSession {
 
     const queryOptions: Record<string, unknown> = {
       cwd: this._projectCwd,
+      includePartialMessages: true,
       abortController: this.abortController,
       canUseTool: this.handleCanUseTool.bind(this),
       allowDangerouslySkipPermissions: true,
       env: { ...process.env, ...claudeEnv },
+      promptSuggestions: true,
     }
 
     // Resume existing session or use previously captured ID
@@ -116,6 +118,13 @@ export class V1QuerySession extends AgentSession {
       queryOptions.thinking = options.thinkingMode === 'disabled'
         ? { type: 'disabled' }
         : { type: 'adaptive' }
+    }
+
+    if (options?.maxBudgetUsd) {
+      queryOptions.maxBudgetUsd = options.maxBudgetUsd
+    }
+    if (options?.maxTurns) {
+      queryOptions.maxTurns = options.maxTurns
     }
 
     // Pass current permission mode to SDK so it applies from the start
@@ -159,8 +168,10 @@ export class V1QuerySession extends AgentSession {
         // Capture session ID from init message
         if ((msg as any).type === 'system' && (msg as any).subtype === 'init') {
           this.sessionId = (msg as any).session_id
-          // Fetch available slash commands after init
+          // Fetch available slash commands, account info, and models after init
           this.fetchCommands()
+          this.fetchAccountInfo()
+          this.fetchModels()
         }
 
         // Detect synthetic error responses from CLI (e.g. "Not logged in")
@@ -216,6 +227,30 @@ export class V1QuerySession extends AgentSession {
       })))
     }).catch(() => {
       // Non-critical — ignore if commands can't be fetched
+    })
+  }
+
+  async stopTask(taskId: string): Promise<void> {
+    await this.queryInstance?.stopTask?.(taskId)
+  }
+
+  private fetchModels(): void {
+    if (!this.queryInstance) return
+    this.queryInstance.supportedModels().then((models) => {
+      this.emit('models', models)
+    }).catch(() => {})
+  }
+
+  async setModel(model: string): Promise<void> {
+    await this.queryInstance?.setModel?.(model)
+  }
+
+  private fetchAccountInfo(): void {
+    if (!this.queryInstance) return
+    this.queryInstance.accountInfo().then((info) => {
+      this.emit('account-info', info)
+    }).catch(() => {
+      // Non-critical — ignore if account info can't be fetched
     })
   }
 
@@ -438,7 +473,7 @@ export class V1QuerySession extends AgentSession {
       let decision: ToolApprovalDecision | null = null
 
       switch (mode) {
-        // Fully permissive: allow everything
+        // Auto: allow all pending tool approvals (consistent with getAutoDecision)
         case 'auto':
           decision = { behavior: 'allow' }
           break
@@ -476,7 +511,7 @@ export class V1QuerySession extends AgentSession {
 
     // Also resolve pending plan approvals when switching modes
     for (const [requestId, pending] of this.pendingPlanApprovals) {
-      if (mode === 'auto' || mode === 'bypassPermissions') {
+      if (mode === 'bypassPermissions') {
         pending.resolve({ decision: 'auto-accept' })
         this.pendingPlanApprovals.delete(requestId)
       } else if (mode === 'dontAsk') {

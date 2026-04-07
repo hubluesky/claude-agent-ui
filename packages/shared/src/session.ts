@@ -21,6 +21,8 @@ export interface SendOptions {
   images?: { data: string; mediaType: string }[]
   thinkingMode?: 'adaptive' | 'enabled' | 'disabled'
   effort?: EffortLevel
+  maxBudgetUsd?: number
+  maxTurns?: number
 }
 
 export interface SessionResult {

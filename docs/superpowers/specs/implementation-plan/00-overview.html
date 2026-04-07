@@ -41,14 +41,14 @@
 <body>
 
 <h1>Claude Agent UI — 分步实施计划</h1>
-<p class="sub">从简单到复杂，5 个阶段共 26 个功能点 &nbsp;|&nbsp; 2026-04-03</p>
+<p class="sub">从简单到复杂，5 个阶段共 26 个功能点 &nbsp;|&nbsp; 最后更新 2026-04-07</p>
 
 <div class="stats">
-  <div class="stat"><div class="num" style="color:var(--g)">Phase 1</div><div class="label">快速接入<br>6 功能 · ~2天</div></div>
-  <div class="stat"><div class="num" style="color:var(--c)">Phase 2</div><div class="label">消息增强<br>6 功能 · ~3天</div></div>
-  <div class="stat"><div class="num" style="color:var(--y)">Phase 3</div><div class="label">会话管理<br>5 功能 · ~3天</div></div>
-  <div class="stat"><div class="num" style="color:var(--o)">Phase 4</div><div class="label">高级功能<br>5 功能 · ~4天</div></div>
-  <div class="stat"><div class="num" style="color:var(--p)">Phase 5</div><div class="label">体验打磨<br>4 功能 · ~3天</div></div>
+  <div class="stat" style="border-color:var(--g)"><div class="num" style="color:var(--g)">Phase 1</div><div class="label">快速接入<br><b style="color:var(--g)">6/6 ✓</b></div></div>
+  <div class="stat" style="border-color:var(--g)"><div class="num" style="color:var(--c)">Phase 2</div><div class="label">消息增强<br><b style="color:var(--g)">5/5 ✓</b></div></div>
+  <div class="stat" style="border-color:var(--g)"><div class="num" style="color:var(--y)">Phase 3</div><div class="label">会话管理<br><b style="color:var(--g)">5/5 ✓</b></div></div>
+  <div class="stat"><div class="num" style="color:var(--o)">Phase 4</div><div class="label">高级功能<br><b style="color:var(--y)">1/5</b></div></div>
+  <div class="stat"><div class="num" style="color:var(--p)">Phase 5</div><div class="label">体验打磨<br><b style="color:var(--y)">0/4</b></div></div>
 </div>
 
 <h2>阶段导航</h2>
@@ -67,12 +67,12 @@
     <h3><span class="badge b-g">Phase 1</span> 快速接入</h3>
     <p>SDK 已提供 API/消息，只需转发+渲染。改动最小，价值最大。</p>
     <ul class="items">
-      <li style="--c:var(--g)"><span style="color:var(--g)">&#10003;</span> <s>1.1 Auto Mode 真实接入</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
-      <li><span style="color:var(--g)">&#9632;</span> 1.2 Tool Progress 流式耗时指示</li>
-      <li><span style="color:var(--g)">&#9632;</span> 1.3 Rate Limit 事件提示</li>
-      <li><span style="color:var(--g)">&#9632;</span> 1.4 Compaction 状态提示</li>
-      <li><span style="color:var(--g)">&#9632;</span> 1.5 Session Complete 结果卡片（cost/tokens）</li>
-      <li><span style="color:var(--g)">&#9632;</span> 1.6 Account Info 状态栏</li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>1.1 Auto Mode 真实接入</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>1.2 Tool Progress 流式耗时指示</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>1.3 Rate Limit 事件提示</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>1.4 Compaction 状态提示</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>1.5 Session Complete 结果卡片（cost/tokens）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>1.6 Account Info 状态栏</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
     </ul>
   </div>
 
@@ -80,12 +80,12 @@
     <h3><span class="badge b-c">Phase 2</span> 消息增强</h3>
     <p>改善消息渲染质量，让工具结果更可读、更易操作。</p>
     <ul class="items">
-      <li><span style="color:var(--c)">&#9632;</span> 2.1 Task 进度卡片（Started/Progress/Notification）</li>
-      <li><span style="color:var(--c)">&#9632;</span> 2.2 工具结果折叠/展开</li>
-      <li><span style="color:var(--c)">&#9632;</span> 2.3 Diff 渲染组件（Edit/Write 工具结果）</li>
-      <li><span style="color:var(--c)">&#9632;</span> 2.4 代码块增强（复制按钮 + 语言标签）</li>
-      <li><span style="color:var(--c)">&#9632;</span> 2.5 Prompt Suggestions（对话结束推荐）</li>
-      <li><span style="color:var(--c)">&#9632;</span> 2.6 API Retry 提示</li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>2.1 Task 进度卡片（Started/Progress/Notification）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>2.2 工具结果折叠/展开</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>2.3 Diff 渲染组件（Edit/Write 工具结果）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>2.4 代码块增强（复制按钮 + 语言标签）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>2.5 Prompt Suggestions（对话结束推荐）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>2.6 API Retry 提示</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
     </ul>
   </div>
 
@@ -93,11 +93,11 @@
     <h3><span class="badge b-y">Phase 3</span> 会话管理</h3>
     <p>补齐会话生命周期功能，对接 SDK 会话 API。</p>
     <ul class="items">
-      <li><span style="color:var(--y)">&#9632;</span> 3.1 Session Resume（恢复历史会话交互）</li>
-      <li><span style="color:var(--y)">&#9632;</span> 3.2 模型列表 + 动态切换</li>
-      <li><span style="color:var(--y)">&#9632;</span> 3.3 Effort 自适应（模型支持级别感知）</li>
-      <li><span style="color:var(--y)">&#9632;</span> 3.4 Session Fork（从任意消息分叉）</li>
-      <li><span style="color:var(--y)">&#9632;</span> 3.5 Permission Rules 持久化</li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>3.1 Session Resume（恢复历史会话交互）</s> <span style="font-size:.7rem;color:var(--g)">(已有)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>3.2 模型列表 + 动态切换</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>3.3 Effort 自适应（模型支持级别感知）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>3.4 Session Fork（从任意消息分叉）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>3.5 Permission Rules 持久化</s> <span style="font-size:.7rem;color:var(--g)">(SDK 原生)</span></li>
     </ul>
   </div>
 
@@ -108,7 +108,7 @@
       <li><span style="color:var(--o)">&#9632;</span> 4.1 Sub-agent 可视化（树形 + 进度摘要）</li>
       <li><span style="color:var(--o)">&#9632;</span> 4.2 Context Usage 可视化面板</li>
       <li><span style="color:var(--o)">&#9632;</span> 4.3 MCP 服务器管理面板</li>
-      <li><span style="color:var(--o)">&#9632;</span> 4.4 Budget 控制（maxTurns/maxBudgetUsd）</li>
+      <li><span style="color:var(--g)">&#10003;</span> <s>4.4 Budget 控制（maxTurns/maxBudgetUsd）</s> <span style="font-size:.7rem;color:var(--g)">(DONE)</span></li>
       <li><span style="color:var(--o)">&#9632;</span> 4.5 File Checkpoint / Rewind</li>
     </ul>
   </div>
@@ -127,13 +127,13 @@
 
 <h2>依赖关系</h2>
 <div class="timeline">
-  <div class="tl-item"><h4>Phase 1 → 无前置依赖</h4><p>纯 SDK 消息转发 + UI 渲染，可立即开始</p></div>
-  <div class="tl-item"><h4>Phase 2 → 依赖 Phase 1.5（result 卡片）</h4><p>Task 卡片和 Diff 组件需要消息渲染基础</p></div>
-  <div class="tl-item"><h4>Phase 3 → 依赖 Phase 1.6（account info）</h4><p>模型切换需要先有 supportedModels() 数据</p></div>
-  <div class="tl-item"><h4>Phase 4 → 依赖 Phase 2.1（Task 卡片）</h4><p>Sub-agent 可视化构建在 Task 系统之上</p></div>
-  <div class="tl-item"><h4>Phase 5 → 无前置依赖</h4><p>纯 UI 功能，可与任意阶段并行</p></div>
+  <div class="tl-item done"><h4>Phase 1 ✓</h4><p>6/6 完成 — SDK 消息转发 + UI 渲染</p></div>
+  <div class="tl-item done"><h4>Phase 2 ✓</h4><p>5/5 完成 — Task 卡片、Diff、代码块、Prompt Suggestions、API Retry</p></div>
+  <div class="tl-item done"><h4>Phase 3 ✓</h4><p>5/5 完成 — Session Resume/Fork、模型切换、Effort 自适应、Permission Rules (SDK 原生)</p></div>
+  <div class="tl-item"><h4>Phase 4 → 进行中</h4><p>1/5 完成（Budget 控制）。剩余：Sub-agent 可视化、Context Usage、MCP 管理、File Rewind</p></div>
+  <div class="tl-item"><h4>Phase 5 → 未开始</h4><p>纯 UI 功能：搜索、主题、快捷键、导出</p></div>
 </div>
 
-<footer>Claude Agent UI Implementation Plan &nbsp;·&nbsp; 2026-04-03 &nbsp;·&nbsp; 5 phases, 26 features</footer>
+<footer>Claude Agent UI Implementation Plan &nbsp;·&nbsp; Updated 2026-04-07 &nbsp;·&nbsp; 17/26 done + 4 bugs fixed</footer>
 </body>
 </html>

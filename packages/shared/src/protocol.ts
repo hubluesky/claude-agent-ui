@@ -78,6 +78,24 @@ export interface C2S_ClaimLock {
   sessionId: string
 }
 
+export interface C2S_StopTask {
+  type: 'stop-task'
+  sessionId: string
+  taskId: string
+}
+
+export interface C2S_SetModel {
+  type: 'set-model'
+  sessionId: string
+  model: string
+}
+
+export interface C2S_ForkSession {
+  type: 'fork-session'
+  sessionId: string
+  atMessageId?: string
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -91,6 +109,9 @@ export type C2SMessage =
   | C2S_ResolvePlanApproval
   | C2S_ReleaseLock
   | C2S_ClaimLock
+  | C2S_StopTask
+  | C2S_SetModel
+  | C2S_ForkSession
 
 // ============ Server → Client (S2C) ============
 
@@ -213,6 +234,36 @@ export interface S2C_Error {
   code?: 'session_locked' | 'session_not_found' | 'not_lock_holder' | 'internal'
 }
 
+export interface ModelInfo {
+  value: string
+  displayName: string
+  description: string
+  supportsAutoMode?: boolean
+  supportedEffortLevels?: string[]
+}
+
+export interface S2C_Models {
+  type: 'models'
+  sessionId: string
+  models: ModelInfo[]
+}
+
+export interface S2C_AccountInfo {
+  type: 'account-info'
+  sessionId: string
+  email?: string
+  organization?: string
+  subscriptionType?: string
+  apiProvider?: string
+  model?: string
+}
+
+export interface S2C_SessionForked {
+  type: 'session-forked'
+  sessionId: string
+  originalSessionId: string
+}
+
 export type S2CMessage =
   | S2C_Init
   | S2C_SessionState
@@ -229,4 +280,7 @@ export type S2CMessage =
   | S2C_ModeChange
   | S2C_PlanApproval
   | S2C_PlanApprovalResolved
+  | S2C_Models
+  | S2C_AccountInfo
+  | S2C_SessionForked
   | S2C_Error

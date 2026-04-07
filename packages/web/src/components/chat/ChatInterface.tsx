@@ -5,6 +5,7 @@ import { ApprovalPanel } from './ApprovalPanel'
 import { buildToolApprovalConfig, buildPlanApprovalConfig, buildAskUserConfig } from './approval-configs'
 import { PlanModal } from './PlanModal'
 import { ConnectionBanner } from './ConnectionBanner'
+import { StatusBar } from './StatusBar'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useMessageStore } from '../../stores/messageStore'
@@ -47,12 +48,14 @@ export function ChatInterface() {
     } as any)
 
     const sessionId = isNewSession ? null : currentSessionId
-    const { thinkingMode, effort } = useSettingsStore.getState()
+    const { thinkingMode, effort, maxBudgetUsd, maxTurns } = useSettingsStore.getState()
     sendMessage(prompt, sessionId, {
       cwd: currentProjectCwd ?? undefined,
       images,
       thinkingMode,
       effort,
+      ...(maxBudgetUsd ? { maxBudgetUsd } : {}),
+      ...(maxTurns ? { maxTurns } : {}),
     })
   }, [currentSessionId, currentProjectCwd, sendMessage, isNewSession])
 
@@ -111,6 +114,7 @@ export function ChatInterface() {
       ) : (
         <ChatComposer onSend={handleSend} onAbort={handleAbort} />
       )}
+      <StatusBar />
       <PlanModal />
     </div>
   )

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Updated Gap Analysis — Claude Agent UI vs SDK</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--tm:#8b949e;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;padding:2rem;max-width:1300px;margin:0 auto}
+  h1{font-size:1.8rem;margin-bottom:.3rem;background:linear-gradient(135deg,var(--a),var(--p));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{color:var(--tm);font-size:.9rem;margin-bottom:2rem;border-bottom:1px solid var(--bd);padding-bottom:1rem}
+  h2{font-size:1.3rem;margin:2.5rem 0 .75rem;color:var(--a);display:flex;align-items:center;gap:.5rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .5rem;color:var(--p)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;margin:1.5rem 0}
+  .stat{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:1rem;text-align:center}
+  .stat .num{font-size:2rem;font-weight:700;line-height:1}
+  .stat .label{color:var(--tm);font-size:.75rem;margin-top:.2rem}
+  .badge{display:inline-block;padding:.1rem .45rem;border-radius:9999px;font-size:.7rem;font-weight:600}
+  .b-done{background:rgba(63,185,80,.15);color:var(--g)}.b-new{background:rgba(63,185,80,.3);color:var(--g);border:1px solid rgba(63,185,80,.4)}
+  .b-partial{background:rgba(210,153,34,.15);color:var(--y)}.b-missing{background:rgba(248,81,73,.15);color:var(--r)}
+  .b-sdk{background:rgba(188,140,255,.15);color:var(--p)}.b-ui{background:rgba(57,210,192,.15);color:var(--c)}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.85rem}
+  th,td{padding:.5rem .7rem;text-align:left;border-bottom:1px solid var(--bd)}
+  th{background:var(--s2);color:var(--a);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+  tr:hover td{background:rgba(88,166,255,.03)}
+  tr.done{opacity:.55}tr.done td:first-child{text-decoration:line-through}
+  code{background:var(--s2);padding:.1rem .3rem;border-radius:4px;font-size:.78rem;color:var(--p);font-family:'SF Mono','Cascadia Code',monospace}
+  .tw{overflow-x:auto;border:1px solid var(--bd);border-radius:8px}
+  .tw table{margin:0}
+  .note{background:rgba(63,185,80,.08);border-left:3px solid var(--g);padding:.6rem .8rem;border-radius:0 6px 6px 0;font-size:.85rem;color:var(--tm);margin:.75rem 0}
+  .warn{background:rgba(248,81,73,.08);border-left:3px solid var(--r);padding:.6rem .8rem;border-radius:0 6px 6px 0;font-size:.85rem;color:var(--tm);margin:.75rem 0}
+  .card{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:1rem 1.25rem;margin:.75rem 0}
+  .nav{display:flex;justify-content:space-between;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--bd);font-size:.85rem}
+  a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+  footer{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--tm);font-size:.8rem;text-align:center}
+</style>
+</head>
+<body>
+
+<h1>Updated Gap Analysis — 2026-04-03 (v2)</h1>
+<p class="sub">项目经过一段时间开发后重新扫描。对比当前实现 vs Claude Agent SDK v0.2.91 完整 API。</p>
+
+<div class="note">
+  <strong>好消息：</strong>相比初始分析，项目已完成大量功能。消息类型覆盖从 3 种增加到 11 种，系统子类型覆盖 13 种，SDK 利用率显著提升。
+</div>
+
+<!-- ========== Summary Stats ========== -->
+<div class="stats">
+  <div class="stat"><div class="num" style="color:var(--g)">17</div><div class="label">SDK 消息类型<br>已处理</div></div>
+  <div class="stat"><div class="num" style="color:var(--g)">7</div><div class="label">SDK 控制方法<br>已使用</div></div>
+  <div class="stat"><div class="num" style="color:var(--r)">12</div><div class="label">SDK 控制方法<br>未使用</div></div>
+  <div class="stat"><div class="num" style="color:var(--y)">8</div><div class="label">SDK Options<br>未传入</div></div>
+  <div class="stat"><div class="num" style="color:var(--g)">63%</div><div class="label">SDK 利用率<br>(↑ from 39%)</div></div>
+</div>
+
+<!-- ========== Section 1: SDK Messages ========== -->
+<h2>一、SDK 消息类型覆盖</h2>
+
+<div class="tw">
+<table>
+  <thead><tr><th>SDK 消息类型</th><th>messages.ts</th><th>MessageComponent 渲染</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr class="done"><td>SDKAssistantMessage</td><td>&#10003; <code>assistant</code></td><td>&#10003; 完整渲染（thinking/tool_use/text）</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKUserMessage</td><td>&#10003; <code>user</code></td><td>&#10003; 气泡+图片+tool_result</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKResultMessage</td><td>&#10003; <code>result</code></td><td>&#10003; 5 种子类型（success/error_*）</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKSystemMessage (init)</td><td>&#10003; <code>system.init</code></td><td>&#10003; 捕获 session_id</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKStatusMessage (compacting)</td><td>&#10003; <code>system.status</code></td><td>&#10003; 压缩 spinner</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKCompactBoundaryMessage</td><td>&#10003; <code>system.compact_boundary</code></td><td>&#10003; 折叠摘要</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKAPIRetryMessage</td><td>&#10003; <code>system.api_retry</code></td><td>&#10003; 重试 spinner</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKTaskStartedMessage</td><td>&#10003; <code>system.task_started</code></td><td>&#10003; agent start badge</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKTaskProgressMessage</td><td>&#10003; <code>system.task_progress</code></td><td>&#10003; 进度指示器</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKTaskNotificationMessage</td><td>&#10003; <code>system.task_notification</code></td><td>&#10003; 状态 badge</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKToolProgressMessage</td><td>&#10003; <code>tool_progress</code></td><td>&#10003; progress spinner</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKToolUseSummaryMessage</td><td>&#10003; <code>tool_use_summary</code></td><td>&#10003; 摘要块</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKRateLimitEvent</td><td>&#10003; <code>rate_limit_event</code></td><td>&#10003; 错误提示</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKPartialAssistantMessage</td><td>&#10003; <code>stream_event</code></td><td>&#10003; 流式渲染</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr class="done"><td>SDKLocalCommandOutputMessage</td><td>&#10003; <code>system.local_command_output</code></td><td>&#10003; 代码块</td><td><span class="badge b-done">DONE</span></td></tr>
+    <tr><td>SDKPromptSuggestionMessage</td><td>&#10003; <code>prompt_suggestion</code></td><td>&#10007; 类型已定义但未渲染</td><td><span class="badge b-partial">待渲染</span></td></tr>
+    <tr class="done"><td>SDKHookStarted/Progress/Response</td><td>&#10003; <code>system.hook_*</code></td><td>&#10003; 类型已定义</td><td><span class="badge b-partial">已转发</span></td></tr>
+    <tr class="done"><td>SDKAuthStatusMessage</td><td>&#10003; <code>auth_status</code></td><td>&#8212;</td><td><span class="badge b-done">已转发</span></td></tr>
+    <tr class="done"><td>SDKSessionStateChangedMessage</td><td>&#10003; <code>system.session_state_changed</code></td><td>&#8212;</td><td><span class="badge b-done">已处理</span></td></tr>
+    <tr class="done"><td>SDKFilesPersistedEvent</td><td>&#10003; <code>system.files_persisted</code></td><td>&#8212;</td><td><span class="badge b-done">已转发</span></td></tr>
+    <tr><td>SDKElicitationCompleteMessage</td><td>&#10003; <code>system.elicitation_complete</code></td><td>&#10007; 类型已定义但无 UI</td><td><span class="badge b-partial">待实现</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note"><strong>覆盖率：21/23 消息类型已定义</strong>（91%），其中 17 种已有 UI 渲染。仅 prompt_suggestion 和 elicitation 需要 UI 补充。</div>
+
+<!-- ========== Section 2: SDK Control Methods ========== -->
+<h2>二、SDK Query 控制方法使用情况</h2>
+
+<div class="tw">
+<table>
+  <thead><tr><th>SDK 方法</th><th>状态</th><th>当前用法 / 缺失说明</th></tr></thead>
+  <tbody>
+    <tr class="done"><td><code>supportedCommands()</code></td><td><span class="badge b-done">已用</span></td><td>init 后获取斜杠命令列表</td></tr>
+    <tr class="done"><td><code>setPermissionMode(mode)</code></td><td><span class="badge b-done">已用</span></td><td>含 auto mode 正确传递</td></tr>
+    <tr class="done"><td><code>interrupt()</code></td><td><span class="badge b-done">已用</span></td><td>abort 时调用</td></tr>
+    <tr class="done"><td><code>close()</code></td><td><span class="badge b-done">已用</span></td><td>session 关闭时</td></tr>
+    <tr class="done"><td><code>listSessions()</code></td><td><span class="badge b-done">已用</span></td><td>via SessionManager</td></tr>
+    <tr class="done"><td><code>renameSession()</code></td><td><span class="badge b-done">已用</span></td><td>via REST API</td></tr>
+    <tr class="done"><td><code>tagSession()</code></td><td><span class="badge b-done">已用</span></td><td>via REST API</td></tr>
+    <tr><td><code>supportedModels()</code></td><td><span class="badge b-missing">未用</span></td><td>无模型选择器。需新增模型列表 API + UI</td></tr>
+    <tr><td><code>setModel(model)</code></td><td><span class="badge b-missing">未用</span></td><td>无动态切换。需配合 supportedModels</td></tr>
+    <tr><td><code>accountInfo()</code></td><td><span class="badge b-missing">未用</span></td><td>无账户信息显示。需状态栏</td></tr>
+    <tr><td><code>getContextUsage()</code></td><td><span class="badge b-missing">未用</span></td><td>无上下文可视化。需面板</td></tr>
+    <tr><td><code>mcpServerStatus()</code></td><td><span class="badge b-missing">未用</span></td><td>无 MCP 管理。需面板</td></tr>
+    <tr><td><code>toggleMcpServer()</code></td><td><span class="badge b-missing">未用</span></td><td>同上</td></tr>
+    <tr><td><code>reconnectMcpServer()</code></td><td><span class="badge b-missing">未用</span></td><td>同上</td></tr>
+    <tr><td><code>setMcpServers()</code></td><td><span class="badge b-missing">未用</span></td><td>同上</td></tr>
+    <tr><td><code>rewindFiles()</code></td><td><span class="badge b-missing">未用</span></td><td>无文件回退功能。需 enableFileCheckpointing</td></tr>
+    <tr><td><code>stopTask(taskId)</code></td><td><span class="badge b-missing">未用</span></td><td>无停止 task 按钮。可加到 TaskCard</td></tr>
+    <tr><td><code>forkSession()</code></td><td><span class="badge b-missing">未用</span></td><td>无会话分叉。需 UI 入口</td></tr>
+    <tr><td><code>listSubagents()</code></td><td><span class="badge b-missing">未用</span></td><td>无子 agent 浏览</td></tr>
+    <tr><td><code>getSubagentMessages()</code></td><td><span class="badge b-missing">未用</span></td><td>无子 agent 消息查看</td></tr>
+    <tr><td><code>supportedAgents()</code></td><td><span class="badge b-missing">未用</span></td><td>无 agent 列表</td></tr>
+    <tr><td><code>reloadPlugins()</code></td><td><span class="badge b-missing">未用</span></td><td>低优先级</td></tr>
+    <tr><td><code>applyFlagSettings()</code></td><td><span class="badge b-missing">未用</span></td><td>低优先级</td></tr>
+    <tr><td><code>seedReadState()</code></td><td><span class="badge b-missing">未用</span></td><td>低优先级，性能优化</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ========== Section 3: SDK Options ========== -->
+<h2>三、SDK Query Options 使用情况</h2>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Option 字段</th><th>状态</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr class="done"><td><code>cwd</code></td><td><span class="badge b-done">已传</span></td><td>&#10003;</td></tr>
+    <tr class="done"><td><code>abortController</code></td><td><span class="badge b-done">已传</span></td><td>&#10003;</td></tr>
+    <tr class="done"><td><code>canUseTool</code></td><td><span class="badge b-done">已传</span></td><td>&#10003; 完整实现</td></tr>
+    <tr class="done"><td><code>env</code></td><td><span class="badge b-done">已传</span></td><td>&#10003; 从 ~/.claude/settings.json</td></tr>
+    <tr class="done"><td><code>resume</code></td><td><span class="badge b-done">已传</span></td><td>&#10003; 连续消息和 resumeSessionId</td></tr>
+    <tr class="done"><td><code>effort</code></td><td><span class="badge b-done">已传</span></td><td>&#10003;</td></tr>
+    <tr class="done"><td><code>thinking</code></td><td><span class="badge b-done">已传</span></td><td>&#10003; adaptive/disabled</td></tr>
+    <tr class="done"><td><code>permissionMode</code></td><td><span class="badge b-done">已传</span></td><td>&#10003; 含 auto</td></tr>
+    <tr class="done"><td><code>allowDangerouslySkipPermissions</code></td><td><span class="badge b-done">已传</span></td><td>&#10003; true</td></tr>
+    <tr><td><code>promptSuggestions</code></td><td><span class="badge b-missing">未传</span></td><td>类型已定义但未启用。设 <code>true</code> 即可</td></tr>
+    <tr><td><code>agentProgressSummaries</code></td><td><span class="badge b-missing">未传</span></td><td>需配合 sub-agent 可视化</td></tr>
+    <tr><td><code>enableFileCheckpointing</code></td><td><span class="badge b-missing">未传</span></td><td>需配合 rewindFiles</td></tr>
+    <tr><td><code>maxBudgetUsd</code></td><td><span class="badge b-missing">未传</span></td><td>需 Budget 设置 UI</td></tr>
+    <tr><td><code>maxTurns</code></td><td><span class="badge b-missing">未传</span></td><td>需 Budget 设置 UI</td></tr>
+    <tr><td><code>hooks</code></td><td><span class="badge b-missing">未传</span></td><td>SDK hooks 系统，可扩展</td></tr>
+    <tr><td><code>onElicitation</code></td><td><span class="badge b-missing">未传</span></td><td>MCP 认证流程</td></tr>
+    <tr><td><code>includeHookEvents</code></td><td><span class="badge b-missing">未传</span></td><td>hook 事件已定义类型但未启用</td></tr>
+    <tr><td><code>allowedTools</code></td><td><span class="badge b-missing">未传</span></td><td>需配合 Permission Rules 持久化</td></tr>
+    <tr><td><code>model</code></td><td><span class="badge b-missing">未传</span></td><td>需配合模型选择器</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ========== Section 4: Updated Plan ========== -->
+<h2>四、更新后的实施计划</h2>
+
+<div class="note"><strong>Phase 1 原计划 6 项，现已全部完成或已有实现。</strong>可直接跳到 Phase 2+。</div>
+
+<h3>Phase 1 (快速接入) — 状态更新</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>功能</th><th>原状态</th><th>当前状态</th><th>备注</th></tr></thead>
+  <tbody>
+    <tr class="done"><td>1.1 Auto Mode</td><td>P0</td><td><span class="badge b-done">DONE</span></td><td>SDK 原生支持，代码已修复</td></tr>
+    <tr class="done"><td>1.2 Tool Progress 耗时</td><td>待实现</td><td><span class="badge b-done">DONE</span></td><td>tool_progress 消息已渲染为 spinner</td></tr>
+    <tr class="done"><td>1.3 Rate Limit 事件</td><td>待实现</td><td><span class="badge b-done">DONE</span></td><td>rate_limit_event 已渲染为错误提示</td></tr>
+    <tr class="done"><td>1.4 Compaction 状态</td><td>待实现</td><td><span class="badge b-done">DONE</span></td><td>compacting spinner + compact_boundary 折叠摘要</td></tr>
+    <tr class="done"><td>1.5 Session Complete 结果</td><td>待实现</td><td><span class="badge b-done">DONE</span></td><td>result 消息 5 种子类型全部渲染</td></tr>
+    <tr><td>1.6 Account Info + 状态栏</td><td>待实现</td><td><span class="badge b-missing">未实现</span></td><td>accountInfo() 未调用，无状态栏</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Phase 2 (消息增强) — 状态更新</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>功能</th><th>原状态</th><th>当前状态</th><th>备注</th></tr></thead>
+  <tbody>
+    <tr class="done"><td>2.1 Task 进度卡片</td><td>待实现</td><td><span class="badge b-done">DONE</span></td><td>task_started/progress/notification 已渲染</td></tr>
+    <tr><td>2.2 工具结果折叠/展开</td><td>待实现</td><td><span class="badge b-partial">部分</span></td><td>tool result 有展开/折叠，但阈值和 UI 可优化</td></tr>
+    <tr><td>2.3 Diff 渲染</td><td>待实现</td><td><span class="badge b-missing">未实现</span></td><td>Edit 工具显示 old/new 文本但非 diff 视图</td></tr>
+    <tr><td>2.4 代码块增强（复制按钮）</td><td>待实现</td><td><span class="badge b-missing">未实现</span></td><td>MarkdownRenderer 无 copy 按钮</td></tr>
+    <tr><td>2.5 Prompt Suggestions</td><td>待实现</td><td><span class="badge b-partial">类型已有</span></td><td>messages.ts 有类型，但未启用 option 且未渲染</td></tr>
+    <tr class="done"><td>2.6 API Retry 提示</td><td>待实现</td><td><span class="badge b-done">DONE</span></td><td>api_retry 已渲染为重试 spinner</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Phase 3-5 — 状态不变（均未开始）</h3>
+<p style="font-size:.85rem;color:var(--tm)">Phase 3（Session Resume/模型切换/Fork/Permission Rules）、Phase 4（Sub-agent/Context/MCP/Budget/Rewind）、Phase 5（搜索/主题/快捷键/导出）均未开始实施。</p>
+
+<!-- ========== Section 5: Revised Priority ========== -->
+<h2>五、修订后的优先级</h2>
+
+<div class="card" style="border-left:3px solid var(--g)">
+  <h3 style="color:var(--g);margin-top:0">Next Up — 最小投入最大价值</h3>
+  <table>
+    <tbody>
+      <tr><td style="width:40px"><span class="badge b-new">NEW</span></td><td><strong>Prompt Suggestions</strong> — 仅需 v1-session.ts 加 <code>promptSuggestions: true</code> + MessageComponent 渲染</td><td>~1h</td></tr>
+      <tr><td><span class="badge b-ui">UI</span></td><td><strong>代码块 Copy 按钮</strong> — MarkdownRenderer 修改</td><td>~1h</td></tr>
+      <tr><td><span class="badge b-ui">UI</span></td><td><strong>Diff 渲染</strong> — Edit 工具结果用 diff 组件替代纯文本</td><td>~3h</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Account Info + 状态栏</strong> — accountInfo() + 底部信息栏</td><td>~3h</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="border-left:3px solid var(--y)">
+  <h3 style="color:var(--y);margin-top:0">Short-term — SDK API 对接</h3>
+  <table>
+    <tbody>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>模型列表 + 切换</strong> — supportedModels() + setModel()</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Context Usage 面板</strong> — getContextUsage() + 可视化</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Session Resume UI</strong> — 侧边栏恢复交互入口</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Budget 控制</strong> — maxBudgetUsd + maxTurns</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Stop Task 按钮</strong> — stopTask() 加到 TaskCard</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="border-left:3px solid var(--o)">
+  <h3 style="color:var(--o);margin-top:0">Medium-term — 高级功能</h3>
+  <table>
+    <tbody>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>MCP 管理面板</strong> — mcpServerStatus/toggle/reconnect</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Sub-agent 可视化</strong> — listSubagents + getSubagentMessages + agentProgressSummaries</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>File Rewind</strong> — enableFileCheckpointing + rewindFiles</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Session Fork</strong> — forkSession()</td></tr>
+      <tr><td><span class="badge b-sdk">SDK</span></td><td><strong>Permission Rules 持久化</strong> — allowedTools + DB</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="border-left:3px solid var(--p)">
+  <h3 style="color:var(--p);margin-top:0">Polish — 纯 UI</h3>
+  <table>
+    <tbody>
+      <tr><td><span class="badge b-ui">UI</span></td><td>消息搜索 (Ctrl+F)</td></tr>
+      <tr><td><span class="badge b-ui">UI</span></td><td>主题系统（深色/浅色）</td></tr>
+      <tr><td><span class="badge b-ui">UI</span></td><td>快捷键系统</td></tr>
+      <tr><td><span class="badge b-ui">UI</span></td><td>Session 导出</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ========== Section 6: Potential Issues ========== -->
+<h2>六、发现的潜在问题</h2>
+
+<div class="warn">
+  <strong>1. auto mode canUseTool 逻辑：</strong><code>getAutoDecision('auto')</code> 返回 <code>null</code> 是正确的（让 SDK 分类器处理）。但 <code>resolvePendingForMode()</code> 中 <code>case 'auto'</code> 仍和 <code>bypassPermissions</code> 一起 auto-allow 所有 pending。这意味着切换到 auto mode 时会立即放行所有等待中的审批，而不是让分类器重新评估。这可能不是期望行为。
+</div>
+
+<div class="warn">
+  <strong>2. Rate Limit 渲染：</strong>当前 rate_limit_event 渲染为普通错误提示。但 SDK 返回的 <code>SDKRateLimitInfo</code> 包含 <code>resetsAt</code>（重置时间）、<code>utilization</code>（用量百分比）、<code>status</code>（allowed_warning vs rejected）等丰富信息。当前可能未区分 warning 和 rejected 状态。
+</div>
+
+<div class="warn">
+  <strong>3. Tool Progress 渲染：</strong>当前渲染为 spinner + 截断内容。SDK 的 <code>SDKToolProgressMessage</code> 包含 <code>elapsed_time_seconds</code> 字段，可以显示实时耗时。需确认是否已利用此字段。
+</div>
+
+<div class="warn">
+  <strong>4. Prompt Suggestion：</strong>消息类型 <code>prompt_suggestion</code> 已定义在 messages.ts 中，但 query options 未传 <code>promptSuggestions: true</code>，SDK 不会生成此消息。需要同时启用 option + 添加渲染。
+</div>
+
+<footer>
+  Updated Gap Analysis v2 &nbsp;·&nbsp; 2026-04-03 &nbsp;·&nbsp; claude-agent-ui vs Claude Agent SDK v0.2.91
+  <br><a href="index.html">返回文档中心</a>
+</footer>
+</body>
+</html>

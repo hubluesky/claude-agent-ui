@@ -3,6 +3,8 @@ import type { AgentMessage } from '@claude-agent-ui/shared'
 import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
 import { ToolIcon, formatToolSummary } from './tool-display'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { useWebSocket } from '../../hooks/useWebSocket'
+import { useSessionStore } from '../../stores/sessionStore'
 
 interface MessageComponentProps {
   message: AgentMessage
@@ -177,8 +179,9 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       return false
     })
     if (!hasVisibleContent) return null
+    const msgUuid = (message as any).uuid as string | undefined
     return (
-      <div className="flex gap-3 items-start">
+      <div className="group/msg relative flex gap-3 items-start">
         <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
           <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
         </div>
@@ -218,6 +221,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
             return null
           })}
         </div>
+        {msgUuid && <ForkButton messageId={msgUuid} />}
       </div>
     )
   }
@@ -296,13 +300,15 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       )
     }
     if (sub === 'task_started') {
+      const taskId = (message as any).task_id
       return (
         <div className="flex items-center gap-2 text-xs text-[#a855f7] bg-[#a855f70a] border border-[#a855f726] rounded-md px-3 py-2 ml-10">
           <svg className="w-3.5 h-3.5 text-[#a855f7]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197" />
           </svg>
-          Agent: {(message as any).agent_name ?? (message as any).task_id ?? 'subagent'}
+          <span className="flex-1">Agent: {(message as any).agent_name ?? taskId ?? 'subagent'}</span>
           <span className="text-[#a855f780] bg-[#a855f71a] px-1.5 py-0.5 rounded text-[10px]">running</span>
+          {taskId && <StopTaskButton taskId={taskId} />}
         </div>
       )
     }
@@ -367,32 +373,117 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
   if (message.type === 'tool_progress') {
     const content = (message as any).content ?? ''
     if (!content) return null
+    const rawElapsed = (message as any).elapsed_time_seconds
+    const elapsed = typeof rawElapsed === 'number' ? rawElapsed : undefined
+    const elapsedStr = elapsed != null ? `${elapsed.toFixed(1)}s` : null
     return (
       <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10">
         <svg className="w-3 h-3 text-[#059669] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
         </svg>
         <span className="truncate">{typeof content === 'string' ? content : JSON.stringify(content).slice(0, 150)}</span>
+        {elapsedStr && <span className="text-[#5c5954] tabular-nums shrink-0">{elapsedStr}</span>}
       </div>
     )
   }
 
-  // Rate limit event
+  // Rate limit event — distinguish warning vs rejected
   if (message.type === 'rate_limit_event') {
+    const rlType = (message as any).rate_limit_type ?? (message as any).subtype
+    const isWarning = rlType === 'allowed_warning'
+    const retryAfter = (message as any).retry_after ?? 30
+    const wrapCls = isWarning
+      ? 'bg-[#f59e0b0a] border border-[#f59e0b26]'
+      : 'bg-[#f871710a] border border-[#f8717126]'
+    const dotCls = isWarning ? 'bg-[#f59e0b]' : 'bg-[#f87171]'
+    const textCls = isWarning ? 'text-[#f59e0b]' : 'text-[#f87171]'
     return (
-      <div className="flex items-center gap-2 bg-[#f871710a] border border-[#f8717126] rounded-md px-4 py-3">
-        <div className="w-5 h-5 rounded-full bg-[#f87171] flex items-center justify-center shrink-0">
-          <span className="text-[11px] font-bold text-[#1c1b18]">!</span>
+      <div className={`flex items-center gap-2 rounded-md px-4 py-3 ${wrapCls}`}>
+        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${dotCls}`}>
+          <span className="text-[11px] font-bold text-[#1c1b18]">{isWarning ? '⚠' : '!'}</span>
         </div>
-        <p className="text-xs text-[#f87171]">
-          Rate limit exceeded. Retrying in {(message as any).retry_after ?? 30}s...
+        <p className={`text-xs ${textCls}`}>
+          {isWarning
+            ? 'Approaching rate limit. Requests may slow down.'
+            : `Rate limit exceeded. Retrying in ${retryAfter}s...`}
         </p>
       </div>
     )
   }
 
+  // Prompt suggestion
+  if (message.type === 'prompt_suggestion') {
+    const suggestion = (message as any).suggestion as string
+    if (!suggestion) return null
+    return <PromptSuggestionCard suggestion={suggestion} />
+  }
+
   return null
 })
+
+// ---- Stop Task Button ----
+
+function ForkButton({ messageId }: { messageId: string }) {
+  const { forkSession } = useWebSocket()
+  const sessionId = useSessionStore((s) => s.currentSessionId)
+
+  const handleFork = () => {
+    if (sessionId && sessionId !== '__new__') {
+      forkSession(sessionId, messageId)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleFork}
+      className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 transition-opacity px-2 py-1 text-[10px] text-[#a8a29e] bg-[#242320] border border-[#3d3b37] rounded-md hover:text-[#d97706] hover:border-[#d97706] cursor-pointer"
+      title="Fork — 从这条消息分叉新会话"
+    >
+      ⚲ Fork
+    </button>
+  )
+}
+
+function StopTaskButton({ taskId }: { taskId: string }) {
+  const { send } = useWebSocket()
+  const sessionId = useSessionStore((s) => s.currentSessionId)
+
+  const handleStop = () => {
+    if (sessionId && sessionId !== '__new__') {
+      send({ type: 'stop-task', sessionId, taskId } as any)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleStop}
+      className="px-1.5 py-0.5 text-[10px] text-[#f87171] bg-[#f871710a] border border-[#f8717126] rounded hover:bg-[#f871711a] transition-colors cursor-pointer"
+      title="Stop this task"
+    >
+      Stop
+    </button>
+  )
+}
+
+// ---- Prompt Suggestion Card ----
+
+function PromptSuggestionCard({ suggestion }: { suggestion: string }) {
+  const handleClick = () => {
+    useSessionStore.getState().setComposerDraft(suggestion)
+  }
+
+  return (
+    <div className="ml-10 mt-1">
+      <button
+        onClick={handleClick}
+        className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-[#3d3b37] bg-[#1e1d1a] hover:border-[#d97706] hover:bg-[#d977060a] transition-colors text-left cursor-pointer"
+      >
+        <span className="text-[#d97706] text-xs shrink-0">&#10148;</span>
+        <span className="text-xs text-[#a8a29e] group-hover:text-[#e5e2db] transition-colors">{suggestion}</span>
+      </button>
+    </div>
+  )
+}
 
 // ---- Tool Use Block ----
 
@@ -476,6 +567,37 @@ function ToolResultBlock({ block }: { block: any }) {
   )
 }
 
+// ---- Inline Diff ----
+
+function InlineDiff({ filePath, oldStr, newStr }: { filePath?: string; oldStr: string; newStr: string }) {
+  const oldLines = oldStr.split('\n')
+  const newLines = newStr.split('\n')
+
+  return (
+    <div className="font-mono text-[11px] leading-[1.6]">
+      {filePath && <div className="text-[10px] text-[#7c7872] mb-1 font-sans">{filePath}</div>}
+      <div className="rounded overflow-hidden border border-[#3d3b37]">
+        {oldLines.map((line, i) => (
+          <div key={`d${i}`} className="flex bg-[#f871710a]">
+            <span className="w-8 text-right pr-2 text-[#f8717166] select-none shrink-0 border-r border-[#3d3b37]">{i + 1}</span>
+            <span className="px-2 text-[#f87171cc] whitespace-pre-wrap break-all">- {line}</span>
+          </div>
+        ))}
+        {newLines.map((line, i) => (
+          <div key={`a${i}`} className="flex bg-[#3fb95010]">
+            <span className="w-8 text-right pr-2 text-[#3fb95066] select-none shrink-0 border-r border-[#3d3b37]">{i + 1}</span>
+            <span className="px-2 text-[#3fb950cc] whitespace-pre-wrap break-all">+ {line}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-3 mt-1 text-[10px] text-[#7c7872] font-sans">
+        <span className="text-[#f87171]">-{oldLines.length}</span>
+        <span className="text-[#3fb950]">+{newLines.length}</span>
+      </div>
+    </div>
+  )
+}
+
 // ---- Format ----
 
 function getToolDetail(toolName: string, input: any): React.ReactNode | null {
@@ -489,22 +611,8 @@ function getToolDetail(toolName: string, input: any): React.ReactNode | null {
         </div>
       ) : null
     case 'Edit':
-      if (input.old_string && input.new_string) {
-        return (
-          <div>
-            <div className="text-[10px] text-[#7c7872] mb-1">{input.file_path}</div>
-            <div className="bg-[#f871710a] border-l-2 border-[#f87171] pl-2 py-1 mb-1">
-              {input.old_string.split('\n').map((line: string, i: number) => (
-                <div key={i} className="text-[#f8717199]">- {line}</div>
-              ))}
-            </div>
-            <div className="bg-[#a3e6350a] border-l-2 border-[#a3e635] pl-2 py-1">
-              {input.new_string.split('\n').map((line: string, i: number) => (
-                <div key={i} className="text-[#a3e63599]">+ {line}</div>
-              ))}
-            </div>
-          </div>
-        )
+      if (input.old_string != null && input.new_string != null) {
+        return <InlineDiff filePath={input.file_path} oldStr={input.old_string} newStr={input.new_string} />
       }
       return null
     case 'Write':

@@ -28,7 +28,7 @@ function findStaticDir(): string | null {
 
 export function loadConfig(): AppConfig {
   return {
-    port: parseInt(process.env.PORT ?? '3456'),
+    port: parseInt(process.env.PORT ?? '4000'),
     host: process.env.HOST ?? '0.0.0.0',
     dbPath: process.env.DB_PATH ?? join(homedir(), '.claude-agent-ui', 'settings.db'),
     staticDir: findStaticDir(),

@@ -7,6 +7,7 @@ import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
 import { V1QuerySession } from '../agent/v1-session.js'
+import { forkSession } from '@anthropic-ai/claude-agent-sdk'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 
@@ -108,6 +109,24 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'resolve-plan-approval':
         await handleResolvePlanApproval(connectionId, msg.sessionId, msg.requestId, msg.decision, msg.feedback)
         break
+      case 'stop-task': {
+        const session = sessionManager.getActive(msg.sessionId)
+        if (session && 'stopTask' in session) {
+          (session as any).stopTask(msg.taskId).catch(() => {})
+        }
+        break
+      }
+      case 'set-model': {
+        const session = sessionManager.getActive(msg.sessionId)
+        if (session && 'setModel' in session) {
+          (session as any).setModel(msg.model).catch(() => {})
+        }
+        break
+      }
+      case 'fork-session': {
+        await handleForkSession(connectionId, msg.sessionId, msg.atMessageId)
+        break
+      }
     }
   }
 
@@ -352,6 +371,31 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     })
 
+    session.on('models', (models: any[]) => {
+      wsHub.broadcast(realSessionId, {
+        type: 'models',
+        sessionId: realSessionId,
+        models: models.map((m: any) => ({
+          value: m.value,
+          displayName: m.displayName,
+          description: m.description,
+          supportsAutoMode: m.supportsAutoMode,
+          supportedEffortLevels: m.supportedEffortLevels,
+        })),
+      })
+    })
+
+    session.on('account-info', (info: any) => {
+      wsHub.broadcast(realSessionId, {
+        type: 'account-info',
+        sessionId: realSessionId,
+        email: info.email,
+        organization: info.organization,
+        subscriptionType: info.subscriptionType,
+        apiProvider: info.apiProvider,
+      })
+    })
+
     session.on('state-change', (state) => {
       wsHub.broadcast(realSessionId, {
         type: 'session-state-change',
@@ -498,6 +542,25 @@ export function createWsHandler(deps: HandlerDeps) {
 
     wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId })
     wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
+  }
+
+  async function handleForkSession(connectionId: string, sessionId: string, atMessageId?: string) {
+    try {
+      const result = await forkSession(sessionId, {
+        upToMessageId: atMessageId,
+      })
+      wsHub.sendTo(connectionId, {
+        type: 'session-forked',
+        sessionId: result.sessionId,
+        originalSessionId: sessionId,
+      } as any)
+    } catch (err: any) {
+      wsHub.sendTo(connectionId, {
+        type: 'error',
+        message: `Fork failed: ${err.message ?? 'unknown error'}`,
+        code: 'internal',
+      })
+    }
   }
 
   function handleReleaseLock(connectionId: string, sessionId: string) {

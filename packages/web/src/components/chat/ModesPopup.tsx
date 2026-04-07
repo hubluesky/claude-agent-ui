@@ -1,10 +1,15 @@
+import { useState } from 'react'
 import type { PermissionMode, EffortLevel } from '@claude-agent-ui/shared'
 
 interface ModesPopupProps {
   currentMode: PermissionMode
   currentEffort: EffortLevel
+  maxBudgetUsd: number | null
+  maxTurns: number | null
+  supportedEffortLevels?: string[]
   onModeChange: (mode: PermissionMode) => void
   onEffortChange: (effort: EffortLevel) => void
+  onBudgetChange: (maxBudgetUsd: number | null, maxTurns: number | null) => void
   onClose: () => void
 }
 
@@ -18,7 +23,19 @@ export const MODES: { mode: PermissionMode; label: string; desc: string; icon: s
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'max']
 
-export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortChange, onClose }: ModesPopupProps) {
+export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns, supportedEffortLevels, onModeChange, onEffortChange, onBudgetChange, onClose }: ModesPopupProps) {
+  const [budgetInput, setBudgetInput] = useState(maxBudgetUsd?.toString() ?? '')
+  const [turnsInput, setTurnsInput] = useState(maxTurns?.toString() ?? '')
+
+  const handleBudgetBlur = () => {
+    const v = parseFloat(budgetInput)
+    onBudgetChange(v > 0 ? v : null, maxTurns)
+  }
+  const handleTurnsBlur = () => {
+    const v = parseInt(turnsInput, 10)
+    onBudgetChange(maxBudgetUsd, v > 0 ? v : null)
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -67,11 +84,14 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
             <div className="relative flex items-center justify-between w-full">
               {EFFORTS.map((e) => {
                 const isActive = e === currentEffort
+                const isDisabled = supportedEffortLevels && !supportedEffortLevels.includes(e)
                 return (
                   <button
                     key={e}
-                    onClick={() => onEffortChange(e)}
-                    className="flex flex-col items-center gap-1.5 z-10"
+                    onClick={() => !isDisabled && onEffortChange(e)}
+                    disabled={!!isDisabled}
+                    className={`flex flex-col items-center gap-1.5 z-10 ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    title={isDisabled ? `当前模型不支持 ${e}` : undefined}
                   >
                     <div className={`w-3.5 h-3.5 rounded-full border-2 transition-colors ${
                       isActive
@@ -82,6 +102,37 @@ export function ModesPopup({ currentMode, currentEffort, onModeChange, onEffortC
                   </button>
                 )
               })}
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-[#3d3b37] px-4 pt-3 pb-3">
+          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">预算限制</span>
+          <div className="flex gap-3 mt-2">
+            <div className="flex-1">
+              <label className="text-[10px] text-[#5c5952] mb-1 block">Max Cost ($)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="不限"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                onBlur={handleBudgetBlur}
+                className="w-full px-2 py-1.5 text-xs bg-[#1a1918] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#5c5952] outline-none focus:border-[#d97706]"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] text-[#5c5952] mb-1 block">Max Turns</label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                placeholder="不限"
+                value={turnsInput}
+                onChange={(e) => setTurnsInput(e.target.value)}
+                onBlur={handleTurnsBlur}
+                className="w-full px-2 py-1.5 text-xs bg-[#1a1918] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#5c5952] outline-none focus:border-[#d97706]"
+              />
             </div>
           </div>
         </div>

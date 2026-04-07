@@ -107,6 +107,11 @@ function handleServerMessage(msg: S2CMessage) {
         if ((msg.message as any).permissionMode) {
           useSettingsStore.getState().setPermissionMode((msg.message as any).permissionMode)
         }
+        // Capture model name from init
+        if ((msg.message as any).model) {
+          const prev = conn.accountInfo
+          conn.setAccountInfo({ ...prev, model: (msg.message as any).model })
+        }
       }
 
       // Sync permission mode when SDK reports status changes (e.g. Agent enters/exits plan mode)
@@ -291,6 +296,19 @@ function handleServerMessage(msg: S2CMessage) {
       useCommandStore.getState().setCommands(msg.commands)
       break
 
+    case 'account-info':
+      conn.setAccountInfo({
+        email: (msg as any).email,
+        organization: (msg as any).organization,
+        subscriptionType: (msg as any).subscriptionType,
+        apiProvider: (msg as any).apiProvider,
+      })
+      break
+
+    case 'models':
+      conn.setModels((msg as any).models ?? [])
+      break
+
     case 'session-complete':
     case 'session-aborted':
       // Clear pending requests but preserve lock status — lock persists across queries
@@ -299,6 +317,21 @@ function handleServerMessage(msg: S2CMessage) {
       conn.setPendingPlanApproval(null)
       conn.setPlanModalOpen(false)
       break
+
+    case 'session-forked': {
+      const newId = (msg as any).sessionId as string
+      const sess = useSessionStore.getState()
+      sess.setCurrentSessionId(newId)
+      // Join the new session
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'join-session', sessionId: newId }))
+      }
+      // Refresh sidebar
+      if (sess.currentProjectCwd) {
+        sess.loadProjectSessions(sess.currentProjectCwd)
+      }
+      break
+    }
 
     case 'error':
       console.error('[WS Error]', msg.message, msg.code)
@@ -361,6 +394,10 @@ function claimLock(sessionId: string) {
   send({ type: 'claim-lock', sessionId })
 }
 
+function forkSession(sessionId: string, atMessageId?: string) {
+  send({ type: 'fork-session', sessionId, atMessageId } as any)
+}
+
 // ── Hook (manages singleton lifecycle via ref-counting) ─────────
 export function useWebSocket() {
   useEffect(() => {
@@ -376,5 +413,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
+  return { send, sendMessage, joinSession, forkSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
 }

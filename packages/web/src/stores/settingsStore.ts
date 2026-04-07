@@ -7,6 +7,8 @@ interface SettingsState {
   thinkingMode: 'adaptive' | 'enabled' | 'disabled'
   sidebarWidth: number
   sidebarOpen: boolean
+  maxBudgetUsd: number | null
+  maxTurns: number | null
 }
 
 interface SettingsActions {
@@ -15,6 +17,8 @@ interface SettingsActions {
   setThinkingMode(mode: SettingsState['thinkingMode']): void
   setSidebarWidth(width: number): void
   setSidebarOpen(open: boolean): void
+  setMaxBudgetUsd(value: number | null): void
+  setMaxTurns(value: number | null): void
   load(): Promise<void>
   save(): Promise<void>
 }
@@ -36,6 +40,8 @@ function saveToLocal(state: SettingsState) {
     effort: state.effort,
     thinkingMode: state.thinkingMode,
     sidebarWidth: state.sidebarWidth,
+    maxBudgetUsd: state.maxBudgetUsd,
+    maxTurns: state.maxTurns,
   }))
 }
 
@@ -47,6 +53,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     thinkingMode: (saved.thinkingMode as SettingsState['thinkingMode']) ?? 'adaptive',
     sidebarWidth: saved.sidebarWidth ?? 280,
     sidebarOpen: true,
+    maxBudgetUsd: (saved as any).maxBudgetUsd ?? null,
+    maxTurns: (saved as any).maxTurns ?? null,
 
     setPermissionMode(mode) {
       set({ permissionMode: mode })
@@ -66,6 +74,14 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     },
     setSidebarOpen(open) {
       set({ sidebarOpen: open })
+    },
+    setMaxBudgetUsd(value) {
+      set({ maxBudgetUsd: value })
+      saveToLocal(get())
+    },
+    setMaxTurns(value) {
+      set({ maxTurns: value })
+      saveToLocal(get())
     },
     async load() {
       try {

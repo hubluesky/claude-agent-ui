@@ -9,6 +9,22 @@ interface ResolvedPlanApproval {
   decision: string
 }
 
+export interface ModelInfo {
+  value: string
+  displayName: string
+  description: string
+  supportsAutoMode?: boolean
+  supportedEffortLevels?: string[]
+}
+
+export interface AccountInfo {
+  email?: string
+  organization?: string
+  subscriptionType?: string
+  apiProvider?: string
+  model?: string
+}
+
 interface ConnectionState {
   connectionId: string | null
   connectionStatus: ConnectionStatus
@@ -20,6 +36,8 @@ interface ConnectionState {
   pendingPlanApproval: (PlanApprovalRequest & { readonly: boolean; contextUsagePercent?: number }) | null
   resolvedPlanApproval: ResolvedPlanApproval | null
   planModalOpen: boolean
+  accountInfo: AccountInfo | null
+  models: ModelInfo[]
 }
 
 interface ConnectionActions {
@@ -33,6 +51,8 @@ interface ConnectionActions {
   setPendingPlanApproval(req: (PlanApprovalRequest & { readonly: boolean; contextUsagePercent?: number }) | null): void
   setResolvedPlanApproval(req: ResolvedPlanApproval | null): void
   setPlanModalOpen(open: boolean): void
+  setAccountInfo(info: AccountInfo | null): void
+  setModels(models: ModelInfo[]): void
   reset(): void
 }
 
@@ -47,6 +67,8 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   pendingPlanApproval: null,
   resolvedPlanApproval: null,
   planModalOpen: false,
+  accountInfo: null,
+  models: [],
 
   setConnectionId: (id) => set({ connectionId: id }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
@@ -58,6 +80,8 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   setPendingPlanApproval: (req) => set({ pendingPlanApproval: req }),
   setResolvedPlanApproval: (req) => set({ resolvedPlanApproval: req }),
   setPlanModalOpen: (open) => set({ planModalOpen: open }),
+  setAccountInfo: (info) => set({ accountInfo: info }),
+  setModels: (models) => set({ models }),
   reset: () => set({
     lockStatus: 'idle', lockHolderId: null, sessionStatus: 'idle',
     pendingApproval: null, pendingAskUser: null,

@@ -1,6 +1,37 @@
-import { memo } from 'react'
+import { memo, useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+
+function CodeBlock({ language, className, children, ...props }: { language?: string; className?: string; children?: React.ReactNode; [key: string]: unknown }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    const text = String(children).replace(/\n$/, '')
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [children])
+
+  return (
+    <div className="group relative bg-[#1e1d1a] border border-[#3d3b37] rounded-md overflow-hidden my-2">
+      <div className="flex items-center justify-between px-3 py-1 bg-[#242320] border-b border-[#3d3b37]">
+        <span className="text-[10px] font-mono text-[#7c7872]">{language ?? 'text'}</span>
+        <button
+          onClick={handleCopy}
+          className="text-[10px] text-[#7c7872] hover:text-[#e5e2db] transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="px-3 py-2.5 overflow-x-auto">
+        <code className={`text-xs font-mono text-[#a8a29e] ${className ?? ''}`} {...props}>
+          {children}
+        </code>
+      </pre>
+    </div>
+  )
+}
 
 interface MarkdownRendererProps {
   content: string
@@ -23,18 +54,9 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
             )
           }
           return (
-            <div className="bg-[#1e1d1a] border border-[#3d3b37] rounded-md overflow-hidden my-2">
-              {match && (
-                <div className="px-3 py-1 bg-[#242320] border-b border-[#3d3b37]">
-                  <span className="text-[10px] font-mono text-[#7c7872]">{match[1]}</span>
-                </div>
-              )}
-              <pre className="px-3 py-2.5 overflow-x-auto">
-                <code className={`text-xs font-mono text-[#a8a29e] ${className ?? ''}`} {...props}>
-                  {children}
-                </code>
-              </pre>
-            </div>
+            <CodeBlock language={match?.[1]} className={className} {...props}>
+              {children}
+            </CodeBlock>
           )
         },
         // Links

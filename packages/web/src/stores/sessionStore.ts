@@ -11,6 +11,7 @@ interface SessionState {
   currentSessionId: string | null
   currentProjectCwd: string | null
   searchQuery: string
+  composerDraft: string | null
 }
 
 interface SessionActions {
@@ -21,6 +22,7 @@ interface SessionActions {
   setSearchQuery(query: string): void
   setCurrentSessionId(id: string | null): void
   renameSession(sessionId: string, title: string): Promise<void>
+  setComposerDraft(text: string | null): void
 }
 
 export const useSessionStore = create<SessionState & SessionActions>((set, get) => ({
@@ -31,6 +33,7 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   currentSessionId: null,
   currentProjectCwd: null,
   searchQuery: '',
+  composerDraft: null,
 
   async loadProjects() {
     set({ projectsLoading: true })
@@ -97,5 +100,9 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   setCurrentSessionId(id: string | null) {
     set({ currentSessionId: id })
+  },
+
+  setComposerDraft(text: string | null) {
+    set({ composerDraft: text })
   },
 }))

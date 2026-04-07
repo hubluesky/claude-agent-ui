@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useMessageStore } from '../../stores/messageStore'
@@ -57,7 +57,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const [images, setImages] = useState<AttachedImage[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { lockStatus, sessionStatus } = useConnectionStore()
+  const { lockStatus, sessionStatus, models, accountInfo } = useConnectionStore()
   const commands = useCommandStore((s) => s.commands)
   const [fileResults, setFileResults] = useState<FileItem[]>([])
   const [fileSelectedIndex, setFileSelectedIndex] = useState(0)
@@ -67,8 +67,19 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
+  // Consume composerDraft from store (set by PromptSuggestionCard)
+  const composerDraft = useSessionStore((s) => s.composerDraft)
+  useEffect(() => {
+    if (composerDraft != null) {
+      setText(composerDraft)
+      useSessionStore.getState().setComposerDraft(null)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+  }, [composerDraft])
+
+  const currentModelInfo = models.find((m) => m.value === accountInfo?.model)
   const [showModes, setShowModes] = useState(false)
-  const { permissionMode, effort, setPermissionMode, setEffort } = useSettingsStore()
+  const { permissionMode, effort, maxBudgetUsd, maxTurns, setPermissionMode, setEffort, setMaxBudgetUsd, setMaxTurns } = useSettingsStore()
   const isLocked = lockStatus === 'locked_other'
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
   const isLockHolder = lockStatus === 'locked_self'
@@ -377,8 +388,12 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
             <ModesPopup
               currentMode={permissionMode}
               currentEffort={effort}
+              maxBudgetUsd={maxBudgetUsd}
+              maxTurns={maxTurns}
+              supportedEffortLevels={currentModelInfo?.supportedEffortLevels}
               onModeChange={handleModeChange}
               onEffortChange={handleEffortChange}
+              onBudgetChange={(b, t) => { setMaxBudgetUsd(b); setMaxTurns(t) }}
               onClose={() => setShowModes(false)}
             />
           </div>
@@ -415,6 +430,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
           ) : (
             <textarea
               ref={textareaRef}
+              data-composer=""
               value={text}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
