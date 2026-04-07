@@ -1,8 +1,8 @@
-# Unified Terminal UI — 三模式中控台设计文档
+# Unified Terminal UI — 双模式中控台设计文档
 
 ## 概述
 
-重构 claude-agent-ui 的 UI，支持用户在一个页面管理所有项目的所有会话。核心是三种视图模式：单聊（现有功能）、聚焦（监控+深度对话）、多聊（N 个面板并行操作）。
+重构 claude-agent-ui 的 UI，支持用户在一个页面管理所有项目的所有会话。核心是两种视图模式：单聊（Single，现有功能）、多聊（Multi，N 面板并行操作）。
 
 ### 目标用户场景
 
@@ -17,13 +17,11 @@
 - Cursor 3 Agent Grid（并行 Agent 网格布局）
 - Nimbalyst（看板式会话管理，状态自动流转）
 - Warp Terminal（三级渐进通知，Agent Management Panel）
-- Devin 2.0（三栏布局，Workspace 面板）
 - GitHub Agent HQ（Mission Control 统一管控）
-- Slack（扁平化频道列表，未读 badge，状态筛选）
 
 ---
 
-## 三种视图模式
+## 两种视图模式
 
 ### 模式一：Single（单聊）— 默认模式
 
@@ -33,31 +31,34 @@
 - 主区域：TopBar + ChatInterface（消息列表 + Composer + ApprovalPanel）
 - 这是新用户的默认模式，不破坏现有体验
 
-**唯一变化**：TopBar 右侧新增模式切换按钮组 `Single | Focus | Multi`。
+**唯一变化**：TopBar 右侧新增模式切换按钮组 `Single | Multi`。
 
-### 模式二：Focus（聚焦）— 深度对话
+### 模式二：Multi（多聊）— N 面板并行
 
-**侧边栏与 Single 模式完全一致**（按项目分组的 ProjectCard → SessionCard 树状结构），主区域保持完整聊天。
+**侧边栏显示面板会话（按状态分组）+ 底部折叠的其他会话。主区域为动态 N 面板网格。**
 
-Focus 模式的意义是从 Multi 模式快速展开某个面板进入全屏聊天，按 Esc 返回 Multi。侧边栏保持项目树，方便在深度对话时切换到其他会话。
+#### 侧边栏
 
-### 模式三：Multi（多聊）— N 面板并行
+Multi 模式侧边栏分为两个区域：
 
-**侧边栏只显示当前在面板中的会话，按任务状态分组。主区域为动态 N 面板网格。**
+**上部：面板会话，按状态分组**
 
-#### 侧边栏：面板会话状态分组
-
-Multi 模式下侧边栏不再显示项目树或全部会话，而是只显示**当前打开在面板中的会话**，按状态分组：
+只显示当前打开在面板中的会话，按状态分组：
 
 - **询问中**（Waiting）— 需要审批或回答问题的会话，黄色标识
 - **进行中**（Running）— 正在运行的会话，绿色标识
 - **已完成**（Done）— 任务完成的会话，灰色标识
 
-每个条目显示：状态点 + 会话标题 + 项目标签 + 进度条/审批 badge。
+每个条目显示：状态点 + 会话标题 + 项目标签 + 进度条/审批 badge + ↗ 展开按钮。
 
-底部 `+ 添加会话` 按钮 → 弹出全部会话选择器（跨项目），选中后添加到面板。
+点击侧边栏条目 → 滚动到对应面板并高亮。
+点击 ↗ 或双击 → 切换到 Single 模式全屏聊天该会话，TopBar 出现"← 返回 Multi"按钮（Esc 同效）。
 
-点击侧边栏条目 → 滚动到对应面板并高亮。双击 → 进入 Focus 全屏聊天。
+**下部：折叠的"其他会话"**
+
+显示未添加到面板的所有会话（跨项目），折叠状态只显示计数"其他会话 (5)"。展开后显示列表，每条可一键添加到面板。
+
+底部 `+ 新建会话` 按钮 → 选择项目 → 新面板自动出现。
 
 #### 面板布局
 
@@ -65,53 +66,59 @@ Multi 模式下侧边栏不再显示项目树或全部会话，而是只显示**
 
 | 面板数 | 布局 |
 |--------|------|
-| 1 | 全宽（等同 Focus 模式） |
+| 1 | 全宽 |
 | 2 | 1×2（左右分） |
 | 3-4 | 2×2 网格 |
 | 5-6 | 2×3 网格 |
 | 7-9 | 3×3 网格 |
 | 10+ | 继续增加列/行，网格容器可垂直滚动 |
 
-每个面板有**最小尺寸**（宽 300px，高 250px）。当面板数量超过屏幕一次性显示的上限时，网格容器支持垂直滚动。
+每个面板有**最小尺寸**（宽 300px，高 250px）。超出屏幕时网格容器支持垂直滚动。
 
 #### 每个面板
 
-每个面板是一个独立的迷你 ChatInterface，包含：
-- **Header**：状态点 + 标题 + 项目标签 + 进度百分比 + 关闭按钮(×)
-- **消息区**：滚动消息列表（字体略小以节省空间）
-- **输入区**：独立 Composer（精简版，无 toolbar 按钮，只有输入框 + 发送按钮）
-- **审批区**：如果该会话有待审批，显示 ApprovalPanel（精简版，只有 Allow/Deny 按钮）
-- **状态栏**：Running 百分比 / 费用（可选）
+每个面板是一个独立的轻量 ChatInterface，包含：
+- **Header**：状态点 + 标题 + 项目标签 + 进度百分比 + ↗ 展开按钮 + × 关闭按钮
+- **消息区**：简单 div 滚动（**不用 Virtuoso**），只渲染最近 20 条消息。展开到 Single 全屏时才用 Virtuoso
+- **输入区**：精简版 Composer（只有 input + send 按钮，无 toolbar）
+- **审批区**：如果该会话有待审批，显示精简版 ApprovalPanel（只有 Allow/Deny 按钮）
+
+#### WebSocket 架构
+
+每个面板创建**独立的 WebSocket 连接**，join 自己的 session。
+
+优势：
+- **服务端零改动**（hub.ts、handler.ts、protocol.ts 全不动）
+- 每个面板的锁/审批/状态天然隔离
+- connectionStore 不需要重构为 per-session Map
+
+8 个 WebSocket 连接对现代浏览器零压力（Chrome 同域上限 255 个）。
 
 #### 新建会话
 
 Multi 模式下新建会话有三种方式：
 1. **侧边栏 `+ 新建会话` 按钮** → 选择项目 → 新面板自动出现
-2. **面板内 Composer 直接输入** → 如果面板是空的（`+` 占位符），先选择项目路径，然后输入消息即创建新会话
+2. **空面板 `+` 占位符** → 点击打开会话选择器
 3. **Ctrl+N** 快捷键 → 同方式 1
 
-#### 自动面板管理
+#### 通知而非自动弹面板
 
-面板不需要手动管理——会话状态变化驱动面板自动增减：
+面板**不自动增减**。当有会话需要关注时，Multi 视图顶部显示通知条：
 
-| 事件 | 行为 |
+| 事件 | 通知 |
 |------|------|
-| 会话变为 `waiting`（需要审批/回答问题） | 如果该会话不在面板中 → **自动添加为新面板**，并高亮提示 |
-| 会话变为 `error` | 如果该会话不在面板中 → **自动添加为新面板**，红色高亮 |
-| 会话变为 `idle`（完成/用户无后续输入） | **延迟 10 秒后自动关闭面板**，期间显示 "Done ✓" 提示，用户可点击取消关闭 |
-| 用户手动关闭面板(×) | 立即关闭，不自动重新打开（除非该会话再次变为 waiting/error） |
+| 有会话变为 `waiting`（需要审批）且不在面板中 | 通知条："N 个会话需要操作" + [添加到面板] 按钮 |
+| 有会话变为 `error` 且不在面板中 | 通知条："N 个会话出错" + [添加到面板] 按钮 |
 
-**效果**：Multi 模式的面板是"活"的——需要关注的会话自动弹出来，完成的自动收走。用户无需手动管理哪些面板开着。
-
-**可选开关**：settingsStore 新增 `autoManagePanels: boolean`（默认 true），关闭后面板不自动增减，完全手动管理。
+完成的面板**不自动关闭**。而是：降低透明度，排到网格末尾。用户手动点 × 关闭。
 
 #### 手动交互
 
-- 从侧边栏**点击**会话 → 添加到新面板（如果该会话未在面板中）；如果已在面板中 → 滚动到该面板并高亮
-- 从侧边栏**拖拽**会话到指定面板位置（可选，v2 实现）
-- 点击面板的 **×** 按钮 → 关闭该面板
+- 从侧边栏**点击**条目 → 滚动到对应面板并高亮
+- 从"其他会话"列表**点击** → 添加为新面板
+- 点击面板的 **×** 按钮 → 关闭面板
 - 空面板显示 `+` 占位符，点击选择会话或新建
-- 每个面板的 Composer **独立工作**，可以同时在多个面板输入
+- 每个面板的 Composer **独立工作**，可同时在多个面板输入
 
 ---
 
@@ -119,57 +126,48 @@ Multi 模式下新建会话有三种方式：
 
 ### 切换控件
 
-TopBar 右侧新增按钮组：
+TopBar 右侧按钮组：
 
 ```
-[ Single | Focus | Multi ]
+[ Single | Multi ]
 ```
 
-- 当前模式高亮（amber 背景）
-- 快捷键：无特殊快捷键，通过 TopBar 按钮切换
+当前模式高亮（amber 背景）。
+
+### 从 Multi 展开面板
+
+点击面板 ↗ 按钮或双击 header → 切换到 Single 模式，TopBar 出现额外的"← 返回 Multi"按钮。按 Esc 或点击该按钮 → 返回 Multi 模式，面板配置保持不变。
+
+内部实现：settingsStore 存一个 `returnToMulti: boolean` 标志，不是单独的 Focus 模式。
 
 ### 切换行为
 
-- **Single → Focus**：侧边栏从项目树变为扁平列表，主区域不变
-- **Focus → Multi**：主区域从单聊变为多面板，侧边栏不变
-- **Multi → Single**：多面板关闭，回到单聊 + 项目树侧边栏
-- **Multi 面板内快速进入 Focus**：双击面板 header 或点击面板上的展开按钮 → 该面板的会话进入 Focus 模式全屏聊天，其他面板会话保留在侧边栏中。按 Esc 或点击模式按钮返回 Multi。
+- **Single → Multi**：侧边栏从项目树变为面板会话列表，主区域从单聊变为多面板网格
+- **Multi → Single**：主区域回到单聊，侧边栏回到项目树
 - 切换时**当前聚焦的会话保持不变**
-- Multi 模式的面板配置**持久化到 settingsStore**（记住哪些会话在面板中）
+- Multi 模式的面板列表**持久化到 localStorage**
 
 ### 状态持久化
 
 ```typescript
 // settingsStore 新增
-viewMode: 'single' | 'focus' | 'multi'
-multiPanelSessions: string[] // Multi 模式下手动钉住的 sessionId 列表
-autoManagePanels: boolean    // true = waiting/error 自动弹面板，idle 自动关面板
+viewMode: 'single' | 'multi'
+returnToMulti: boolean  // true = TopBar 显示"← 返回 Multi"按钮
+
+// multiPanelStore（独立 store）
+panels: PanelSession[]  // 面板列表，持久化 sessionId 列表到 localStorage
 ```
 
 ---
 
-## 侧边栏数据源
+## 实时状态推送
 
-### Focus/Multi 模式下的扁平列表数据
-
-需要一个新的聚合 API 或 Store 逻辑：
-
-1. 加载所有项目的所有会话（现有 `loadProjects()` + 每个项目的 `loadProjectSessions()`）
-2. 合并为一个扁平数组
-3. 附加实时状态信息（通过 WebSocket 推送）：
-   - `status`: 'running' | 'waiting' | 'idle' | 'error'
-   - `lastMessage`: 最新消息摘要
-   - `progress`: { current: number, total: number } | null
-   - `hasApproval`: boolean
-
-### 实时状态推送
-
-服务端需要新增的 WebSocket 消息类型：
+服务端需要新增 WebSocket 消息类型，用于通知 Multi 侧边栏更新面板状态：
 
 ```typescript
-// S2C: 广播会话状态变更（发给所有连接的客户端）
+// S2C: 广播会话状态变更
 type S2C_SessionStatusUpdate = {
-  type: 's2c:session-status'
+  type: 'session-status-update'
   sessionId: string
   status: 'running' | 'waiting' | 'idle' | 'error'
   lastMessage?: string
@@ -178,13 +176,7 @@ type S2C_SessionStatusUpdate = {
 }
 ```
 
-这个消息在以下时机发送：
-- Agent 开始运行 → status: 'running'
-- Agent 遇到工具审批 → status: 'waiting', hasApproval: true
-- Agent 完成 → status: 'idle'
-- Agent 报错 → status: 'error'
-- Task 进度变化 → progress 更新
-- 新消息产生 → lastMessage 更新
+注意：每个面板有自己的 WebSocket 连接，已经能收到自己 session 的消息。此消息类型主要用于通知"其他会话"区域的状态变化（未打开在面板中的会话）。
 
 ---
 
@@ -194,55 +186,37 @@ type S2C_SessionStatusUpdate = {
 
 | 组件 | 位置 | 职责 |
 |------|------|------|
-| `ViewModeToggle` | `components/layout/` | TopBar 内的 Single/Focus/Multi 按钮组 |
-| `FlatSessionList` | `components/sidebar/` | Focus/Multi 模式下的扁平会话列表 |
-| `StatusFilterBar` | `components/sidebar/` | All/Running/Waiting/Idle 筛选按钮 |
-| `FlatSessionCard` | `components/sidebar/` | 带状态/进度/消息预览的会话卡片 |
-| `MultiPanelGrid` | `components/chat/` | Multi 模式下的 N 面板网格容器 |
-| `MiniChatPanel` | `components/chat/` | 多面板中的单个迷你聊天面板 |
+| `ViewModeToggle` | `components/layout/` | TopBar 内 Single/Multi 按钮组 |
+| `ReturnToMultiButton` | `components/layout/` | TopBar "← 返回 Multi" 按钮 |
+| `MultiSidebar` | `components/sidebar/` | Multi 模式侧边栏（状态分组 + 其他会话折叠） |
+| `MultiSessionCard` | `components/sidebar/` | Multi 侧边栏的面板会话卡片 |
+| `OtherSessionsList` | `components/sidebar/` | "其他会话"折叠区 |
+| `SessionPicker` | `components/sidebar/` | 添加会话弹窗 |
+| `MultiPanelGrid` | `components/chat/` | N 面板网格容器 |
+| `MiniChatPanel` | `components/chat/` | 单个迷你聊天面板（独立 WebSocket） |
+| `MiniComposer` | `components/chat/` | 精简版输入框 |
+| `MiniMessageList` | `components/chat/` | 简单 div 滚动消息列表（最近 20 条，不用 Virtuoso） |
+| `EmptyPanel` | `components/chat/` | 空面板占位符 |
+| `PanelNotificationBar` | `components/chat/` | Multi 顶部通知条（N 个会话需要操作） |
+| `multiPanelStore` | `stores/` | Multi 模式面板状态管理 |
 
 ### 修改组件
 
 | 组件 | 变更 |
 |------|------|
-| `AppLayout` | 根据 viewMode 渲染不同侧边栏（SessionList / FlatSessionList） |
-| `TopBar` | 新增 ViewModeToggle |
-| `ChatInterface` | Single/Focus 模式使用现有逻辑；Multi 模式渲染 MultiPanelGrid |
-| `sessionStore` | 新增 allSessions 扁平列表 + 实时状态字段 |
-| `settingsStore` | 新增 viewMode + multiPanelSessions |
-| `connectionStore` | 支持多会话的 pending approval 跟踪 |
+| `settingsStore` | 新增 `viewMode`, `returnToMulti` |
+| `TopBar` | 集成 ViewModeToggle + ReturnToMultiButton |
+| `AppLayout` | 根据 viewMode 切换侧边栏（SessionList / MultiSidebar） |
+| `ChatInterface` | Multi 模式渲染 MultiPanelGrid |
+| `shared/protocol.ts` | 新增 S2C_SessionStatusUpdate |
+| `server/ws/handler.ts` | 在关键时机广播 session-status-update |
 
 ### 不改动的组件
 
-- `ChatMessagesPane`、`MessageComponent`、`ApprovalPanel`、`ChatComposer` 等核心聊天组件保持不变
-- `ProjectCard`、`SessionCard` 在 Single 模式下继续使用，不改动
-
----
-
-## WebSocket 多会话支持
-
-### 当前限制
-
-现有架构：一个 WebSocket 连接绑定一个 session（通过 `joinSession` 消息）。切换会话时需要 leave + join。
-
-### Multi 模式需求
-
-Multi 模式需要同时接收多个会话的消息。两种方案：
-
-**方案 A：多 join（推荐）**
-- 客户端可以同时 join 多个 session
-- 服务端 WSHub 为每个 join 的 session 广播消息给该客户端
-- 需要修改 `ws/handler.ts` 支持一个连接 join 多个 session
-- 客户端 messageStore 需要支持多会话消息缓存（现有 `_cache` Map 已支持）
-
-**方案 B：多 WebSocket 连接**
-- 每个面板一个独立的 WebSocket 连接
-- 简单但浪费资源，不推荐
-
-选择**方案 A**。需要修改：
-- `ws/handler.ts`：支持 `joinSession` 不自动 leave 之前的 session
-- `useWebSocket.ts`：支持同时监听多个 session 的消息
-- `connectionStore`：per-session 的 lockStatus、pendingApproval 等
+- `ws/hub.ts` — 服务端 WebSocket hub 不变
+- `connectionStore` — 保持全局单值，Multi 面板各有独立连接
+- `ChatMessagesPane`（Virtuoso）— 只在 Single 模式使用
+- `ProjectCard`、`SessionCard` — Single 模式继续使用
 
 ---
 
@@ -250,41 +224,42 @@ Multi 模式需要同时接收多个会话的消息。两种方案：
 
 ### Phase 1：核心框架
 
-1. settingsStore 新增 viewMode, multiPanelSessions
-2. ViewModeToggle 组件
+1. settingsStore 新增 viewMode, returnToMulti
+2. ViewModeToggle + ReturnToMultiButton
 3. AppLayout 根据 viewMode 切换侧边栏
-4. FlatSessionList + FlatSessionCard + StatusFilterBar（Focus 模式侧边栏）
-5. sessionStore 新增 allSessions 扁平列表，加载所有项目所有会话
+4. ChatInterface 根据 viewMode 渲染
+5. multiPanelStore
 
-### Phase 2：Multi 模式
+### Phase 2：Multi 模式 UI
 
-6. MultiPanelGrid 动态网格容器（无上限，最小尺寸约束，可滚动）
-7. MiniChatPanel 迷你聊天面板
-8. WebSocket 多 join 支持（服务端 + 客户端）
-9. connectionStore 多会话状态管理
-10. 面板内新建会话（选择项目 → 输入消息 → 创建）
+6. MultiSidebar + MultiSessionCard + OtherSessionsList
+7. MultiPanelGrid + EmptyPanel
+8. MiniChatPanel + MiniComposer + MiniMessageList（独立 WebSocket，简单 div 消息）
+9. SessionPicker
+10. PanelNotificationBar
 
-### Phase 3：实时状态 + 自动面板
+### Phase 3：实时状态
 
-11. 服务端 S2C_SessionStatusUpdate 消息
-12. FlatSessionCard 实时状态/进度/消息更新
-13. Waiting 自动置顶排序
-14. 自动面板管理：waiting/error → 自动添加面板，idle → 自动关闭面板
-15. autoManagePanels 开关
+11. 服务端 S2C_SessionStatusUpdate 广播
+12. MultiSidebar 实时状态更新
+13. PanelNotificationBar 响应未面板中会话的状态变化
 
 ### Phase 4：打磨
 
-16. 面板拖拽排序
-17. 模式切换动画
-18. 移动端适配（Multi 模式降级为 Focus）
-19. 键盘快捷键（Ctrl+N 新建）
+14. 面板拖拽排序
+15. 模式切换动画
+16. 移动端适配（Multi 降级为 Single）
+17. 键盘快捷键（Ctrl+N 新建）
 
 ---
 
 ## 不做的事情
 
-- 不做看板视图（Kanban）——用户明确表示不需要
-- 不做 Dashboard/Grid 总览页——Focus 模式侧边栏已覆盖监控需求
-- 不做 Workspace 面板（文件变更/终端）——当前聊天内已包含 tool 信息
-- 不做声音/桌面通知——可后续根据反馈添加
-- 不做费用追踪——SDK 暂不提供费用信息
+- 不做三种模式（Focus 是多余的，用 returnToMulti 标志替代）
+- 不做 WebSocket multi-join（每面板独立连接，服务端零改动）
+- 不做 Virtuoso 在 Mini 面板中（简单 div + 20 条消息）
+- 不做自动弹出/关闭面板（用通知条，用户手动操作）
+- 不做看板/Dashboard 视图
+- 不做 Workspace 面板（文件变更/终端）
+- 不做声音/桌面通知
+- 不做费用追踪
