@@ -8,12 +8,16 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 
 interface ChatMessagesPaneProps {
   sessionId: string
+  limit?: number
 }
 
-export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
+export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const ctx = useChatSession()
   const rawMessages = ctx.messages
-  const messages = useMemo(() => rawMessages.filter(isMessageVisible), [rawMessages])
+  const messages = useMemo(() => {
+    const visible = rawMessages.filter(isMessageVisible)
+    return limit ? visible.slice(-limit) : visible
+  }, [rawMessages, limit])
   const hasMore = ctx.hasMore
   const isLoadingHistory = ctx.isLoadingHistory
   const isLoadingMore = ctx.isLoadingMore

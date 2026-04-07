@@ -3,6 +3,9 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useEmbedStore } from '../../stores/embedStore'
 import { HistoryPanel } from './HistoryPanel'
+import { ViewModeToggle } from './ViewModeToggle'
+import { ReturnToMultiButton } from './ReturnToMultiButton'
+import { BackgroundStatusButton } from './BackgroundStatusButton'
 
 export function TopBar() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
@@ -103,6 +106,9 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        <ReturnToMultiButton />
+        <ViewModeToggle />
+        <BackgroundStatusButton />
         <button
           onClick={() => setShowHistory(!showHistory)}
           className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${

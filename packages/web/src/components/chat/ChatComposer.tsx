@@ -50,9 +50,10 @@ let imageIdCounter = 0
 interface ChatComposerProps {
   onSend: (prompt: string, images?: { data: string; mediaType: string }[]) => void
   onAbort: () => void
+  minimal?: boolean
 }
 
-export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
+export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const [text, setText] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [images, setImages] = useState<AttachedImage[]>([])
@@ -392,10 +393,10 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
     <div className="px-4 py-3 shrink-0">
       <div className={`relative rounded-xl border ${borderClass} bg-[var(--bg-input)]`}>
         {/* Image preview bar */}
-        <ImagePreviewBar images={images} onRemove={removeImage} />
+        {!minimal && <ImagePreviewBar images={images} onRemove={removeImage} />}
 
         {/* Popups — outside overflow context so they aren't clipped */}
-        {showModes && (
+        {!minimal && showModes && (
           <div className="relative">
             <ModesPopup
               currentMode={permissionMode}
@@ -410,7 +411,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
             />
           </div>
         )}
-        {showPopup && (
+        {!minimal && showPopup && (
           <div className="relative">
             <SlashCommandPopup
               commands={filteredCommands}
@@ -419,7 +420,7 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
             />
           </div>
         )}
-        {showFilePopup && (
+        {!minimal && showFilePopup && (
           <div className="relative">
             <FileReferencePopup
               files={fileResults}
@@ -455,25 +456,44 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
           )}
         </div>
 
-        {/* Divider */}
-        <div className="h-px bg-[var(--border)]" />
-
-        {/* Toolbar */}
-        <ComposerToolbar
-          onUpload={handleUpload}
-          onSlashClick={handleSlashClick}
-          onAtClick={handleAtClick}
-          onSend={handleSubmit}
-          onAbort={onAbort}
-          canSend={canSend}
-          fileRefs={fileRefs}
-          isLocked={inputDisabled}
-          isRunning={isRunning}
-          isLockHolder={isLockHolder}
-          onReleaseLock={handleReleaseLock}
-          showModes={showModes}
-          setShowModes={setShowModes}
-        />
+        {/* Divider + Toolbar */}
+        {minimal ? (
+          <div className="flex items-center px-2 py-1 gap-1">
+            <div className="flex-1" />
+            <button
+              onClick={isRunning ? onAbort : handleSubmit}
+              disabled={!isRunning && !canSend}
+              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
+                isRunning
+                  ? 'bg-[var(--error)] text-white hover:bg-[#dc2626] cursor-pointer'
+                  : canSend
+                    ? 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[#b45309] cursor-pointer'
+                    : 'bg-[var(--border)] text-[var(--text-dim)] cursor-default'
+              }`}
+            >
+              {isRunning ? '■' : '↑'}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="h-px bg-[var(--border)]" />
+            <ComposerToolbar
+              onUpload={handleUpload}
+              onSlashClick={handleSlashClick}
+              onAtClick={handleAtClick}
+              onSend={handleSubmit}
+              onAbort={onAbort}
+              canSend={canSend}
+              fileRefs={fileRefs}
+              isLocked={inputDisabled}
+              isRunning={isRunning}
+              isLockHolder={isLockHolder}
+              onReleaseLock={handleReleaseLock}
+              showModes={showModes}
+              setShowModes={setShowModes}
+            />
+          </>
+        )}
 
       </div>
 

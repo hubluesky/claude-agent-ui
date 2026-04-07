@@ -1,14 +1,17 @@
 import { useEffect } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { ChatInterface } from './components/chat/ChatInterface'
+import { MultiPanelGrid } from './components/chat/MultiPanelGrid'
 import { ChatSessionProvider } from './providers/ChatSessionProvider'
 import { ToastContainer } from './components/chat/Toast'
 import { useSessionStore } from './stores/sessionStore'
+import { useSettingsStore } from './stores/settingsStore'
 import { useCommandStore } from './stores/commandStore'
 import { useEmbedStore } from './stores/embedStore'
 
 export function App() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
+  const viewMode = useSettingsStore((s) => s.viewMode)
   const isEmbed = useEmbedStore((s) => s.isEmbed)
   const embedCwd = useEmbedStore((s) => s.embedCwd)
 
@@ -26,7 +29,9 @@ export function App() {
   return (
     <>
       <AppLayout>
-        {currentSessionId ? (
+        {viewMode === 'multi' ? (
+          <MultiPanelGrid />
+        ) : currentSessionId ? (
           <ChatSessionProvider sessionId={currentSessionId}>
             <ChatInterface />
           </ChatSessionProvider>

@@ -51,7 +51,7 @@ const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: stri
   red:    { border: 'border-[#ef444430]',  hoverBg: 'hover:bg-[#ef44440f]', numBorder: 'border-[#ef444450]', numText: 'text-[#ef4444]',  activeBg: 'bg-[#ef444415]', activeBorder: 'border-[#ef444460]' },
 }
 
-export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
+export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig; compact?: boolean }) {
   const { lockStatus } = useConnectionStore()
   const handleClaim = useClaimLock()
 
@@ -148,10 +148,10 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
   }, [canInteract, config.options, config.multiSelect, handleOptionClick, handleMultiSubmit, selectedKeys])
 
   return (
-    <div className="px-4 py-3 shrink-0">
+    <div className={compact ? 'px-2 py-1.5 shrink-0' : 'px-4 py-3 shrink-0'}>
       <div className={`rounded-xl border ${canInteract ? 'bg-[var(--bg-input)] border-[var(--accent-subtle-border)]' : 'bg-[var(--bg-input)] border-[var(--border)]'}`}>
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
+        <div className={`flex items-center gap-2 ${compact ? 'px-3 pt-2 pb-1' : 'px-4 pt-3.5 pb-2'}`}>
           {canInteract ? (
             <>
               <svg className="w-4 h-4 text-[var(--accent)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -231,8 +231,8 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
             )
           })}
 
-          {/* Other field */}
-          {config.otherField && canInteract && (
+          {/* Other field — hidden in compact mode */}
+          {!compact && config.otherField && canInteract && (
             showOther ? (
               <div className="border border-[#d977064d] rounded-md px-4 py-2.5 flex gap-2">
                 <input
@@ -276,8 +276,8 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
           </div>
         )}
 
-        {/* Feedback field */}
-        {config.feedbackField && canInteract && (
+        {/* Feedback field — hidden in compact mode */}
+        {!compact && config.feedbackField && canInteract && (
           <div className="mx-4 mb-3">
             <input
               type="text"
