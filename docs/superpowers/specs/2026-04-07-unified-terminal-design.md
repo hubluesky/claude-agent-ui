@@ -9,7 +9,8 @@
 1. **一套代码，两种布局** — Single 和 Multi 渲染同一个 `ChatInterface` 组件，只是布局不同（全屏 vs 网格）
 2. **每个面板完全自包含** — 自己的 WS 连接、自己的消息、自己的锁/审批状态，通过 `ChatSessionProvider` 提供
 3. **组件不知道自己在哪种模式** — 只从 Context 读数据，不关心 Single 还是 Multi
-4. **侧边栏不变、服务端不变** — 改动全在客户端的数据流层
+4. **Provider 保持薄** — 复杂逻辑提取为可复用 hook（`useSessionMessages`、`useSessionConnection`），Provider 组合 hook
+5. **侧边栏不变、服务端不变** — 改动全在客户端的数据流层
 
 ### 目标用户场景
 
@@ -29,13 +30,39 @@
 
 **重构方案**：将这三个全局单例的职责统一到 `ChatSessionProvider`（React Context），每个面板一个 Provider 实例。
 
+### Provider 内部结构
+
+Provider 不直接包含逻辑，而是**组合可复用 hook**：
+
 ```
 ChatSessionProvider(sessionId)
-  ├── WS 连接（connect → join → 收消息）
-  ├── messages 状态（追加、流式、替换）
-  ├── connection 状态（lockStatus、pendingApproval、sessionStatus...）
-  └── actions（send、respondApproval、abort、claimLock...）
+  │
+  ├── useSessionWebSocket(sessionId)
+  │     WS 生命周期（connect / join / reconnect / disconnect）
+  │     send() 发送消息
+  │     onMessage 回调分发
+  │
+  ├── useSessionMessages(ws)
+  │     messages 数组
+  │     appendStreamDelta + RAF 节流
+  │     flushStreamingDelta
+  │     optimistic 替换
+  │     assistant 消息合并
+  │     loadInitial（REST API）
+  │
+  ├── useSessionConnection(ws)
+  │     lockStatus / lockHolderId
+  │     sessionStatus
+  │     pendingApproval / pendingAskUser / pendingPlanApproval
+  │     resolvedPlanApproval
+  │     contextUsage / mcpServers / rewindPreview / subagentMessages
+  │     respondToolApproval / respondAskUser / respondPlanApproval
+  │     abort / claimLock / releaseLock
+  │
+  └── 写入 multiPanelStore（summary 状态供下拉菜单读）
 ```
+
+每个 hook 可独立测试，Provider 文件保持 <100 行。
 
 ### Context 接口
 
@@ -44,18 +71,26 @@ interface ChatSessionContextValue {
   // 连接
   sessionId: string
   connectionStatus: ConnectionStatus
-  
+
   // 消息
   messages: AgentMessage[]
   isLoadingHistory: boolean
-  
+
   // 会话状态
   sessionStatus: SessionStatus
   lockStatus: ClientLockStatus
-  pendingApproval: ToolApprovalRequest | null
-  pendingAskUser: AskUserRequest | null
-  pendingPlanApproval: PlanApprovalRequest | null
-  
+  lockHolderId: string | null
+  pendingApproval: (ToolApprovalRequest & { readonly: boolean }) | null
+  pendingAskUser: (AskUserRequest & { readonly: boolean }) | null
+  pendingPlanApproval: (PlanApprovalRequest & { readonly: boolean; contextUsagePercent?: number }) | null
+  resolvedPlanApproval: ResolvedPlanApproval | null
+  planModalOpen: boolean
+  setPlanModalOpen(open: boolean): void
+  contextUsage: ContextUsage | null
+  mcpServers: McpServerInfo[]
+  rewindPreview: RewindPreview | null
+  subagentMessages: SubagentMessages | null
+
   // 操作
   send(prompt: string, options?: SendOptions): void
   respondToolApproval(requestId: string, decision: ToolApprovalDecision): void
@@ -64,8 +99,29 @@ interface ChatSessionContextValue {
   abort(): void
   claimLock(): void
   releaseLock(): void
+  getContextUsage(): void
+  getMcpStatus(): void
+  toggleMcpServer(serverName: string, enabled: boolean): void
+  reconnectMcpServer(serverName: string): void
+  rewindFiles(messageId: string, dryRun?: boolean): void
+  getSubagentMessages(agentId: string): void
+  forkSession(atMessageId?: string): void
 }
 ```
+
+### 全局 store 保留的内容
+
+Provider 管 per-session 状态。以下是**真正全局**的，保留在 store 中：
+
+| Store | 保留内容 |
+|-------|---------|
+| `connectionStore` | models、accountInfo（登录账号信息、可用模型列表——不随 session 变） |
+| `sessionStore` | 项目列表、会话列表、当前选中会话（导航用） |
+| `settingsStore` | permissionMode、effort、theme、sidebarWidth、viewMode、returnToMulti |
+| `commandStore` | 斜杠命令列表（全局共享） |
+| `multiPanelStore` | 面板 sessionId 列表 + 各面板 summary 状态 |
+
+Provider 的 WS 收到 `models`、`account-info`、`slash-commands` 消息时，写入全局 store（这些不是 per-session 的）。
 
 ### Single vs Multi：同一条路径
 
@@ -161,25 +217,14 @@ interface ChatSessionContextValue {
 ```
 ChatSessionProvider(sessionId)
   │
-  ├─ mount → 创建 WebSocket → join session
-  ├─ WS 收到消息 → 更新 Provider 内部 state
-  ├─ Provider state → 通过 Context 传给子组件
-  ├─ 面板状态 (status/lastMessage/progress) → 写入 multiPanelStore
-  ├─ unmount → WebSocket disconnect
+  ├─ mount → useSessionWebSocket 创建 WS → join session → loadInitial
+  ├─ WS 收到消息 → useSessionMessages / useSessionConnection 更新内部 state
+  ├─ 内部 state → 通过 Context 传给子组件
+  ├─ 面板 summary (status/lastMessage/progress) → 写入 multiPanelStore
+  ├─ 全局消息 (models/accountInfo/commands) → 写入全局 store
   │
   └─ 子组件通过 useChatSession() 读数据、调操作
 ```
-
-### 全局 store 变化
-
-| Store | 变化 |
-|-------|------|
-| `messageStore` | **废弃大部分逻辑**。消息状态移入 ChatSessionProvider。仅保留消息缓存（可选优化） |
-| `connectionStore` | **废弃 per-session 状态**。lockStatus/pendingApproval 等移入 Provider。保留 connectionId、models、accountInfo 等真正全局的状态 |
-| `useWebSocket` | **重构为 per-provider 实例**。不再是全局单例。每个 Provider 创建自己的 WS |
-| `sessionStore` | 不变 |
-| `settingsStore` | 新增 viewMode、returnToMulti |
-| `multiPanelStore` | 新建。面板列表 + 各面板的 summary 状态（供下拉菜单显示） |
 
 ### ChatInterface 的 compact prop
 
@@ -198,27 +243,22 @@ ChatSessionProvider(sessionId)
 
 ### Single → Multi
 
-1. 当前 ChatSessionProvider unmount → WS 断开
-2. 渲染 MultiPanelGrid → 每个面板 mount 各自的 ChatSessionProvider → 各自 WS 连接
-3. 消息通过 REST API loadInitial 加载
+所有面板 Provider **同时 mount**，各自创建 WS + 加载消息。Single 的 Provider unmount。
 
 ### Multi → Single
 
-1. 各面板 ChatSessionProvider unmount → WS 断开
-2. 渲染单个 ChatSessionProvider → WS 连接当前选中会话
-3. 消息通过 REST API loadInitial 加载
+选中会话的 Provider 保持或新建。其他面板 Provider unmount。
 
 ### Multi ↗ 展开面板
 
-1. 该面板 Provider 保持（不 unmount，避免 WS 断开重连）
-2. 其他面板 unmount
-3. 展开的面板切换为 `compact=false` 全屏渲染
-4. TopBar 显示 "← 返回 Multi"
+**所有 Provider 保持存活（不 unmount）。** 非展开的面板用 CSS `display:none` 隐藏：
+- WS 连接保持 → 持续收消息 → 状态保持最新
+- 展开面板从 `compact=true` 变为 `compact=false`
+- TopBar 显示 "← 返回 Multi"
 
 ### ← 返回 Multi
 
-1. 全屏面板切换为 `compact=true`
-2. 其他面板重新 mount（各自新建 WS）
+展开面板从 `compact=false` 变回 `compact=true`。隐藏面板恢复 `display:block`。**零 WS 重连，零 REST 加载，瞬间恢复。**
 
 ---
 
@@ -228,8 +268,11 @@ ChatSessionProvider(sessionId)
 
 | 组件 | 位置 | 职责 |
 |------|------|------|
-| `ChatSessionProvider` | `providers/` | per-session Context：WS + 消息 + 连接状态 + 操作 |
+| `ChatSessionProvider` | `providers/` | per-session Context：组合下面 3 个 hook |
 | `useChatSession` | `providers/` | 从 Context 读数据的 hook |
+| `useSessionWebSocket` | `hooks/` | per-session WS 连接生命周期 + send |
+| `useSessionMessages` | `hooks/` | 消息数组 + 流式 + RAF + optimistic（从 messageStore 提取） |
+| `useSessionConnection` | `hooks/` | lock/approval/status/contextUsage 等（从 connectionStore 提取） |
 | `ViewModeToggle` | `components/layout/` | Single/Multi 按钮组 |
 | `ReturnToMultiButton` | `components/layout/` | "← 返回 Multi" 按钮 |
 | `BackgroundStatusButton` | `components/layout/` | TopBar 带 badge 按钮 |
@@ -242,15 +285,15 @@ ChatSessionProvider(sessionId)
 
 | 组件 | 变化 |
 |------|------|
-| `ChatInterface` | 新增 `compact` prop。内部从 `useChatSession()` 读数据替代直接读全局 store |
-| `ChatMessagesPane` | 从 `useChatSession().messages` 读数据。新增 `limit` prop |
-| `ChatComposer` | 从 `useChatSession().send` 调发送。新增 `minimal` prop 隐藏 toolbar |
-| `ApprovalPanel` | 从 `useChatSession()` 读 pending 状态。新增 `compact` prop |
+| `ChatInterface` | 新增 `compact` prop。从 `useChatSession()` 读数据 |
+| `ChatMessagesPane` | 从 `useChatSession().messages` 读。新增 `limit` prop |
+| `ChatComposer` | 从 `useChatSession()` 读/调。新增 `minimal` prop |
+| `ApprovalPanel` | 从 `useChatSession()` 读。新增 `compact` prop |
 | `ConnectionBanner` | 从 `useChatSession().connectionStatus` 读 |
 | `StatusBar` | 从 `useChatSession()` 读 |
-| `useWebSocket` | 不再是全局单例。逻辑拆入 ChatSessionProvider 内部 |
-| `messageStore` | 精简：移除 per-session 消息逻辑，保留可选缓存 |
-| `connectionStore` | 精简：移除 per-session 状态（lock/approval），保留全局状态（connectionId/models/accountInfo） |
+| `messageStore` | **逻辑提取到 `useSessionMessages` hook**。store 精简为可选缓存层 |
+| `connectionStore` | **per-session 逻辑提取到 `useSessionConnection` hook**。store 只保留 models/accountInfo |
+| `useWebSocket` | **逻辑提取到 `useSessionWebSocket` hook**。全局单例废弃 |
 | `settingsStore` | 新增 viewMode、returnToMulti |
 | `TopBar` | 集成新按钮组件 |
 
@@ -269,43 +312,58 @@ ChatSessionProvider(sessionId)
 
 ## 实现范围
 
-### Phase 1：ChatSessionProvider（核心重构）
+### Phase 1：提取 hook + 创建 Provider（渐进式，不破坏现有功能）
 
-1. 创建 `ChatSessionProvider` + `useChatSession` + Context 接口定义
-2. 将 `useWebSocket` 的连接/消息处理逻辑迁入 Provider
-3. 将 `messageStore` 的消息状态迁入 Provider
-4. 将 `connectionStore` 的 per-session 状态迁入 Provider
-5. `ChatInterface` 改为从 `useChatSession()` 读数据
-6. `ChatMessagesPane` / `ChatComposer` / `ApprovalPanel` / `ConnectionBanner` / `StatusBar` 改为从 `useChatSession()` 读数据
-7. Single 模式包裹 `<ChatSessionProvider>`，验证行为与重构前完全一致
+**Step 1a：提取 hook，Provider 代理到全局 store**
+1. 创建 `useSessionWebSocket(sessionId)` hook，提取自 `useWebSocket`
+2. 创建 `useSessionMessages(ws)` hook，提取自 `messageStore`
+3. 创建 `useSessionConnection(ws)` hook，提取自 `connectionStore`
+4. 创建 `ChatSessionProvider` + `useChatSession`，内部调用这 3 个 hook
+5. 同时，Provider **仍然写入全局 store**（兼容层），组件仍从全局 store 读
+6. 在 Single 模式包裹 `<ChatSessionProvider>`，验证行为完全不变
+
+**Step 1b：逐个组件切换数据源**
+7. `ChatInterface` → `useChatSession()`
+8. `ChatMessagesPane` → `useChatSession().messages`
+9. `ChatComposer` → `useChatSession().send`
+10. `ApprovalPanel` → `useChatSession()` 读 pending
+11. `ConnectionBanner` → `useChatSession().connectionStatus`
+12. `StatusBar` → `useChatSession()`
+13. 每切一个组件，验证 Single 模式行为不变
+
+**Step 1c：清理全局 store**
+14. 移除 Provider 对全局 store 的写入（兼容层）
+15. 精简 `messageStore`（移除 per-session 逻辑，保留可选缓存）
+16. 精简 `connectionStore`（只保留 models/accountInfo）
+17. 删除旧 `useWebSocket` 全局单例
 
 ### Phase 2：compact 模式
 
-8. `ChatInterface` 新增 `compact` prop
-9. `MessageComponent` compact 时跳过语法高亮
-10. `ChatComposer` minimal 时隐藏 toolbar
-11. `ApprovalPanel` compact 时精简
-12. `ChatMessagesPane` limit prop
+18. `ChatInterface` 新增 `compact` prop
+19. `MessageComponent` compact 时跳过语法高亮
+20. `ChatComposer` minimal 时隐藏 toolbar
+21. `ApprovalPanel` compact 时精简
+22. `ChatMessagesPane` limit prop
 
 ### Phase 3：Multi 模式 UI
 
-13. `settingsStore` 新增 viewMode、returnToMulti
-14. `multiPanelStore`
-15. `ViewModeToggle` + `ReturnToMultiButton`
-16. `MultiPanelGrid` + `EmptyPanel`
-17. 面板 Header（状态+标题+↗+×）
+23. `settingsStore` 新增 viewMode、returnToMulti
+24. `multiPanelStore`
+25. `ViewModeToggle` + `ReturnToMultiButton`
+26. `MultiPanelGrid` + `EmptyPanel`
+27. 面板 Header（状态+标题+↗+×）
+28. ↗ 展开/返回：CSS display:none 保持所有 Provider 存活
 
 ### Phase 4：后台状态菜单
 
-18. `BackgroundStatusButton` + `BackgroundStatusDropdown`
-19. 面板状态写入 multiPanelStore → badge 更新
+29. `BackgroundStatusButton` + `BackgroundStatusDropdown`
+30. 面板状态写入 multiPanelStore → badge 更新
 
 ### Phase 5：打磨
 
-20. 模式切换 WS 连接优化（↗ 展开时保持 Provider 不 unmount）
-21. 面板拖拽排序
-22. 移动端适配
-23. 键盘快捷键
+31. 面板拖拽排序
+32. 移动端适配（Multi 降级为 Single）
+33. 键盘快捷键
 
 ---
 
