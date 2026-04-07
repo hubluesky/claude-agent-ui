@@ -324,6 +324,23 @@ export interface S2C_RewindResult {
   dryRun: boolean
 }
 
+// ---- Sub-agent Messages ----
+
+export interface C2S_GetSubagentMessages {
+  type: 'get-subagent-messages'
+  sessionId: string
+  agentId: string
+  limit?: number
+  offset?: number
+}
+
+export interface S2C_SubagentMessages {
+  type: 'subagent-messages'
+  sessionId: string
+  agentId: string
+  messages: AgentMessage[]
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -345,6 +362,7 @@ export type C2SMessage =
   | C2S_ToggleMcpServer
   | C2S_ReconnectMcpServer
   | C2S_RewindFiles
+  | C2S_GetSubagentMessages
 
 export type S2CMessage =
   | S2C_Init
@@ -368,4 +386,5 @@ export type S2CMessage =
   | S2C_ContextUsage
   | S2C_McpStatus
   | S2C_RewindResult
+  | S2C_SubagentMessages
   | S2C_Error

@@ -340,6 +340,14 @@ function handleServerMessage(msg: S2CMessage) {
       break
     }
 
+    case 'subagent-messages': {
+      // Dispatch as custom event — AgentCard listens for its own agentId
+      window.dispatchEvent(new CustomEvent('subagent-messages', {
+        detail: { agentId: (msg as any).agentId, messages: (msg as any).messages },
+      }))
+      break
+    }
+
     case 'session-complete':
     case 'session-aborted':
       // Clear pending requests but preserve lock status — lock persists across queries
@@ -449,6 +457,10 @@ function rewindFiles(sessionId: string, messageId: string, dryRun?: boolean) {
   send({ type: 'rewind-files', sessionId, messageId, dryRun } as any)
 }
 
+function getSubagentMessages(sessionId: string, agentId: string) {
+  send({ type: 'get-subagent-messages', sessionId, agentId } as any)
+}
+
 // ── Hook (manages singleton lifecycle via ref-counting) ─────────
 export function useWebSocket() {
   useEffect(() => {
@@ -464,5 +476,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, forkSession, getContextUsage, getMcpStatus, toggleMcpServer, reconnectMcpServer, rewindFiles, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
+  return { send, sendMessage, joinSession, forkSession, getContextUsage, getMcpStatus, toggleMcpServer, reconnectMcpServer, rewindFiles, getSubagentMessages, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
 }

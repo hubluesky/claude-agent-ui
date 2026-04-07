@@ -7,7 +7,7 @@ import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
 import { V1QuerySession } from '../agent/v1-session.js'
-import { forkSession } from '@anthropic-ai/claude-agent-sdk'
+import { forkSession, getSubagentMessages, listSubagents } from '@anthropic-ai/claude-agent-sdk'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 
@@ -145,6 +145,10 @@ export function createWsHandler(deps: HandlerDeps) {
       }
       case 'rewind-files': {
         await handleRewindFiles(connectionId, msg.sessionId, msg.messageId, msg.dryRun)
+        break
+      }
+      case 'get-subagent-messages': {
+        await handleGetSubagentMessages(connectionId, msg.sessionId, msg.agentId, msg.limit, msg.offset)
         break
       }
     }
@@ -783,6 +787,36 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     } catch (err: any) {
       wsHub.sendTo(connectionId, { type: 'error', message: `Rewind failed: ${err.message}`, code: 'internal' })
+    }
+  }
+
+  async function handleGetSubagentMessages(
+    connectionId: string,
+    sessionId: string,
+    agentId: string,
+    limit?: number,
+    offset?: number
+  ) {
+    try {
+      const session = sessionManager.getActive(sessionId)
+      const cwd = session?.projectCwd
+      const msgs = await getSubagentMessages(sessionId, agentId, {
+        dir: cwd,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
+      })
+      wsHub.sendTo(connectionId, {
+        type: 'subagent-messages',
+        sessionId,
+        agentId,
+        messages: msgs,
+      })
+    } catch (err: any) {
+      wsHub.sendTo(connectionId, {
+        type: 'error',
+        message: `Failed to get subagent messages: ${err.message}`,
+        code: 'internal',
+      })
     }
   }
 
