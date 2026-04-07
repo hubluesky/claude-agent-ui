@@ -4,7 +4,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { ChatSessionProvider } from '../../providers/ChatSessionProvider'
 import { ChatInterface } from './ChatInterface'
-import { EmptyPanel } from './EmptyPanel'
+import { AddPanelSlot } from './AddPanelSlot'
 
 function getGridCols(count: number): number {
   if (count <= 1) return 1
@@ -17,6 +17,7 @@ export function MultiPanelGrid() {
   const panelIds = useMultiPanelStore((s) => s.panelSessionIds)
   const summaries = useMultiPanelStore((s) => s.panelSummaries)
   const removePanel = useMultiPanelStore((s) => s.removePanel)
+  const addPanel = useMultiPanelStore((s) => s.addPanel)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
   const setReturnToMulti = useSettingsStore((s) => s.setReturnToMulti)
   const selectSession = useSessionStore((s) => s.selectSession)
@@ -27,22 +28,15 @@ export function MultiPanelGrid() {
     setReturnToMulti(true)
   }, [selectSession, setViewMode, setReturnToMulti])
 
-  const handleNewConversation = useCallback(() => {
-    setViewMode('single')
-    const cwd = useSessionStore.getState().currentProjectCwd
-    if (cwd) selectSession('__new__', cwd)
-  }, [setViewMode, selectSession])
+  const handleAddSession = useCallback((sessionId: string, title: string, cwd: string, projectName: string) => {
+    addPanel(sessionId, { sessionId, title, projectCwd: cwd, projectName })
+  }, [addPanel])
 
-  const totalSlots = panelIds.length + 1 // +1 for empty/new slot
+  const totalSlots = panelIds.length + 1 // +1 for add slot
   const cols = getGridCols(totalSlots)
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {panelIds.length > 0 && (
-        <div className="px-3 py-1.5 bg-[var(--warning-subtle-bg)] border-b border-[var(--warning-subtle-border)] text-[10px] text-[var(--warning)] text-center shrink-0">
-          Multi 面板预览模式 — 各面板暂时共享同一会话数据，独立数据通道将在后续版本实现
-        </div>
-      )}
       <div
         className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-y-auto"
         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
@@ -50,7 +44,7 @@ export function MultiPanelGrid() {
         {panelIds.map((sid) => {
           const summary = summaries.get(sid)
           return (
-            <ChatSessionProvider key={sid} sessionId={sid}>
+            <ChatSessionProvider key={sid} sessionId={sid} independent>
               <ChatInterface
                 compact
                 panelTitle={summary?.title}
@@ -61,7 +55,10 @@ export function MultiPanelGrid() {
             </ChatSessionProvider>
           )
         })}
-        <EmptyPanel onNewConversation={handleNewConversation} />
+        <AddPanelSlot
+          existingPanelIds={panelIds}
+          onAddSession={handleAddSession}
+        />
       </div>
     </div>
   )

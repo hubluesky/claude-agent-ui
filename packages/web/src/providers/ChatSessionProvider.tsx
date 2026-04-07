@@ -1,28 +1,80 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { ChatSessionContext, type ChatSessionContextValue } from './ChatSessionContext'
 import { useMessageStore } from '../stores/messageStore'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { fetchSessionMessages } from '../lib/api'
+import type { AgentMessage } from '@claude-agent-ui/shared'
 
 interface ChatSessionProviderProps {
   sessionId: string | null
+  /**
+   * When true, Provider loads its own messages from REST API
+   * instead of reading from the global messageStore.
+   * Used in Multi mode so each panel has independent messages.
+   */
+  independent?: boolean
   children: ReactNode
 }
 
 /**
- * Proxy provider: reads from existing global stores.
- * Phase 1a — validates Provider tree without changing any component.
- * Will be replaced with per-session hooks in Phase 1b.
+ * Phase 1a proxy provider.
+ *
+ * - independent=false (default): reads from global stores (Single mode)
+ * - independent=true: loads messages via REST API into local state (Multi mode)
  */
-export function ChatSessionProvider({ sessionId, children }: ChatSessionProviderProps) {
-  const messages = useMessageStore((s) => s.messages)
-  const isLoadingHistory = useMessageStore((s) => s.isLoadingHistory)
-  const isLoadingMore = useMessageStore((s) => s.isLoadingMore)
-  const hasMore = useMessageStore((s) => s.hasMore)
-  const loadMore = useMessageStore((s) => s.loadMore)
+export function ChatSessionProvider({ sessionId, independent, children }: ChatSessionProviderProps) {
+  // ── Independent message state (Multi mode) ──────────────────
+  const [localMessages, setLocalMessages] = useState<AgentMessage[]>([])
+  const [localLoading, setLocalLoading] = useState(false)
+  const [localHasMore, setLocalHasMore] = useState(false)
 
+  useEffect(() => {
+    if (!independent || !sessionId || sessionId === '__new__') return
+    let cancelled = false
+    setLocalLoading(true)
+    fetchSessionMessages(sessionId, { limit: 50, offset: 0 })
+      .then((result) => {
+        if (cancelled) return
+        setLocalMessages(result.messages as AgentMessage[])
+        setLocalHasMore(result.hasMore)
+        setLocalLoading(false)
+      })
+      .catch(() => {
+        if (!cancelled) setLocalLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [independent, sessionId])
+
+  const localLoadMore = useCallback(() => {
+    if (!independent || !sessionId || sessionId === '__new__' || localLoading) return
+    setLocalLoading(true)
+    fetchSessionMessages(sessionId, { limit: 50, offset: localMessages.length })
+      .then((result) => {
+        setLocalMessages((prev) => [...(result.messages as AgentMessage[]), ...prev])
+        setLocalHasMore(result.hasMore)
+        setLocalLoading(false)
+      })
+      .catch(() => setLocalLoading(false))
+  }, [independent, sessionId, localMessages.length, localLoading])
+
+  // ── Global store reads (Single mode / shared state) ─────────
+  const globalMessages = useMessageStore((s) => s.messages)
+  const globalIsLoadingHistory = useMessageStore((s) => s.isLoadingHistory)
+  const globalIsLoadingMore = useMessageStore((s) => s.isLoadingMore)
+  const globalHasMore = useMessageStore((s) => s.hasMore)
+  const globalLoadMore = useMessageStore((s) => s.loadMore)
+
+  // Select message source based on mode
+  const messages = independent ? localMessages : globalMessages
+  const isLoadingHistory = independent ? localLoading : globalIsLoadingHistory
+  const isLoadingMore = independent ? false : globalIsLoadingMore
+  const hasMore = independent ? localHasMore : globalHasMore
+  const loadMore = independent ? localLoadMore : globalLoadMore
+
+  // ── Connection state (shared in proxy phase) ────────────────
   const connectionStatus = useConnectionStore((s) => s.connectionStatus)
   const sessionStatus = useConnectionStore((s) => s.sessionStatus)
   const lockStatus = useConnectionStore((s) => s.lockStatus)

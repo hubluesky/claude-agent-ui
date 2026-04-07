@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 
 export function ViewModeToggle() {
@@ -11,8 +12,21 @@ export function ViewModeToggle() {
     if (mode !== 'single') setReturnToMulti(false)
   }
 
+  // Ctrl+Shift+M to toggle Single/Multi
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        const next = useSettingsStore.getState().viewMode === 'single' ? 'multi' : 'single'
+        handleSwitch(next)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   return (
-    <div className="flex bg-[var(--bg-primary)] rounded-[5px] border border-[var(--border)] overflow-hidden">
+    <div className="flex bg-[var(--bg-primary)] rounded-[5px] border border-[var(--border)] overflow-hidden" title="Ctrl+Shift+M 切换模式">
       {(['single', 'multi'] as const).map((mode) => (
         <button
           key={mode}
