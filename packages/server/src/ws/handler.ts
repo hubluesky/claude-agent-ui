@@ -30,6 +30,12 @@ export function createWsHandler(deps: HandlerDeps) {
   }
   const pendingRequestMap = new Map<string, PendingRequest>()
 
+  // Start heartbeat and register dead connection handler
+  wsHub.setOnDeadConnection((deadConnectionId) => {
+    lockManager.onDisconnect(deadConnectionId)
+  })
+  wsHub.startHeartbeat()
+
   function resendPendingRequests(sessionId: string, connectionId: string, readonly: boolean) {
     for (const [, entry] of pendingRequestMap) {
       if (entry.sessionId !== sessionId) continue
@@ -74,7 +80,7 @@ export function createWsHandler(deps: HandlerDeps) {
   async function handleMessage(connectionId: string, msg: C2SMessage) {
     switch (msg.type) {
       case 'join-session':
-        handleJoinSession(connectionId, msg.sessionId)
+        handleJoinSession(connectionId, msg.sessionId, msg.lastSeq)
         break
       case 'send-message':
         await handleSendMessage(connectionId, msg.sessionId, msg.prompt, msg.options)
@@ -151,10 +157,13 @@ export function createWsHandler(deps: HandlerDeps) {
         await handleGetSubagentMessages(connectionId, msg.sessionId, msg.agentId, msg.limit, msg.offset)
         break
       }
+      case 'pong':
+        wsHub.recordPong(connectionId)
+        break
     }
   }
 
-  function handleJoinSession(connectionId: string, sessionId: string) {
+  function handleJoinSession(connectionId: string, sessionId: string, lastSeq?: number) {
     wsHub.joinSession(connectionId, sessionId)
     const lockHolder = lockManager.getHolder(sessionId)
     const activeSession = sessionManager.getActive(sessionId)
@@ -168,6 +177,23 @@ export function createWsHandler(deps: HandlerDeps) {
       isLockHolder,
       permissionMode: activeSession?.permissionMode,
     })
+
+    // Replay buffered messages the client missed
+    const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
+    for (const entry of missed) {
+      wsHub.sendTo(connectionId, entry.message)
+    }
+
+    // Send stream snapshot if streaming is in progress
+    const snapshot = wsHub.getStreamSnapshot(sessionId)
+    if (snapshot) {
+      wsHub.sendTo(connectionId, {
+        type: 'stream-snapshot',
+        sessionId,
+        messageId: snapshot.messageId,
+        blocks: snapshot.blocks,
+      })
+    }
 
     // Re-send any pending tool-approval or ask-user requests for this session
     resendPendingRequests(sessionId, connectionId, !isLockHolder)
@@ -185,7 +211,6 @@ export function createWsHandler(deps: HandlerDeps) {
           status: 'locked',
           holderId: connectionId,
         })
-        // Re-send pending requests as non-readonly since this client now holds lock
         resendPendingRequests(sessionId, connectionId, false)
       }
     }
@@ -195,7 +220,7 @@ export function createWsHandler(deps: HandlerDeps) {
     connectionId: string,
     sessionId: string | null,
     prompt: string,
-    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string }
+    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string }
   ) {
     let effectiveSessionId = sessionId
     let session: AgentSession
@@ -240,6 +265,14 @@ export function createWsHandler(deps: HandlerDeps) {
     }
     if (prompt) {
       broadcastContent.push({ type: 'text', text: prompt })
+    }
+
+    // Apply permission mode from client BEFORE binding events or sending,
+    // so the session starts with the correct mode (not 'default')
+    if (options?.permissionMode && session instanceof V1QuerySession) {
+      try {
+        await session.setPermissionMode(options.permissionMode as any)
+      } catch { /* ignore — mode will be applied on next query */ }
     }
 
     bindSessionEvents(session, effectiveSessionId, connectionId, prompt, broadcastContent)
@@ -321,7 +354,33 @@ export function createWsHandler(deps: HandlerDeps) {
         if (!isToolResult) return
       }
 
-      // Broadcast all other messages to ALL clients.
+      // Update stream snapshot for streaming events
+      if (msg.type === 'stream_event') {
+        const event = msg.event
+        if (event?.type === 'content_block_delta') {
+          const delta = event.delta
+          const index = event.index ?? 0
+          if (delta?.type === 'text_delta' && delta.text) {
+            wsHub.updateStreamSnapshot(realSessionId, msg.uuid ?? '', index, 'text', delta.text)
+          } else if (delta?.type === 'thinking_delta' && delta.thinking) {
+            wsHub.updateStreamSnapshot(realSessionId, msg.uuid ?? '', index, 'thinking', delta.thinking)
+          }
+        }
+        // Don't buffer streaming events — they're tracked via snapshot
+        wsHub.broadcastRaw(realSessionId, {
+          type: 'agent-message',
+          sessionId: realSessionId,
+          message: msg,
+        })
+        return
+      }
+
+      // Clear stream snapshot when final assistant message arrives
+      if (msg.type === 'assistant') {
+        wsHub.clearStreamSnapshot(realSessionId)
+      }
+
+      // Broadcast and buffer all other messages to ALL clients
       wsHub.broadcast(realSessionId, {
         type: 'agent-message',
         sessionId: realSessionId,
@@ -420,6 +479,14 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     })
 
+    session.on('mcp-status', (servers: any[]) => {
+      wsHub.broadcast(realSessionId, {
+        type: 'mcp-status',
+        sessionId: realSessionId,
+        servers,
+      })
+    })
+
     session.on('state-change', (state) => {
       wsHub.broadcast(realSessionId, {
         type: 'session-state-change',
@@ -447,14 +514,12 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function handleToolApprovalResponse(connectionId: string, requestId: string, decision: ToolApprovalDecision) {
+  function handleToolApprovalResponse(_connectionId: string, requestId: string, decision: ToolApprovalDecision) {
     const entry = pendingRequestMap.get(requestId)
     if (!entry) return
 
-    if (!lockManager.isHolder(entry.sessionId, connectionId)) {
-      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
-      return
-    }
+    // No lock check — any connected client can respond to approval requests.
+    // Lock controls who can send new messages, not who can respond to pending approvals.
 
     const session = sessionManager.getActive(entry.sessionId)
     if (!session) return
@@ -463,7 +528,6 @@ export function createWsHandler(deps: HandlerDeps) {
     lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
-    // Broadcast to ALL clients (including sender) so everyone clears pendingApproval
     wsHub.broadcast(entry.sessionId, {
       type: 'tool-approval-resolved',
       requestId,
@@ -471,14 +535,9 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function handleAskUserResponse(connectionId: string, requestId: string, answers: Record<string, string>) {
+  function handleAskUserResponse(_connectionId: string, requestId: string, answers: Record<string, string>) {
     const entry = pendingRequestMap.get(requestId)
     if (!entry) return
-
-    if (!lockManager.isHolder(entry.sessionId, connectionId)) {
-      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
-      return
-    }
 
     const session = sessionManager.getActive(entry.sessionId)
     if (!session) return
@@ -487,7 +546,6 @@ export function createWsHandler(deps: HandlerDeps) {
     lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
-    // Broadcast to ALL clients (including sender) so everyone clears pendingAskUser
     wsHub.broadcast(entry.sessionId, {
       type: 'ask-user-resolved',
       requestId,
@@ -496,7 +554,7 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   async function handleResolvePlanApproval(
-    connectionId: string,
+    _connectionId: string,
     _sessionId: string,
     requestId: string,
     decision: PlanApprovalDecision['decision'],
@@ -504,11 +562,6 @@ export function createWsHandler(deps: HandlerDeps) {
   ) {
     const entry = pendingRequestMap.get(requestId)
     if (!entry) return
-
-    if (!lockManager.isHolder(entry.sessionId, connectionId)) {
-      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
-      return
-    }
 
     const session = sessionManager.getActive(entry.sessionId)
     if (!session || !(session instanceof V1QuerySession)) return
@@ -714,7 +767,10 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   async function handleGetContextUsage(connectionId: string, sessionId: string) {
-    const session = sessionManager.getActive(sessionId)
+    let session = sessionManager.getActive(sessionId)
+    if (!session && sessionId && !sessionId.startsWith('pending-') && sessionId !== '__new__') {
+      try { session = await sessionManager.resumeSession(sessionId) } catch { /* ignore */ }
+    }
     if (!session || !('getContextUsage' in session)) return
     try {
       const usage = await (session as any).getContextUsage()
@@ -733,7 +789,15 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   async function handleGetMcpStatus(connectionId: string, sessionId: string) {
-    const session = sessionManager.getActive(sessionId)
+    let session = sessionManager.getActive(sessionId)
+    // If no active session, resume one so we can query MCP status
+    if (!session && sessionId && !sessionId.startsWith('pending-') && sessionId !== '__new__') {
+      try {
+        session = await sessionManager.resumeSession(sessionId)
+      } catch {
+        // Can't resume
+      }
+    }
     if (!session || !('getMcpStatus' in session)) return
     try {
       const servers = await (session as any).getMcpStatus()
