@@ -45,10 +45,17 @@
 - [x] 快捷键系统 — useKeyboardShortcuts + ShortcutsDialog (Ctrl+N/B/F//)
 - [x] Session 导出 — /api/sessions/:id/export?format=md|json + SessionCard MD/JSON 按钮
 
-## 待改进项
+## 可选增量优化
 
-1. **主题组件完全迁移**：主框架已用 CSS 变量，但消息组件等仍有硬编码颜色，需逐步迁移
-2. **消息搜索高亮集成**：HighlightText 组件已创建，需在 MessageComponent 中集成 useSearchQuery
+### 功能类
+1. **setMaxThinkingTokens** — ModesPopup 增加 thinking token 限制滑块
+2. **supportedAgents** — 新建会话时展示可用 agent 列表
+3. **reloadPlugins** — MCP 面板增加 Reload 按钮
+
+### 工程类
+4. **主题组件完全迁移** — 消息组件等仍有硬编码颜色，需逐步改为 CSS 变量
+5. **Server 端返回类型** — v1-session 方法返回 `Promise<any>`，应定义具体接口
+6. **Bundle code splitting** — 当前单 chunk 532KB，可用 React.lazy 拆分 Dialog/Panel
 
 ## 已知 Bug
 
@@ -62,6 +69,19 @@
 | 控制方法 (24) | 18 | 6 | 75% |
 | Query Options (20) | 15 | 5 | 75% |
 | 综合利用率 | | | ~80% |
+
+### 未用 SDK API 明细
+
+**Query 方法（6 个未用）：**
+- `setMaxThinkingTokens()` — 可加到 ModesPopup ⭐
+- `supportedAgents()` — 可展示 agent 列表 ⭐
+- `reloadPlugins()` — 可加到 MCP 面板 ⭐
+- `applyFlagSettings()` — 内部用途，不需要暴露
+- `initializationResult()` — 内部用途
+- `seedReadState()` — 内部用途
+
+**顶层函数（1 个未用）：**
+- `listSubagents()` — AgentCard 已通过 getSubagentMessages 替代
 
 ## 参考文件
 
