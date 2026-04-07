@@ -39,26 +39,23 @@
 
 #### 侧边栏
 
-Multi 模式侧边栏分为两个区域：
+**完全不变。** Single 和 Multi 模式共用同一个侧边栏（现有的项目树：ProjectCard → SessionCard）。侧边栏可收起，Multi 模式时收起可为面板网格腾出更多空间。
 
-**上部：面板会话，按状态分组**
+在 Multi 模式下，从侧边栏点击会话 → 添加到面板（如果不在面板中）或滚动到对应面板。
 
-只显示当前打开在面板中的会话，按状态分组：
+#### 后台状态弹窗（BackgroundStatusPopup）
 
-- **询问中**（Waiting）— 需要审批或回答问题的会话，黄色标识
-- **进行中**（Running）— 正在运行的会话，绿色标识
-- **已完成**（Done）— 任务完成的会话，灰色标识
+**Single 模式下**，TopBar 新增一个带 badge 的状态按钮，点击从右上角下拉展开弹窗，显示其他后台会话的状态：
 
-每个条目显示：状态点 + 会话标题 + 项目标签 + 进度条/审批 badge + ↗ 展开按钮。
+- 按 Waiting → Running → Idle 排序
+- 每条显示：状态点 + 标题 + 项目标签 + 最新消息 + 进度条
+- Waiting 的会话显示 `!` badge
+- 点击 → 切换到该会话
+- badge 数字 = 需要关注的会话数（waiting + error）
 
-点击侧边栏条目 → 滚动到对应面板并高亮。
-点击 ↗ 或双击 → 切换到 Single 模式全屏聊天该会话，TopBar 出现"← 返回 Multi"按钮（Esc 同效）。
+弹窗从 TopBar 按钮下拉，不遮挡聊天内容和 Composer。
 
-**下部：折叠的"其他会话"**
-
-显示未添加到面板的所有会话（跨项目），折叠状态只显示计数"其他会话 (5)"。展开后显示列表，每条可一键添加到面板。
-
-底部 `+ 新建会话` 按钮 → 选择项目 → 新面板自动出现。
+**Multi 模式下**不需要此弹窗——面板本身已经显示所有状态。
 
 #### 面板布局
 
@@ -189,16 +186,13 @@ panels: PanelSession[]  // 面板列表，持久化 sessionId 列表到 localSto
 |------|------|------|
 | `ViewModeToggle` | `components/layout/` | TopBar 内 Single/Multi 按钮组 |
 | `ReturnToMultiButton` | `components/layout/` | TopBar "← 返回 Multi" 按钮 |
-| `MultiSidebar` | `components/sidebar/` | Multi 模式侧边栏（状态分组 + 其他会话折叠） |
-| `MultiSessionCard` | `components/sidebar/` | Multi 侧边栏的面板会话卡片 |
-| `OtherSessionsList` | `components/sidebar/` | "其他会话"折叠区 |
-| `SessionPicker` | `components/sidebar/` | 添加会话弹窗 |
+| `BackgroundStatusButton` | `components/layout/` | TopBar 带 badge 的后台状态按钮 |
+| `BackgroundStatusPopup` | `components/layout/` | 右上角下拉弹窗：后台会话状态列表 |
 | `MultiPanelGrid` | `components/chat/` | N 面板网格容器 |
 | `MiniChatPanel` | `components/chat/` | 单个迷你聊天面板（独立 WebSocket） |
 | `MiniComposer` | `components/chat/` | 精简版输入框 |
 | `MiniMessageList` | `components/chat/` | 简单 div 滚动消息列表（最近 20 条，不用 Virtuoso） |
 | `EmptyPanel` | `components/chat/` | 空面板占位符 |
-| `PanelNotificationBar` | `components/chat/` | Multi 顶部通知条（N 个会话需要操作） |
 | `multiPanelStore` | `stores/` | Multi 模式面板状态管理 |
 
 ### 修改组件
@@ -206,8 +200,7 @@ panels: PanelSession[]  // 面板列表，持久化 sessionId 列表到 localSto
 | 组件 | 变更 |
 |------|------|
 | `settingsStore` | 新增 `viewMode`, `returnToMulti` |
-| `TopBar` | 集成 ViewModeToggle + ReturnToMultiButton |
-| `AppLayout` | 根据 viewMode 切换侧边栏（SessionList / MultiSidebar） |
+| `TopBar` | 集成 ViewModeToggle + ReturnToMultiButton + BackgroundStatusButton |
 | `ChatInterface` | Multi 模式渲染 MultiPanelGrid |
 | `useWebSocket` | Single→Multi 切换时 leave-session，Multi→Single 时 join |
 
@@ -218,7 +211,8 @@ panels: PanelSession[]  // 面板列表，持久化 sessionId 列表到 localSto
 - `connectionStore` — 保持全局单值，Multi 面板各有独立本地状态
 - `messageStore` — Multi 面板不走 messageStore，避免流式冲突
 - `ChatMessagesPane`（Virtuoso）— 只在 Single 模式使用
-- `ProjectCard`、`SessionCard` — Single 模式继续使用
+- `AppLayout` — 侧边栏不变，不需要条件渲染
+- `SessionList`、`ProjectCard`、`SessionCard` — 完全不变
 
 ---
 
@@ -227,30 +221,27 @@ panels: PanelSession[]  // 面板列表，持久化 sessionId 列表到 localSto
 ### Phase 1：核心框架
 
 1. settingsStore 新增 viewMode, returnToMulti
-2. ViewModeToggle + ReturnToMultiButton
-3. AppLayout 根据 viewMode 切换侧边栏
-4. ChatInterface 根据 viewMode 渲染
-5. multiPanelStore
+2. ViewModeToggle + ReturnToMultiButton（TopBar）
+3. ChatInterface 根据 viewMode 渲染（Multi 占位符）
+4. multiPanelStore（面板列表管理+持久化）
 
-### Phase 2：Multi 模式 UI
+### Phase 2：后台状态弹窗（Single 模式增强）
 
-6. MultiSidebar + MultiSessionCard + OtherSessionsList
-7. MultiPanelGrid + EmptyPanel
-8. MiniChatPanel + MiniComposer + MiniMessageList（独立 WebSocket，简单 div 消息）
-9. SessionPicker
-10. PanelNotificationBar
+5. BackgroundStatusButton（TopBar 带 badge 按钮）
+6. BackgroundStatusPopup（右上角下拉弹窗，显示后台会话状态，点击切换）
 
-### Phase 3：连接交接 + 通知
+### Phase 3：Multi 模式 UI
 
-11. 模式切换的 WS 连接交接协议（Single↔Multi、展开↔返回）
-12. PanelNotificationBar（面板中有会话 waiting 时高亮提示）
+7. MultiPanelGrid + EmptyPanel（动态 N 面板网格）
+8. MiniChatPanel + MiniComposer + MiniMessageList（独立 WS，简单 div 消息）
+9. 模式切换的 WS 连接交接（Single↔Multi、展开↔返回）
 
 ### Phase 4：打磨
 
-13. 面板拖拽排序
-14. 模式切换动画
-15. 移动端适配（Multi 降级为 Single）
-16. 键盘快捷键（Ctrl+N 新建）
+10. 面板拖拽排序
+11. 模式切换动画
+12. 移动端适配（Multi 降级为 Single）
+13. 键盘快捷键（Ctrl+N 新建）
 
 ---
 
