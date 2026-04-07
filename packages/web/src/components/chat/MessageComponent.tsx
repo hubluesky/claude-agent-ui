@@ -5,6 +5,7 @@ import { ToolIcon, formatToolSummary } from './tool-display'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
+import { useConnectionStore } from '../../stores/connectionStore'
 
 interface MessageComponentProps {
   message: AgentMessage
@@ -360,22 +361,14 @@ function ForkButton({ messageId }: { messageId: string }) {
 
 function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string }) {
   const [expanded, setExpanded] = useState(false)
-  const [messages, setMessages] = useState<any[] | null>(null)
   const { getSubagentMessages } = useWebSocket()
   const sessionId = useSessionStore((s) => s.currentSessionId)
+  const subagentData = useConnectionStore((s) => s.subagentMessages)
+  const messages = (subagentData && subagentData.agentId === agentId) ? subagentData.messages : null
 
   const handleExpand = () => {
     if (!expanded && agentId && sessionId && sessionId !== '__new__') {
-      // Request messages
       getSubagentMessages(sessionId, agentId)
-      const handler = (e: Event) => {
-        const detail = (e as CustomEvent).detail
-        if (detail.agentId === agentId) {
-          setMessages(detail.messages ?? [])
-          window.removeEventListener('subagent-messages', handler)
-        }
-      }
-      window.addEventListener('subagent-messages', handler)
     }
     setExpanded(!expanded)
   }
@@ -582,28 +575,29 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
 function RewindButton({ messageId }: { messageId: string }) {
   const { rewindFiles } = useWebSocket()
   const sessionId = useSessionStore((s) => s.currentSessionId)
+  const rewindPreview = useConnectionStore((s) => s.rewindPreview)
   const [showPreview, setShowPreview] = useState(false)
-  const [preview, setPreview] = useState<{ filesChanged?: string[]; insertions?: number; deletions?: number } | null>(null)
 
   const handleDryRun = () => {
     if (!sessionId || sessionId === '__new__') return
+    useConnectionStore.getState().setRewindPreview(null)
     rewindFiles(sessionId, messageId, true)
     setShowPreview(true)
-
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      setPreview(detail)
-      window.removeEventListener('rewind-preview', handler)
-    }
-    window.addEventListener('rewind-preview', handler)
   }
 
   const handleRewind = () => {
     if (!sessionId || sessionId === '__new__') return
     rewindFiles(sessionId, messageId, false)
     setShowPreview(false)
-    setPreview(null)
+    useConnectionStore.getState().setRewindPreview(null)
   }
+
+  const handleClose = () => {
+    setShowPreview(false)
+    useConnectionStore.getState().setRewindPreview(null)
+  }
+
+  const preview = showPreview ? rewindPreview : null
 
   return (
     <>
@@ -616,7 +610,7 @@ function RewindButton({ messageId }: { messageId: string }) {
       </button>
       {showPreview && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => { setShowPreview(false); setPreview(null) }} />
+          <div className="fixed inset-0 z-40 bg-black/30" onClick={handleClose} />
           <div className="absolute left-0 top-full mt-1 w-72 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 p-3">
             <p className="text-xs text-[#a8a29e] mb-2 font-medium">Rewind Preview</p>
             {!preview ? (
@@ -642,7 +636,7 @@ function RewindButton({ messageId }: { messageId: string }) {
                     Confirm Rewind
                   </button>
                   <button
-                    onClick={() => { setShowPreview(false); setPreview(null) }}
+                    onClick={handleClose}
                     className="px-2 py-1.5 text-xs text-[#7c7872] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer"
                   >
                     Cancel

@@ -7,7 +7,7 @@ import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
 import { V1QuerySession } from '../agent/v1-session.js'
-import { forkSession, getSubagentMessages, listSubagents } from '@anthropic-ai/claude-agent-sdk'
+import { forkSession, getSubagentMessages } from '@anthropic-ai/claude-agent-sdk'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 

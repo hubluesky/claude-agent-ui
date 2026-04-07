@@ -3,35 +3,11 @@ import { useConnectionStore } from '../../stores/connectionStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 
+// Note: useEffect/useRef used by ContextUsageIndicator at bottom of file
+
 export function ContextPanel({ onClose }: { onClose: () => void }) {
   const contextUsage = useConnectionStore((s) => s.contextUsage)
-  const sessionStatus = useConnectionStore((s) => s.sessionStatus)
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const { getContextUsage } = useWebSocket()
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Fetch on mount and poll while running
-  useEffect(() => {
-    if (!sessionId || sessionId === '__new__') return
-    getContextUsage(sessionId)
-
-    intervalRef.current = setInterval(() => {
-      if (useConnectionStore.getState().sessionStatus === 'running') {
-        getContextUsage(sessionId)
-      }
-    }, 15000)
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [sessionId])
-
-  // Also fetch when status changes to running
-  useEffect(() => {
-    if (sessionStatus === 'running' && sessionId && sessionId !== '__new__') {
-      getContextUsage(sessionId)
-    }
-  }, [sessionStatus])
+  // Polling is owned by ContextUsageIndicator — panel just reads store state
 
   if (!contextUsage) {
     return (
@@ -110,10 +86,38 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-/** Compact token bar for StatusBar — shows percentage and opens ContextPanel on click */
+/** Compact token bar for StatusBar — shows percentage and opens ContextPanel on click.
+ *  Also owns the polling lifecycle: fetches on mount + every 15s while running. */
 export function ContextUsageIndicator() {
   const [open, setOpen] = useState(false)
   const contextUsage = useConnectionStore((s) => s.contextUsage)
+  const sessionStatus = useConnectionStore((s) => s.sessionStatus)
+  const sessionId = useSessionStore((s) => s.currentSessionId)
+  const { getContextUsage } = useWebSocket()
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Fetch on mount and poll while running
+  useEffect(() => {
+    if (!sessionId || sessionId === '__new__') return
+    getContextUsage(sessionId)
+
+    intervalRef.current = setInterval(() => {
+      if (useConnectionStore.getState().sessionStatus === 'running') {
+        getContextUsage(sessionId)
+      }
+    }, 15000)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [sessionId])
+
+  // Also fetch when status changes to running
+  useEffect(() => {
+    if (sessionStatus === 'running' && sessionId && sessionId !== '__new__') {
+      getContextUsage(sessionId)
+    }
+  }, [sessionStatus])
 
   if (!contextUsage) return null
 

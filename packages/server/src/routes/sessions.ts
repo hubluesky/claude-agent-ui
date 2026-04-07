@@ -66,13 +66,20 @@ export function sessionRoutes(sessionManager: SessionManager) {
       Params: { id: string }
       Querystring: { format?: string }
     }>('/api/sessions/:id/export', async (request, reply) => {
-      const format = request.query.format ?? 'md'
-      const messages = await sessionManager.getSessionMessages(request.params.id, { limit: 10000 })
+      const format = request.query.format === 'json' ? 'json' : 'md'
       const info = await sessionManager.getSessionInfo(request.params.id)
+      if (!info) {
+        reply.status(404)
+        return { error: 'Session not found' }
+      }
+      const messages = await sessionManager.getSessionMessages(request.params.id, { limit: 10000 })
+
+      // Sanitize session ID for Content-Disposition filename
+      const safeId = request.params.id.slice(0, 8).replace(/[^a-zA-Z0-9_-]/g, '')
 
       if (format === 'json') {
         reply.header('Content-Type', 'application/json')
-        reply.header('Content-Disposition', `attachment; filename="session-${request.params.id.slice(0, 8)}.json"`)
+        reply.header('Content-Disposition', `attachment; filename="session-${safeId}.json"`)
         return { session: info, messages: messages.messages }
       }
 
@@ -105,7 +112,7 @@ export function sessionRoutes(sessionManager: SessionManager) {
       }
 
       reply.header('Content-Type', 'text/markdown; charset=utf-8')
-      reply.header('Content-Disposition', `attachment; filename="session-${request.params.id.slice(0, 8)}.md"`)
+      reply.header('Content-Disposition', `attachment; filename="session-${safeId}.md"`)
       return lines.join('\n')
     })
 

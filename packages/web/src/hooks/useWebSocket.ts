@@ -326,9 +326,13 @@ function handleServerMessage(msg: S2CMessage) {
     case 'rewind-result': {
       const rr = msg as any
       if (rr.dryRun) {
-        // Dry run results are handled by the RewindDialog component via a callback
-        // Broadcast a custom event so the dialog can pick it up
-        window.dispatchEvent(new CustomEvent('rewind-preview', { detail: rr }))
+        conn.setRewindPreview({
+          canRewind: rr.canRewind,
+          error: rr.error,
+          filesChanged: rr.filesChanged,
+          insertions: rr.insertions,
+          deletions: rr.deletions,
+        })
       } else if (rr.canRewind) {
         useToastStore.getState().add(
           `Rewound ${rr.filesChanged?.length ?? 0} files (+${rr.insertions ?? 0}/-${rr.deletions ?? 0})`,
@@ -340,13 +344,12 @@ function handleServerMessage(msg: S2CMessage) {
       break
     }
 
-    case 'subagent-messages': {
-      // Dispatch as custom event — AgentCard listens for its own agentId
-      window.dispatchEvent(new CustomEvent('subagent-messages', {
-        detail: { agentId: (msg as any).agentId, messages: (msg as any).messages },
-      }))
+    case 'subagent-messages':
+      conn.setSubagentMessages({
+        agentId: (msg as any).agentId,
+        messages: (msg as any).messages ?? [],
+      })
       break
-    }
 
     case 'session-complete':
     case 'session-aborted':

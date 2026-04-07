@@ -62,6 +62,8 @@ interface ConnectionState {
   models: ModelInfo[]
   contextUsage: ContextUsage | null
   mcpServers: McpServerInfo[]
+  rewindPreview: { filesChanged?: string[]; insertions?: number; deletions?: number; canRewind?: boolean; error?: string } | null
+  subagentMessages: { agentId: string; messages: any[] } | null
 }
 
 interface ConnectionActions {
@@ -79,6 +81,8 @@ interface ConnectionActions {
   setModels(models: ModelInfo[]): void
   setContextUsage(usage: ContextUsage | null): void
   setMcpServers(servers: McpServerInfo[]): void
+  setRewindPreview(preview: ConnectionState['rewindPreview']): void
+  setSubagentMessages(data: ConnectionState['subagentMessages']): void
   reset(): void
 }
 
@@ -97,6 +101,8 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   models: [],
   contextUsage: null,
   mcpServers: [],
+  rewindPreview: null,
+  subagentMessages: null,
 
   setConnectionId: (id) => set({ connectionId: id }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
@@ -112,6 +118,8 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   setModels: (models) => set({ models }),
   setContextUsage: (usage) => set({ contextUsage: usage }),
   setMcpServers: (servers) => set({ mcpServers: servers }),
+  setRewindPreview: (preview) => set({ rewindPreview: preview }),
+  setSubagentMessages: (data) => set({ subagentMessages: data }),
   reset: () => set({
     lockStatus: 'idle', lockHolderId: null, sessionStatus: 'idle',
     pendingApproval: null, pendingAskUser: null,
