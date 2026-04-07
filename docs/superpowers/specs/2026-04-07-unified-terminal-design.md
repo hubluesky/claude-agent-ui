@@ -77,11 +77,15 @@ Multi 模式侧边栏分为两个区域：
 
 #### 每个面板
 
-每个面板是一个独立的轻量 ChatInterface，包含：
+每个面板是一个**完全自包含**的轻量 ChatInterface，拥有：
+- **独立 WebSocket 连接**：自己 join session，自己收消息
+- **独立本地状态**：messages 数组（最近 20 条）、lockStatus、pendingApproval 等。**不走全局 messageStore/connectionStore**，避免多面板流式数据冲突
 - **Header**：状态点 + 标题 + 项目标签 + 进度百分比 + ↗ 展开按钮 + × 关闭按钮
 - **消息区**：简单 div 滚动（**不用 Virtuoso**），只渲染最近 20 条消息。展开到 Single 全屏时才用 Virtuoso
 - **输入区**：精简版 Composer（只有 input + send 按钮，无 toolbar）
 - **审批区**：如果该会话有待审批，显示精简版 ApprovalPanel（只有 Allow/Deny 按钮）
+
+面板状态变化（running/waiting/idle）实时写入 multiPanelStore，侧边栏自动响应。
 
 #### WebSocket 架构
 
@@ -142,8 +146,10 @@ TopBar 右侧按钮组：
 
 ### 切换行为
 
-- **Single → Multi**：侧边栏从项目树变为面板会话列表，主区域从单聊变为多面板网格
-- **Multi → Single**：主区域回到单聊，侧边栏回到项目树
+- **Single → Multi**：主 WS 先 leave-session → 侧边栏切换 → 各面板创建自己的 WS 连接
+- **Multi → Single**：各面板 WS 断开 → 主 WS join 当前选中会话 → 侧边栏回到项目树
+- **展开面板 → Single**：该面板 WS 断开 → 主 WS join 该会话 → TopBar 显示"← 返回 Multi"
+- **返回 Multi**：主 WS leave → 各面板（含刚才展开的）重新创建 WS 连接
 - 切换时**当前聚焦的会话保持不变**
 - Multi 模式的面板列表**持久化到 localStorage**
 
@@ -160,23 +166,18 @@ panels: PanelSession[]  // 面板列表，持久化 sessionId 列表到 localSto
 
 ---
 
-## 实时状态推送
+## 数据流：纯客户端驱动
 
-服务端需要新增 WebSocket 消息类型，用于通知 Multi 侧边栏更新面板状态：
+**服务端零改动。** 每个面板的 WebSocket 连接已经能收到该会话的所有消息（agent-message、tool-approval-request、session-state-change 等）。
 
-```typescript
-// S2C: 广播会话状态变更
-type S2C_SessionStatusUpdate = {
-  type: 'session-status-update'
-  sessionId: string
-  status: 'running' | 'waiting' | 'idle' | 'error'
-  lastMessage?: string
-  progress?: { current: number; total: number }
-  hasApproval?: boolean
-}
-```
+数据流：
+1. MiniChatPanel 创建自己的 WS 连接，join 自己的 session
+2. WS 收到消息 → 更新面板本地状态（messages、lockStatus、pendingApproval 等）
+3. 面板本地状态变化 → 写入 multiPanelStore（status、lastMessage、progress、hasApproval）
+4. MultiSidebar 订阅 multiPanelStore → 自动按状态分组显示
+5. "其他会话"区域 → 只从 sessionStore 读取名字列表，**不需要实时状态**
 
-注意：每个面板有自己的 WebSocket 连接，已经能收到自己 session 的消息。此消息类型主要用于通知"其他会话"区域的状态变化（未打开在面板中的会话）。
+**不需要** S2C_SessionStatusUpdate 或任何服务端新增消息类型。客户端已经有所有数据。
 
 ---
 
@@ -208,13 +209,14 @@ type S2C_SessionStatusUpdate = {
 | `TopBar` | 集成 ViewModeToggle + ReturnToMultiButton |
 | `AppLayout` | 根据 viewMode 切换侧边栏（SessionList / MultiSidebar） |
 | `ChatInterface` | Multi 模式渲染 MultiPanelGrid |
-| `shared/protocol.ts` | 新增 S2C_SessionStatusUpdate |
-| `server/ws/handler.ts` | 在关键时机广播 session-status-update |
+| `useWebSocket` | Single→Multi 切换时 leave-session，Multi→Single 时 join |
 
 ### 不改动的组件
 
-- `ws/hub.ts` — 服务端 WebSocket hub 不变
-- `connectionStore` — 保持全局单值，Multi 面板各有独立连接
+- **整个 packages/server** — 服务端零改动
+- **shared/protocol.ts** — 不新增消息类型
+- `connectionStore` — 保持全局单值，Multi 面板各有独立本地状态
+- `messageStore` — Multi 面板不走 messageStore，避免流式冲突
 - `ChatMessagesPane`（Virtuoso）— 只在 Single 模式使用
 - `ProjectCard`、`SessionCard` — Single 模式继续使用
 
@@ -238,18 +240,17 @@ type S2C_SessionStatusUpdate = {
 9. SessionPicker
 10. PanelNotificationBar
 
-### Phase 3：实时状态
+### Phase 3：连接交接 + 通知
 
-11. 服务端 S2C_SessionStatusUpdate 广播
-12. MultiSidebar 实时状态更新
-13. PanelNotificationBar 响应未面板中会话的状态变化
+11. 模式切换的 WS 连接交接协议（Single↔Multi、展开↔返回）
+12. PanelNotificationBar（面板中有会话 waiting 时高亮提示）
 
 ### Phase 4：打磨
 
-14. 面板拖拽排序
-15. 模式切换动画
-16. 移动端适配（Multi 降级为 Single）
-17. 键盘快捷键（Ctrl+N 新建）
+13. 面板拖拽排序
+14. 模式切换动画
+15. 移动端适配（Multi 降级为 Single）
+16. 键盘快捷键（Ctrl+N 新建）
 
 ---
 
@@ -259,6 +260,9 @@ type S2C_SessionStatusUpdate = {
 - 不做 WebSocket multi-join（每面板独立连接，服务端零改动）
 - 不做 Virtuoso 在 Mini 面板中（简单 div + 20 条消息）
 - 不做自动弹出/关闭面板（用通知条，用户手动操作）
+- 不改服务端任何代码（hub.ts、handler.ts、protocol.ts 全不动）
+- 不改 messageStore/connectionStore（Multi 面板用本地状态，避免流式冲突）
+- 不做"其他会话"的实时状态（只显示名字，想看状态就添加到面板）
 - 不做看板/Dashboard 视图
 - 不做 Workspace 面板（文件变更/终端）
 - 不做声音/桌面通知
