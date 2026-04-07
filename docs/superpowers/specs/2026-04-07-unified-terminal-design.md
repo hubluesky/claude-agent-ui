@@ -70,13 +70,16 @@
 
 #### 每个面板
 
-每个面板是**完全自包含**的轻量 ChatInterface：
+每个面板是**完全自包含**的轻量 ChatInterface，**复用现有组件**而非创建新组件：
 - **独立 WebSocket 连接**：自己 join session，自己收消息
-- **独立本地状态**：messages（最近 20 条）、lockStatus、pendingApproval。**不走全局 messageStore/connectionStore**
+- **独立本地状态**：messages、lockStatus、pendingApproval。**不走全局 messageStore/connectionStore**
 - **Header**：状态点 + 标题 + 项目标签 + 进度 + ↗ 展开 + × 关闭
-- **消息区**：简单 div 滚动（**不用 Virtuoso**），最近 20 条
-- **输入区**：精简版 Composer（只有 input + send）
-- **审批区**：精简版 ApprovalPanel（Allow/Deny）
+- **消息区**：复用 `ChatMessagesPane`，传入 `limit={20}` 只渲染最近 20 条
+- **消息渲染**：复用 `MessageComponent`，传入 `compact={true}` 跳过语法高亮减少开销
+- **输入区**：复用 `ChatComposer`，传入 `minimal={true}` 隐藏 toolbar 只显示 input + send
+- **审批区**：复用 `ApprovalPanel`（已有 readonly 模式，加 compact 模式）
+
+**不新建** MiniMessageList、MiniComposer、MiniApprovalPanel 等重复组件。
 
 面板状态变化实时写入 multiPanelStore → 下拉菜单的 badge 自动更新。
 
@@ -144,9 +147,7 @@ panels: PanelSession[]  // 面板列表，sessionId 持久化到 localStorage
 | `BackgroundStatusButton` | `components/layout/` | TopBar 带 badge 的后台状态按钮 |
 | `BackgroundStatusDropdown` | `components/layout/` | 右上角下拉菜单：后台会话状态 + 添加到面板 |
 | `MultiPanelGrid` | `components/chat/` | N 面板网格容器 |
-| `MiniChatPanel` | `components/chat/` | 迷你聊天面板（独立 WS + 本地状态） |
-| `MiniComposer` | `components/chat/` | 精简版输入框 |
-| `MiniMessageList` | `components/chat/` | 简单 div 消息列表（最近 20 条） |
+| `MiniChatPanel` | `components/chat/` | 迷你聊天面板（独立 WS + 本地状态，复用现有组件 + compact props） |
 | `EmptyPanel` | `components/chat/` | 空面板 / 新建对话入口 |
 | `multiPanelStore` | `stores/` | 面板状态管理 + 持久化 |
 
@@ -157,6 +158,10 @@ panels: PanelSession[]  // 面板列表，sessionId 持久化到 localStorage
 | `settingsStore` | 新增 `viewMode`, `returnToMulti` |
 | `TopBar` | 集成 ViewModeToggle + BackgroundStatusButton + ReturnToMultiButton |
 | `ChatInterface` | Multi 模式渲染 MultiPanelGrid |
+| `ChatMessagesPane` | 新增 `limit?: number` prop，限制渲染消息数量 |
+| `MessageComponent` | 新增 `compact?: boolean` prop，compact 时跳过语法高亮 |
+| `ChatComposer` | 新增 `minimal?: boolean` prop，minimal 时隐藏 toolbar |
+| `ApprovalPanel` | 新增 `compact?: boolean` prop，compact 时精简按钮 |
 | `useWebSocket` | 模式切换时 leave/join |
 
 ### 不改动的组件
@@ -201,6 +206,6 @@ panels: PanelSession[]  // 面板列表，sessionId 持久化到 localStorage
 - 不改 AppLayout
 - 不改服务端任何代码
 - 不改 messageStore/connectionStore
-- 不做 Virtuoso 在 Mini 面板（简单 div + 20 条）
+- 不新建 MiniMessageList / MiniComposer / MiniApprovalPanel（复用现有组件 + compact prop）
 - 不做自动弹出/关闭面板（用户手动管理）
 - 不做"其他会话"实时状态（下拉菜单只显示已在面板中的会话状态）
