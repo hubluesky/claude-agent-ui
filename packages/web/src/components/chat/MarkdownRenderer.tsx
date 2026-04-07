@@ -35,10 +35,9 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
 
 interface MarkdownRendererProps {
   content: string
-  compact?: boolean
 }
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content, compact }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}

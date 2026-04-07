@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useClaimLock } from '../../hooks/useClaimLock'
 
 export type ApprovalOptionColor = 'green' | 'amber' | 'purple' | 'gray' | 'red'
@@ -52,7 +52,7 @@ const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: stri
 }
 
 export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig; compact?: boolean }) {
-  const { lockStatus } = useConnectionStore()
+  const { lockStatus } = useChatSession()
   const handleClaim = useClaimLock()
 
   const readonly = config.readonly

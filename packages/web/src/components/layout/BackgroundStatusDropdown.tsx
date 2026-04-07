@@ -8,8 +8,8 @@ interface BackgroundStatusDropdownProps {
 
 export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownProps) {
   const panelSummaries = useMultiPanelStore((s) => s.panelSummaries)
+  const panelIds = useMultiPanelStore((s) => s.panelSessionIds)
   const addPanel = useMultiPanelStore((s) => s.addPanel)
-  const hasPanel = useMultiPanelStore((s) => s.hasPanel)
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
   const selectSession = useSessionStore((s) => s.selectSession)
   const ref = useRef<HTMLDivElement>(null)
@@ -21,8 +21,14 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
         onClose()
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    // Use setTimeout to avoid catching the same click that opened the dropdown
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClick)
+    }, 0)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handleClick)
+    }
   }, [onClose])
 
   // Get all panel summaries except current session
@@ -72,7 +78,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
               : isRunning
                 ? 'bg-[var(--success)] shadow-[0_0_3px_rgba(34,197,94,0.3)]'
                 : 'bg-[var(--border)]'
-            const inPanel = hasPanel(item.sessionId)
+            const inPanel = panelIds.includes(item.sessionId)
 
             return (
               <div

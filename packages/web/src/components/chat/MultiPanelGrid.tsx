@@ -37,25 +37,32 @@ export function MultiPanelGrid() {
   const cols = getGridCols(totalSlots)
 
   return (
-    <div
-      className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-y-auto"
-      style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
-    >
-      {panelIds.map((sid) => {
-        const summary = summaries.get(sid)
-        return (
-          <ChatSessionProvider key={sid} sessionId={sid}>
-            <ChatInterface
-              compact
-              panelTitle={summary?.title}
-              panelProjectName={summary?.projectName}
-              onExpandPanel={() => handleExpand(sid, summary?.projectCwd ?? '')}
-              onClosePanel={() => removePanel(sid)}
-            />
-          </ChatSessionProvider>
-        )
-      })}
-      <EmptyPanel onNewConversation={handleNewConversation} />
+    <div className="flex-1 flex flex-col min-h-0">
+      {panelIds.length > 0 && (
+        <div className="px-3 py-1.5 bg-[var(--warning-subtle-bg)] border-b border-[var(--warning-subtle-border)] text-[10px] text-[var(--warning)] text-center shrink-0">
+          Multi 面板预览模式 — 各面板暂时共享同一会话数据，独立数据通道将在后续版本实现
+        </div>
+      )}
+      <div
+        className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-y-auto"
+        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+      >
+        {panelIds.map((sid) => {
+          const summary = summaries.get(sid)
+          return (
+            <ChatSessionProvider key={sid} sessionId={sid}>
+              <ChatInterface
+                compact
+                panelTitle={summary?.title}
+                panelProjectName={summary?.projectName}
+                onExpandPanel={() => handleExpand(sid, summary?.projectCwd ?? '')}
+                onClosePanel={() => removePanel(sid)}
+              />
+            </ChatSessionProvider>
+          )
+        })}
+        <EmptyPanel onNewConversation={handleNewConversation} />
+      </div>
     </div>
   )
 }

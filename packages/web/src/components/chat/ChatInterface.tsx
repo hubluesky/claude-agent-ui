@@ -115,7 +115,7 @@ export function ChatInterface({
   useEffect(() => {
     if (!returnToMulti) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !ctx.planModalOpen) {
         setViewMode('multi')
         setReturnToMulti(false)
       }
