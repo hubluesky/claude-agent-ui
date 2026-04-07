@@ -7,6 +7,7 @@ import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { HighlightText } from './SearchBar'
+import { ImagePreviewModal } from './ImagePreviewModal'
 
 interface MessageComponentProps {
   message: AgentMessage
@@ -578,6 +579,7 @@ function PromptSuggestionCard({ suggestion }: { suggestion: string }) {
 
 function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; isOptimistic?: boolean; uuid?: string }) {
   const content = (message as any).message?.content
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null)
 
   const renderContent = () => {
     if (Array.isArray(content)) {
@@ -589,7 +591,13 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
               const src = `data:${block.source.media_type};base64,${block.source.data}`
               return (
                 <div key={i} className="flex justify-end">
-                  <img src={src} alt="attached" loading="lazy" className="max-w-[300px] max-h-[200px] rounded-lg border border-[var(--border)]" />
+                  <img
+                    src={src}
+                    alt="attached"
+                    loading="lazy"
+                    className="max-w-[70%] max-h-[400px] rounded-lg border border-[var(--border)] cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => setPreviewSrc(src)}
+                  />
                 </div>
               )
             }
@@ -668,6 +676,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
         {renderContent()}
       </div>
       {uuid && <MessageActions messageId={uuid} />}
+      {previewSrc && <ImagePreviewModal src={previewSrc} name="attached" onClose={() => setPreviewSrc(null)} />}
     </div>
   )
 }

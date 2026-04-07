@@ -7,12 +7,10 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl'
 export function ViewModeToggle() {
   const viewMode = useSettingsStore((s) => s.viewMode)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
-  const setReturnToMulti = useSettingsStore((s) => s.setReturnToMulti)
 
   const handleSwitch = (mode: 'single' | 'multi') => {
     if (mode === viewMode) return
     setViewMode(mode)
-    if (mode !== 'single') setReturnToMulti(false)
   }
 
   // Ctrl/Cmd+` to toggle Single/Multi (left-hand friendly)
@@ -20,10 +18,8 @@ export function ViewModeToggle() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.code === 'Backquote') {
         e.preventDefault()
-        const { viewMode: current, setViewMode: set, setReturnToMulti: setRtm } = useSettingsStore.getState()
-        const next = current === 'single' ? 'multi' : 'single'
-        set(next)
-        if (next === 'multi') setRtm(false)
+        const { viewMode: current, setViewMode: set } = useSettingsStore.getState()
+        set(current === 'single' ? 'multi' : 'single')
       }
     }
     window.addEventListener('keydown', handler)

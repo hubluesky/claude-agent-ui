@@ -11,7 +11,6 @@ interface SettingsState {
   maxTurns: number | null
   theme: 'dark' | 'light'
   viewMode: 'single' | 'multi'
-  returnToMulti: boolean
 }
 
 interface SettingsActions {
@@ -24,7 +23,6 @@ interface SettingsActions {
   setMaxTurns(value: number | null): void
   setTheme(theme: 'dark' | 'light'): void
   setViewMode(mode: SettingsState['viewMode']): void
-  setReturnToMulti(value: boolean): void
   load(): Promise<void>
   save(): Promise<void>
 }
@@ -65,8 +63,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     maxTurns: (saved as any).maxTurns ?? null,
     theme: ((saved as any).theme as 'dark' | 'light') ?? 'dark',
     viewMode: ((saved as any).viewMode as SettingsState['viewMode']) ?? 'single',
-    returnToMulti: false,
-
     setPermissionMode(mode) {
       set({ permissionMode: mode })
       saveToLocal(get())
@@ -102,9 +98,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     setViewMode(mode) {
       set({ viewMode: mode })
       saveToLocal(get())
-    },
-    setReturnToMulti(value) {
-      set({ returnToMulti: value })
     },
     async load() {
       try {

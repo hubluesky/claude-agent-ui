@@ -7,6 +7,18 @@ interface BackgroundStatusDropdownProps {
   onClose: () => void
 }
 
+type StatusGroup = '需要注意' | '进行中' | '空闲'
+
+const STATUS_GROUP_ORDER: StatusGroup[] = ['需要注意', '进行中', '空闲']
+
+function getStatusGroup(item: PanelSummary): StatusGroup {
+  if (item.hasApproval || item.status === 'awaiting_approval' || item.status === 'awaiting_user_input') {
+    return '需要注意'
+  }
+  if (item.status === 'running') return '进行中'
+  return '空闲'
+}
+
 export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownProps) {
   const panelSummaries = useMultiPanelStore((s) => s.panelSummaries)
   const panelIds = useMultiPanelStore((s) => s.panelSessionIds)
@@ -14,6 +26,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
   const selectSession = useSessionStore((s) => s.selectSession)
   const viewMode = useSettingsStore((s) => s.viewMode)
+  const setViewMode = useSettingsStore((s) => s.setViewMode)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,26 +47,29 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
     }
   }
 
-  // Group by project
+  // Group by status
   const grouped = useMemo(() => {
-    const map = new Map<string, PanelSummary[]>()
-    // Sort within each group: waiting > running > idle
-    const sorted = [...items].sort((a, b) => {
-      const order = (s: string) =>
-        s === 'awaiting_approval' || s === 'awaiting_user_input' ? 0
-          : s === 'running' ? 1 : 2
-      return order(a.status) - order(b.status)
-    })
-    for (const item of sorted) {
-      const key = item.projectName || item.projectCwd
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(item)
+    const map = new Map<StatusGroup, PanelSummary[]>()
+    for (const item of items) {
+      const group = getStatusGroup(item)
+      if (!map.has(group)) map.set(group, [])
+      map.get(group)!.push(item)
     }
-    return map
+    // Return in defined order, only non-empty groups
+    const ordered = new Map<StatusGroup, PanelSummary[]>()
+    for (const key of STATUS_GROUP_ORDER) {
+      const list = map.get(key)
+      if (list?.length) ordered.set(key, list)
+    }
+    return ordered
   }, [items])
 
   const handleClick = (summary: PanelSummary) => {
     selectSession(summary.sessionId, summary.projectCwd)
+    // Switch to single view for quick access
+    if (viewMode === 'multi') {
+      setViewMode('single')
+    }
     onClose()
   }
 
@@ -75,14 +91,16 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
         {items.length === 0 ? (
           <div className="text-center text-[var(--text-muted)] text-xs py-6">没有后台会话</div>
         ) : (
-          Array.from(grouped.entries()).map(([projectName, sessions]) => (
-            <div key={projectName} className="mb-1">
-              {/* Project group header */}
-              {grouped.size > 1 && (
-                <div className="px-2.5 py-1 text-[8px] text-[var(--accent)] font-semibold uppercase tracking-wider">
-                  {projectName}
-                </div>
-              )}
+          Array.from(grouped.entries()).map(([groupName, sessions]) => (
+            <div key={groupName} className="mb-1">
+              {/* Status group header */}
+              <div className={`px-2.5 py-1 text-[8px] font-semibold uppercase tracking-wider ${
+                groupName === '需要注意' ? 'text-[var(--warning)]'
+                  : groupName === '进行中' ? 'text-[var(--success)]'
+                  : 'text-[var(--text-muted)]'
+              }`}>
+                {groupName}
+              </div>
               {sessions.map((item) => {
                 const isWaiting = item.hasApproval || item.status === 'awaiting_approval' || item.status === 'awaiting_user_input'
                 const isRunning = item.status === 'running'
@@ -104,9 +122,10 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
                     <div className={`w-[7px] h-[7px] rounded-full shrink-0 ${dotClass}`} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] font-semibold truncate text-[var(--text-primary)]">{item.title || '新会话'}</div>
-                      {item.lastMessage && (
-                        <div className="text-[8px] text-[var(--text-muted)] truncate mt-0.5">{item.lastMessage}</div>
-                      )}
+                      <div className="text-[8px] text-[var(--text-muted)] truncate mt-0.5">
+                        {item.projectName || item.projectCwd}
+                        {item.lastMessage && ` · ${item.lastMessage}`}
+                      </div>
                     </div>
                     {isWaiting && (
                       <span className="text-[7px] bg-[var(--warning)] text-[var(--bg-primary)] px-1.5 rounded font-bold">审批</span>

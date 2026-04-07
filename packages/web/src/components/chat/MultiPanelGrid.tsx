@@ -19,14 +19,12 @@ export function MultiPanelGrid() {
   const removePanel = useMultiPanelStore((s) => s.removePanel)
   const addPanel = useMultiPanelStore((s) => s.addPanel)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
-  const setReturnToMulti = useSettingsStore((s) => s.setReturnToMulti)
   const selectSession = useSessionStore((s) => s.selectSession)
 
   const handleExpand = useCallback((sessionId: string, cwd: string) => {
     selectSession(sessionId, cwd)
     setViewMode('single')
-    setReturnToMulti(true)
-  }, [selectSession, setViewMode, setReturnToMulti])
+  }, [selectSession, setViewMode])
 
   const handleAddSession = useCallback((sessionId: string, title: string, cwd: string, projectName: string) => {
     addPanel(sessionId, { sessionId, title, projectCwd: cwd, projectName })

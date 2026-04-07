@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useMessageStore } from '../../stores/messageStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { PlanApprovalCard } from './PlanApprovalCard'
@@ -9,9 +10,11 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 interface ChatMessagesPaneProps {
   sessionId: string
   limit?: number
+  /** When true, skip global messageStore loadInitial (Multi mode panels load independently) */
+  compact?: boolean
 }
 
-export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
+export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPaneProps) {
   const ctx = useChatSession()
   const rawMessages = ctx.messages
   const messages = useMemo(() => {
@@ -32,10 +35,12 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   // Track loading state in ref to avoid stale closure in startReached
   isLoadingMoreRef.current = isLoadingMore
 
-  // Load messages when session changes — must be in useEffect, not during render
+  // Load messages when session changes or when returning to single mode.
+  // Compact panels (Multi mode) load independently; skip global store load.
+  const viewMode = useSettingsStore((s) => s.viewMode)
   useEffect(() => {
-    loadInitial(sessionId)
-  }, [sessionId, loadInitial])
+    if (!compact) loadInitial(sessionId)
+  }, [sessionId, loadInitial, compact, viewMode])
 
   // Scroll to bottom when Footer content changes (PlanApprovalCard, ThinkingIndicator)
   useEffect(() => {

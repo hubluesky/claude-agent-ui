@@ -40,13 +40,16 @@ export function ChatInterface({
   const isNewSession = ctx.sessionId === '__new__'
 
   useEffect(() => {
+    // Compact panels (Multi mode) use independent REST-loaded messages —
+    // they must NOT join the shared WS or touch the global messageStore.
+    if (compact) return
     if (ctx.sessionId && !isNewSession) {
       joinSession(ctx.sessionId)
     }
     if (isNewSession) {
       useMessageStore.getState().clear()
     }
-  }, [ctx.sessionId, joinSession, isNewSession])
+  }, [ctx.sessionId, joinSession, isNewSession, compact])
 
   const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
     const contentBlocks: any[] = []
@@ -107,33 +110,20 @@ export function ChatInterface({
   }, [ctx.pendingAskUser, ctx.pendingApproval, ctx.pendingPlanApproval,
       ctx.respondToolApproval, ctx.respondAskUser, ctx.respondPlanApproval])
 
-  // Unified Esc handler: priority order → input focus → modal → returnToMulti → abort AI
-  const returnToMulti = useSettingsStore((s) => s.returnToMulti)
-  const setViewMode = useSettingsStore((s) => s.setViewMode)
-  const setReturnToMulti = useSettingsStore((s) => s.setReturnToMulti)
-
+  // Esc handler: abort running AI session (like Claude Code CLI Esc)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      // Let textarea/input handle their own Esc (e.g. close slash/file popup)
       const tag = (document.activeElement as HTMLElement)?.tagName
       if (tag === 'TEXTAREA' || tag === 'INPUT') return
-      // PlanModal handles its own Esc
       if (ctx.planModalOpen) return
-      // Return to Multi mode from expanded panel
-      if (returnToMulti) {
-        setViewMode('multi')
-        setReturnToMulti(false)
-        return
-      }
-      // Abort running AI session (like Claude Code CLI Esc)
       if (ctx.sessionStatus === 'running' && ctx.lockStatus === 'locked_self') {
         ctx.abort()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [ctx, returnToMulti, setViewMode, setReturnToMulti])
+  }, [ctx])
 
   if (!ctx.sessionId) return null
 
@@ -157,7 +147,7 @@ export function ChatInterface({
           <p className={`${compact ? 'text-xs' : 'text-sm'} text-[#7c7872]`}>New conversation in {currentProjectCwd?.split(/[/\\]/).pop()}</p>
         </div>
       ) : (
-        <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} />
+        <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} compact={compact} />
       )}
       {compact ? (
         // Compact panels are read-only; expand to interact

@@ -2,9 +2,9 @@ import { useState, useRef, useCallback, useMemo } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useEmbedStore } from '../../stores/embedStore'
+import { useMultiPanelStore } from '../../stores/multiPanelStore'
 import { HistoryPanel } from './HistoryPanel'
 import { ViewModeToggle } from './ViewModeToggle'
-import { ReturnToMultiButton } from './ReturnToMultiButton'
 import { BackgroundStatusButton } from './BackgroundStatusButton'
 
 export function TopBar() {
@@ -16,6 +16,7 @@ export function TopBar() {
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen)
   const setSidebarOpen = useSettingsStore((s) => s.setSidebarOpen)
   const isEmbed = useEmbedStore((s) => s.isEmbed)
+  const panelSummary = useMultiPanelStore((s) => currentSessionId ? s.panelSummaries.get(currentSessionId) : undefined)
 
   const [showHistory, setShowHistory] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -28,7 +29,8 @@ export function TopBar() {
     () => currentSessions.find((s) => s.sessionId === currentSessionId),
     [currentSessions, currentSessionId],
   )
-  const sessionTitle = currentSession?.title || (isNewSession ? 'New conversation' : '')
+  // Fallback to panelSummary title when session list hasn't loaded yet (e.g. switching from multi-view)
+  const sessionTitle = currentSession?.title || panelSummary?.title || (isNewSession ? 'New conversation' : '')
 
   const handleTitleClick = useCallback(() => {
     if (isNewSession || !currentSessionId) return
@@ -106,7 +108,6 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        <ReturnToMultiButton />
         <ViewModeToggle />
         <BackgroundStatusButton />
         <button
