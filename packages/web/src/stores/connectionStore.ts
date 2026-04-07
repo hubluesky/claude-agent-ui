@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SessionStatus, ClientLockStatus, ConnectionStatus } from '@claude-agent-ui/shared'
+import type { SessionStatus, ClientLockStatus, ConnectionStatus, ContextUsageCategory, McpServerStatusInfo } from '@claude-agent-ui/shared'
 import type { ToolApprovalRequest, AskUserRequest, PlanApprovalRequest } from '@claude-agent-ui/shared'
 
 interface ResolvedPlanApproval {
@@ -25,13 +25,6 @@ export interface AccountInfo {
   model?: string
 }
 
-export interface ContextUsageCategory {
-  name: string
-  tokens: number
-  color: string
-  isDeferred?: boolean
-}
-
 export interface ContextUsage {
   categories: ContextUsageCategory[]
   totalTokens: number
@@ -40,12 +33,7 @@ export interface ContextUsage {
   model: string
 }
 
-export interface McpServerInfo {
-  name: string
-  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'
-  serverInfo?: { name: string; version: string }
-  error?: string
-}
+export type McpServerInfo = McpServerStatusInfo
 
 interface ConnectionState {
   connectionId: string | null

@@ -298,56 +298,55 @@ function handleServerMessage(msg: S2CMessage) {
 
     case 'account-info':
       conn.setAccountInfo({
-        email: (msg as any).email,
-        organization: (msg as any).organization,
-        subscriptionType: (msg as any).subscriptionType,
-        apiProvider: (msg as any).apiProvider,
+        email: msg.email,
+        organization: msg.organization,
+        subscriptionType: msg.subscriptionType,
+        apiProvider: msg.apiProvider,
       })
       break
 
     case 'models':
-      conn.setModels((msg as any).models ?? [])
+      conn.setModels(msg.models ?? [])
       break
 
     case 'context-usage':
       conn.setContextUsage({
-        categories: (msg as any).categories ?? [],
-        totalTokens: (msg as any).totalTokens ?? 0,
-        maxTokens: (msg as any).maxTokens ?? 0,
-        percentage: (msg as any).percentage ?? 0,
-        model: (msg as any).model ?? '',
+        categories: msg.categories ?? [],
+        totalTokens: msg.totalTokens ?? 0,
+        maxTokens: msg.maxTokens ?? 0,
+        percentage: msg.percentage ?? 0,
+        model: msg.model ?? '',
       })
       break
 
     case 'mcp-status':
-      conn.setMcpServers((msg as any).servers ?? [])
+      conn.setMcpServers(msg.servers ?? [])
       break
 
     case 'rewind-result': {
-      const rr = msg as any
-      if (rr.dryRun) {
+      if (msg.dryRun) {
         conn.setRewindPreview({
-          canRewind: rr.canRewind,
-          error: rr.error,
-          filesChanged: rr.filesChanged,
-          insertions: rr.insertions,
-          deletions: rr.deletions,
+          canRewind: msg.canRewind,
+          error: msg.error,
+          filesChanged: msg.filesChanged,
+          insertions: msg.insertions,
+          deletions: msg.deletions,
         })
-      } else if (rr.canRewind) {
+      } else if (msg.canRewind) {
         useToastStore.getState().add(
-          `Rewound ${rr.filesChanged?.length ?? 0} files (+${rr.insertions ?? 0}/-${rr.deletions ?? 0})`,
+          `Rewound ${msg.filesChanged?.length ?? 0} files (+${msg.insertions ?? 0}/-${msg.deletions ?? 0})`,
           'info'
         )
       } else {
-        useToastStore.getState().add(rr.error ?? 'Cannot rewind', 'error')
+        useToastStore.getState().add(msg.error ?? 'Cannot rewind', 'error')
       }
       break
     }
 
     case 'subagent-messages':
       conn.setSubagentMessages({
-        agentId: (msg as any).agentId,
-        messages: (msg as any).messages ?? [],
+        agentId: msg.agentId,
+        messages: msg.messages ?? [],
       })
       break
 
@@ -437,31 +436,31 @@ function claimLock(sessionId: string) {
 }
 
 function forkSession(sessionId: string, atMessageId?: string) {
-  send({ type: 'fork-session', sessionId, atMessageId } as any)
+  send({ type: 'fork-session', sessionId, atMessageId })
 }
 
 function getContextUsage(sessionId: string) {
-  send({ type: 'get-context-usage', sessionId } as any)
+  send({ type: 'get-context-usage', sessionId })
 }
 
 function getMcpStatus(sessionId: string) {
-  send({ type: 'get-mcp-status', sessionId } as any)
+  send({ type: 'get-mcp-status', sessionId })
 }
 
 function toggleMcpServer(sessionId: string, serverName: string, enabled: boolean) {
-  send({ type: 'toggle-mcp-server', sessionId, serverName, enabled } as any)
+  send({ type: 'toggle-mcp-server', sessionId, serverName, enabled })
 }
 
 function reconnectMcpServer(sessionId: string, serverName: string) {
-  send({ type: 'reconnect-mcp-server', sessionId, serverName } as any)
+  send({ type: 'reconnect-mcp-server', sessionId, serverName })
 }
 
 function rewindFiles(sessionId: string, messageId: string, dryRun?: boolean) {
-  send({ type: 'rewind-files', sessionId, messageId, dryRun } as any)
+  send({ type: 'rewind-files', sessionId, messageId, dryRun })
 }
 
 function getSubagentMessages(sessionId: string, agentId: string) {
-  send({ type: 'get-subagent-messages', sessionId, agentId } as any)
+  send({ type: 'get-subagent-messages', sessionId, agentId })
 }
 
 // ── Hook (manages singleton lifecycle via ref-counting) ─────────

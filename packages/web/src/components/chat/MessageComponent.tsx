@@ -6,6 +6,7 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useConnectionStore } from '../../stores/connectionStore'
+import { HighlightText } from './SearchBar'
 
 interface MessageComponentProps {
   message: AgentMessage
@@ -518,7 +519,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
               return (
                 <div key={i} className="flex justify-end">
                   <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-                    <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{block.text}</p>
+                    <HighlightText text={block.text} className="text-sm text-[#e5e2db] whitespace-pre-wrap" />
                     {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
                   </div>
                 </div>
@@ -555,7 +556,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
     return (
       <div className="flex justify-end">
         <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-          <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{rawText}</p>
+          <HighlightText text={rawText} className="text-sm text-[#e5e2db] whitespace-pre-wrap" />
           {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
         </div>
       </div>
