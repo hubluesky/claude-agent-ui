@@ -159,10 +159,19 @@ export function ChatInterface({
       ) : (
         <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} />
       )}
-      {approvalConfig ? (
-        <ApprovalPanel config={approvalConfig} compact={compact} />
+      {compact ? (
+        // Compact panels are read-only; expand to interact
+        <div
+          onClick={onExpandPanel}
+          className="flex items-center gap-2 px-3 py-1.5 border-t border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-secondary)] cursor-pointer shrink-0 transition-colors"
+        >
+          <span className="text-[10px] flex-1">展开以发送消息或操作</span>
+          <span className="text-[9px]">↗</span>
+        </div>
+      ) : approvalConfig ? (
+        <ApprovalPanel config={approvalConfig} />
       ) : (
-        <ChatComposer onSend={handleSend} onAbort={handleAbort} minimal={compact} />
+        <ChatComposer onSend={handleSend} onAbort={handleAbort} />
       )}
       {!compact && <StatusBar />}
       {!compact && <PlanModal />}

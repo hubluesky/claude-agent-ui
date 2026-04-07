@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 
+const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)
+const MOD_KEY = IS_MAC ? '⌘' : 'Ctrl'
+
 export function ViewModeToggle() {
   const viewMode = useSettingsStore((s) => s.viewMode)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
@@ -12,7 +15,7 @@ export function ViewModeToggle() {
     if (mode !== 'single') setReturnToMulti(false)
   }
 
-  // Ctrl+Shift+M to toggle Single/Multi
+  // Ctrl/Cmd+Shift+M to toggle Single/Multi
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
@@ -26,27 +29,30 @@ export function ViewModeToggle() {
   }, [])
 
   return (
-    <div className="flex bg-[var(--bg-primary)] rounded-[5px] border border-[var(--border)] overflow-hidden" title="Ctrl+Shift+M 切换模式">
-      <button
-        onClick={() => handleSwitch('single')}
-        className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
-          viewMode === 'single'
-            ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
-            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-        }`}
-      >
-        Single
-      </button>
-      <button
-        onClick={() => handleSwitch('multi')}
-        className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
-          viewMode === 'multi'
-            ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
-            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-        }`}
-      >
-        Multi
-      </button>
+    <div className="flex items-center gap-1.5">
+      <div className="flex bg-[var(--bg-primary)] rounded-[5px] border border-[var(--border)] overflow-hidden">
+        <button
+          onClick={() => handleSwitch('single')}
+          className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
+            viewMode === 'single'
+              ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+          }`}
+        >
+          Single
+        </button>
+        <button
+          onClick={() => handleSwitch('multi')}
+          className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
+            viewMode === 'multi'
+              ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+          }`}
+        >
+          Multi
+        </button>
+      </div>
+      <span className="text-[8px] text-[var(--text-dim)] font-mono">{MOD_KEY}+⇧+M</span>
     </div>
   )
 }

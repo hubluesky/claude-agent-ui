@@ -18,6 +18,7 @@ export function ReturnToMultiButton() {
       className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--accent-subtle-bg)] text-[var(--accent)] text-[9px] font-semibold cursor-pointer border-none font-inherit hover:bg-[var(--accent-subtle-border)]"
     >
       ← 返回 Multi
+      <span className="text-[7px] opacity-60 font-mono ml-0.5">Esc</span>
     </button>
   )
 }
