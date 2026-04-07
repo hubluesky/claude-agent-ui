@@ -96,23 +96,6 @@ export interface C2S_ForkSession {
   atMessageId?: string
 }
 
-export type C2SMessage =
-  | C2S_JoinSession
-  | C2S_SendMessage
-  | C2S_ToolApprovalResponse
-  | C2S_AskUserResponse
-  | C2S_Abort
-  | C2S_SetMode
-  | C2S_SetEffort
-  | C2S_Reconnect
-  | C2S_LeaveSession
-  | C2S_ResolvePlanApproval
-  | C2S_ReleaseLock
-  | C2S_ClaimLock
-  | C2S_StopTask
-  | C2S_SetModel
-  | C2S_ForkSession
-
 // ============ Server → Client (S2C) ============
 
 export interface S2C_Init {
@@ -264,6 +247,105 @@ export interface S2C_SessionForked {
   originalSessionId: string
 }
 
+// ---- Context Usage ----
+
+export interface C2S_GetContextUsage {
+  type: 'get-context-usage'
+  sessionId: string
+}
+
+export interface ContextUsageCategory {
+  name: string
+  tokens: number
+  color: string
+  isDeferred?: boolean
+}
+
+export interface S2C_ContextUsage {
+  type: 'context-usage'
+  sessionId: string
+  categories: ContextUsageCategory[]
+  totalTokens: number
+  maxTokens: number
+  percentage: number
+  model: string
+}
+
+// ---- MCP Server Management ----
+
+export interface C2S_GetMcpStatus {
+  type: 'get-mcp-status'
+  sessionId: string
+}
+
+export interface C2S_ToggleMcpServer {
+  type: 'toggle-mcp-server'
+  sessionId: string
+  serverName: string
+  enabled: boolean
+}
+
+export interface C2S_ReconnectMcpServer {
+  type: 'reconnect-mcp-server'
+  sessionId: string
+  serverName: string
+}
+
+export interface McpServerStatusInfo {
+  name: string
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'
+  serverInfo?: { name: string; version: string }
+  error?: string
+}
+
+export interface S2C_McpStatus {
+  type: 'mcp-status'
+  sessionId: string
+  servers: McpServerStatusInfo[]
+}
+
+// ---- File Rewind ----
+
+export interface C2S_RewindFiles {
+  type: 'rewind-files'
+  sessionId: string
+  messageId: string
+  dryRun?: boolean
+}
+
+export interface S2C_RewindResult {
+  type: 'rewind-result'
+  sessionId: string
+  canRewind: boolean
+  error?: string
+  filesChanged?: string[]
+  insertions?: number
+  deletions?: number
+  dryRun: boolean
+}
+
+export type C2SMessage =
+  | C2S_JoinSession
+  | C2S_SendMessage
+  | C2S_ToolApprovalResponse
+  | C2S_AskUserResponse
+  | C2S_Abort
+  | C2S_SetMode
+  | C2S_SetEffort
+  | C2S_Reconnect
+  | C2S_LeaveSession
+  | C2S_ResolvePlanApproval
+  | C2S_ReleaseLock
+  | C2S_ClaimLock
+  | C2S_StopTask
+  | C2S_SetModel
+  | C2S_ForkSession
+  | C2S_GetContextUsage
+  | C2S_GetMcpStatus
+  | C2S_ToggleMcpServer
+  | C2S_ReconnectMcpServer
+  | C2S_RewindFiles
+
 export type S2CMessage =
   | S2C_Init
   | S2C_SessionState
@@ -283,4 +365,7 @@ export type S2CMessage =
   | S2C_Models
   | S2C_AccountInfo
   | S2C_SessionForked
+  | S2C_ContextUsage
+  | S2C_McpStatus
+  | S2C_RewindResult
   | S2C_Error

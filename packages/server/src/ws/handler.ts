@@ -127,6 +127,26 @@ export function createWsHandler(deps: HandlerDeps) {
         await handleForkSession(connectionId, msg.sessionId, msg.atMessageId)
         break
       }
+      case 'get-context-usage': {
+        await handleGetContextUsage(connectionId, msg.sessionId)
+        break
+      }
+      case 'get-mcp-status': {
+        await handleGetMcpStatus(connectionId, msg.sessionId)
+        break
+      }
+      case 'toggle-mcp-server': {
+        await handleToggleMcpServer(connectionId, msg.sessionId, msg.serverName, msg.enabled)
+        break
+      }
+      case 'reconnect-mcp-server': {
+        await handleReconnectMcpServer(connectionId, msg.sessionId, msg.serverName)
+        break
+      }
+      case 'rewind-files': {
+        await handleRewindFiles(connectionId, msg.sessionId, msg.messageId, msg.dryRun)
+        break
+      }
     }
   }
 
@@ -686,6 +706,83 @@ export function createWsHandler(deps: HandlerDeps) {
         })
         pendingRequestMap.delete(requestId)
       }
+    }
+  }
+
+  async function handleGetContextUsage(connectionId: string, sessionId: string) {
+    const session = sessionManager.getActive(sessionId)
+    if (!session || !('getContextUsage' in session)) return
+    try {
+      const usage = await (session as any).getContextUsage()
+      wsHub.sendTo(connectionId, {
+        type: 'context-usage',
+        sessionId,
+        categories: usage.categories,
+        totalTokens: usage.totalTokens,
+        maxTokens: usage.maxTokens,
+        percentage: usage.percentage,
+        model: usage.model,
+      })
+    } catch {
+      // Non-critical
+    }
+  }
+
+  async function handleGetMcpStatus(connectionId: string, sessionId: string) {
+    const session = sessionManager.getActive(sessionId)
+    if (!session || !('getMcpStatus' in session)) return
+    try {
+      const servers = await (session as any).getMcpStatus()
+      wsHub.sendTo(connectionId, {
+        type: 'mcp-status',
+        sessionId,
+        servers,
+      })
+    } catch {
+      // Non-critical
+    }
+  }
+
+  async function handleToggleMcpServer(connectionId: string, sessionId: string, serverName: string, enabled: boolean) {
+    const session = sessionManager.getActive(sessionId)
+    if (!session || !('toggleMcpServer' in session)) return
+    try {
+      await (session as any).toggleMcpServer(serverName, enabled)
+      // Refresh status after toggle
+      await handleGetMcpStatus(connectionId, sessionId)
+    } catch (err: any) {
+      wsHub.sendTo(connectionId, { type: 'error', message: `MCP toggle failed: ${err.message}`, code: 'internal' })
+    }
+  }
+
+  async function handleReconnectMcpServer(connectionId: string, sessionId: string, serverName: string) {
+    const session = sessionManager.getActive(sessionId)
+    if (!session || !('reconnectMcpServer' in session)) return
+    try {
+      await (session as any).reconnectMcpServer(serverName)
+      await handleGetMcpStatus(connectionId, sessionId)
+    } catch (err: any) {
+      wsHub.sendTo(connectionId, { type: 'error', message: `MCP reconnect failed: ${err.message}`, code: 'internal' })
+    }
+  }
+
+  async function handleRewindFiles(connectionId: string, sessionId: string, messageId: string, dryRun?: boolean) {
+    const session = sessionManager.getActive(sessionId)
+    if (!session || !('rewindFiles' in session)) return
+    try {
+      const result = await (session as any).rewindFiles(messageId, { dryRun: dryRun ?? false })
+      wsHub.sendTo(connectionId, {
+        type: 'rewind-result',
+        sessionId,
+        canRewind: result.canRewind,
+        error: result.error,
+        filesChanged: result.filesChanged,
+        insertions: result.insertions,
+        deletions: result.deletions,
+        dryRun: dryRun ?? false,
+      })
+    } catch (err: any) {
+      wsHub.sendTo(connectionId, { type: 'error', message: `Rewind failed: ${err.message}`, code: 'internal' })
     }
   }
 

@@ -84,86 +84,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
 
   // User message
   if (message.type === 'user') {
-    const content = (message as any).message?.content
-    if (Array.isArray(content)) {
-      return (
-        <>
-          {content.map((block: any, i: number) => {
-            if (block.type === 'tool_result') return <ToolResultBlock key={i} block={block} />
-            if (block.type === 'image' && block.source?.type === 'base64') {
-              const src = `data:${block.source.media_type};base64,${block.source.data}`
-              return (
-                <div key={i} className="flex justify-end">
-                  <img src={src} alt="attached" loading="lazy" className="max-w-[300px] max-h-[200px] rounded-lg border border-[#3d3b37]" />
-                </div>
-              )
-            }
-            if (block.type === 'text') {
-              const textClass = classifyText(block.text)
-              if (textClass === 'internal-output') return null
-              if (textClass === 'compact-summary') {
-                return (
-                  <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-                    <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
-                    <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{block.text}</div>
-                  </details>
-                )
-              }
-              const cmdText = parseCommandXml(block.text)
-              if (cmdText) {
-                return (
-                  <div key={i} className="flex justify-end">
-                    <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
-                      <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
-                      <span className="text-sm text-[#e5e2db]">{cmdText}</span>
-                    </div>
-                  </div>
-                )
-              }
-              return (
-                <div key={i} className="flex justify-end">
-                  <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-                    <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{block.text}</p>
-                    {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
-                  </div>
-                </div>
-              )
-            }
-            return null
-          })}
-        </>
-      )
-    }
-    const rawText = typeof content === 'string' ? content : JSON.stringify(content)
-    const rawTextClass = classifyText(rawText)
-    if (rawTextClass === 'internal-output') return null
-    if (rawTextClass === 'compact-summary') {
-      return (
-        <details className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-          <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
-          <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{rawText}</div>
-        </details>
-      )
-    }
-    const cmdText = parseCommandXml(rawText)
-    if (cmdText) {
-      return (
-        <div className="flex justify-end">
-          <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
-            <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
-            <span className="text-sm text-[#e5e2db]">{cmdText}</span>
-          </div>
-        </div>
-      )
-    }
-    return (
-      <div className="flex justify-end">
-        <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-          <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{rawText}</p>
-          {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
-        </div>
-      </div>
-    )
+    const userUuid = (message as any).uuid as string | undefined
+    return <UserMessage message={message} isOptimistic={isOptimistic} uuid={userUuid} />
   }
 
   // Assistant message
@@ -482,6 +404,182 @@ function PromptSuggestionCard({ suggestion }: { suggestion: string }) {
         <span className="text-xs text-[#a8a29e] group-hover:text-[#e5e2db] transition-colors">{suggestion}</span>
       </button>
     </div>
+  )
+}
+
+// ---- User Message (extracted for Rewind button wrapper) ----
+
+function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; isOptimistic?: boolean; uuid?: string }) {
+  const content = (message as any).message?.content
+
+  const renderContent = () => {
+    if (Array.isArray(content)) {
+      return (
+        <>
+          {content.map((block: any, i: number) => {
+            if (block.type === 'tool_result') return <ToolResultBlock key={i} block={block} />
+            if (block.type === 'image' && block.source?.type === 'base64') {
+              const src = `data:${block.source.media_type};base64,${block.source.data}`
+              return (
+                <div key={i} className="flex justify-end">
+                  <img src={src} alt="attached" loading="lazy" className="max-w-[300px] max-h-[200px] rounded-lg border border-[#3d3b37]" />
+                </div>
+              )
+            }
+            if (block.type === 'text') {
+              const textClass = classifyText(block.text)
+              if (textClass === 'internal-output') return null
+              if (textClass === 'compact-summary') {
+                return (
+                  <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+                    <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
+                    <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{block.text}</div>
+                  </details>
+                )
+              }
+              const cmdText = parseCommandXml(block.text)
+              if (cmdText) {
+                return (
+                  <div key={i} className="flex justify-end">
+                    <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
+                      <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
+                      <span className="text-sm text-[#e5e2db]">{cmdText}</span>
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <div key={i} className="flex justify-end">
+                  <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
+                    <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{block.text}</p>
+                    {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
+                  </div>
+                </div>
+              )
+            }
+            return null
+          })}
+        </>
+      )
+    }
+
+    const rawText = typeof content === 'string' ? content : JSON.stringify(content)
+    const rawTextClass = classifyText(rawText)
+    if (rawTextClass === 'internal-output') return null
+    if (rawTextClass === 'compact-summary') {
+      return (
+        <details className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+          <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
+          <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{rawText}</div>
+        </details>
+      )
+    }
+    const cmdText = parseCommandXml(rawText)
+    if (cmdText) {
+      return (
+        <div className="flex justify-end">
+          <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
+            <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
+            <span className="text-sm text-[#e5e2db]">{cmdText}</span>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="flex justify-end">
+        <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
+          <p className="text-sm text-[#e5e2db] whitespace-pre-wrap">{rawText}</p>
+          {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="group/usr relative">
+      {renderContent()}
+      {uuid && <RewindButton messageId={uuid} />}
+    </div>
+  )
+}
+
+// ---- Rewind Button ----
+
+function RewindButton({ messageId }: { messageId: string }) {
+  const { rewindFiles } = useWebSocket()
+  const sessionId = useSessionStore((s) => s.currentSessionId)
+  const [showPreview, setShowPreview] = useState(false)
+  const [preview, setPreview] = useState<{ filesChanged?: string[]; insertions?: number; deletions?: number } | null>(null)
+
+  const handleDryRun = () => {
+    if (!sessionId || sessionId === '__new__') return
+    rewindFiles(sessionId, messageId, true)
+    setShowPreview(true)
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      setPreview(detail)
+      window.removeEventListener('rewind-preview', handler)
+    }
+    window.addEventListener('rewind-preview', handler)
+  }
+
+  const handleRewind = () => {
+    if (!sessionId || sessionId === '__new__') return
+    rewindFiles(sessionId, messageId, false)
+    setShowPreview(false)
+    setPreview(null)
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleDryRun}
+        className="opacity-0 group-hover/usr:opacity-100 transition-opacity px-2 py-0.5 text-[10px] text-[#a8a29e] bg-[#242320] border border-[#3d3b37] rounded hover:text-[#60a5fa] hover:border-[#60a5fa] cursor-pointer absolute top-0 left-0"
+        title="Rewind files to this point"
+      >
+        ⏪ Rewind
+      </button>
+      {showPreview && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => { setShowPreview(false); setPreview(null) }} />
+          <div className="absolute left-0 top-full mt-1 w-72 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 p-3">
+            <p className="text-xs text-[#a8a29e] mb-2 font-medium">Rewind Preview</p>
+            {!preview ? (
+              <p className="text-[10px] text-[#7c7872]">Loading...</p>
+            ) : !preview.filesChanged?.length ? (
+              <p className="text-[10px] text-[#7c7872]">No files to rewind</p>
+            ) : (
+              <>
+                <div className="space-y-1 max-h-40 overflow-y-auto mb-2">
+                  {preview.filesChanged.map((f: string) => (
+                    <div key={f} className="text-[10px] font-mono text-[#a8a29e] truncate">{f}</div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-[#7c7872] mb-2">
+                  <span className="text-[#3fb950]">+{preview.insertions ?? 0}</span>
+                  <span className="text-[#f87171]">-{preview.deletions ?? 0}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRewind}
+                    className="flex-1 px-2 py-1.5 text-xs text-[#e5e2db] bg-[#60a5fa] rounded hover:bg-[#3b82f6] cursor-pointer"
+                  >
+                    Confirm Rewind
+                  </button>
+                  <button
+                    onClick={() => { setShowPreview(false); setPreview(null) }}
+                    className="px-2 py-1.5 text-xs text-[#7c7872] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
   )
 }
 

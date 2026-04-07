@@ -25,6 +25,28 @@ export interface AccountInfo {
   model?: string
 }
 
+export interface ContextUsageCategory {
+  name: string
+  tokens: number
+  color: string
+  isDeferred?: boolean
+}
+
+export interface ContextUsage {
+  categories: ContextUsageCategory[]
+  totalTokens: number
+  maxTokens: number
+  percentage: number
+  model: string
+}
+
+export interface McpServerInfo {
+  name: string
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'
+  serverInfo?: { name: string; version: string }
+  error?: string
+}
+
 interface ConnectionState {
   connectionId: string | null
   connectionStatus: ConnectionStatus
@@ -38,6 +60,8 @@ interface ConnectionState {
   planModalOpen: boolean
   accountInfo: AccountInfo | null
   models: ModelInfo[]
+  contextUsage: ContextUsage | null
+  mcpServers: McpServerInfo[]
 }
 
 interface ConnectionActions {
@@ -53,6 +77,8 @@ interface ConnectionActions {
   setPlanModalOpen(open: boolean): void
   setAccountInfo(info: AccountInfo | null): void
   setModels(models: ModelInfo[]): void
+  setContextUsage(usage: ContextUsage | null): void
+  setMcpServers(servers: McpServerInfo[]): void
   reset(): void
 }
 
@@ -69,6 +95,8 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   planModalOpen: false,
   accountInfo: null,
   models: [],
+  contextUsage: null,
+  mcpServers: [],
 
   setConnectionId: (id) => set({ connectionId: id }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
@@ -82,6 +110,8 @@ export const useConnectionStore = create<ConnectionState & ConnectionActions>((s
   setPlanModalOpen: (open) => set({ planModalOpen: open }),
   setAccountInfo: (info) => set({ accountInfo: info }),
   setModels: (models) => set({ models }),
+  setContextUsage: (usage) => set({ contextUsage: usage }),
+  setMcpServers: (servers) => set({ mcpServers: servers }),
   reset: () => set({
     lockStatus: 'idle', lockHolderId: null, sessionStatus: 'idle',
     pendingApproval: null, pendingAskUser: null,

@@ -97,6 +97,8 @@ export class V1QuerySession extends AgentSession {
       allowDangerouslySkipPermissions: true,
       env: { ...process.env, ...claudeEnv },
       promptSuggestions: true,
+      enableFileCheckpointing: true,
+      agentProgressSummaries: true,
     }
 
     // Resume existing session or use previously captured ID
@@ -243,6 +245,26 @@ export class V1QuerySession extends AgentSession {
 
   async setModel(model: string): Promise<void> {
     await this.queryInstance?.setModel?.(model)
+  }
+
+  async getContextUsage(): Promise<any> {
+    return this.queryInstance?.getContextUsage?.()
+  }
+
+  async getMcpStatus(): Promise<any[]> {
+    return (await this.queryInstance?.mcpServerStatus?.()) ?? []
+  }
+
+  async toggleMcpServer(serverName: string, enabled: boolean): Promise<void> {
+    await this.queryInstance?.toggleMcpServer?.(serverName, enabled)
+  }
+
+  async reconnectMcpServer(serverName: string): Promise<void> {
+    await this.queryInstance?.reconnectMcpServer?.(serverName)
+  }
+
+  async rewindFiles(messageId: string, options?: { dryRun?: boolean }): Promise<any> {
+    return this.queryInstance?.rewindFiles?.(messageId, options)
   }
 
   private fetchAccountInfo(): void {
@@ -473,9 +495,9 @@ export class V1QuerySession extends AgentSession {
       let decision: ToolApprovalDecision | null = null
 
       switch (mode) {
-        // Auto: allow all pending tool approvals (consistent with getAutoDecision)
+        // Auto: keep pending — SDK risk classifier will evaluate new calls,
+        // but already-queued requests should not be retroactively auto-allowed
         case 'auto':
-          decision = { behavior: 'allow' }
           break
 
         // Bypass: allow unless safety-sensitive

@@ -309,6 +309,37 @@ function handleServerMessage(msg: S2CMessage) {
       conn.setModels((msg as any).models ?? [])
       break
 
+    case 'context-usage':
+      conn.setContextUsage({
+        categories: (msg as any).categories ?? [],
+        totalTokens: (msg as any).totalTokens ?? 0,
+        maxTokens: (msg as any).maxTokens ?? 0,
+        percentage: (msg as any).percentage ?? 0,
+        model: (msg as any).model ?? '',
+      })
+      break
+
+    case 'mcp-status':
+      conn.setMcpServers((msg as any).servers ?? [])
+      break
+
+    case 'rewind-result': {
+      const rr = msg as any
+      if (rr.dryRun) {
+        // Dry run results are handled by the RewindDialog component via a callback
+        // Broadcast a custom event so the dialog can pick it up
+        window.dispatchEvent(new CustomEvent('rewind-preview', { detail: rr }))
+      } else if (rr.canRewind) {
+        useToastStore.getState().add(
+          `Rewound ${rr.filesChanged?.length ?? 0} files (+${rr.insertions ?? 0}/-${rr.deletions ?? 0})`,
+          'info'
+        )
+      } else {
+        useToastStore.getState().add(rr.error ?? 'Cannot rewind', 'error')
+      }
+      break
+    }
+
     case 'session-complete':
     case 'session-aborted':
       // Clear pending requests but preserve lock status — lock persists across queries
@@ -398,6 +429,26 @@ function forkSession(sessionId: string, atMessageId?: string) {
   send({ type: 'fork-session', sessionId, atMessageId } as any)
 }
 
+function getContextUsage(sessionId: string) {
+  send({ type: 'get-context-usage', sessionId } as any)
+}
+
+function getMcpStatus(sessionId: string) {
+  send({ type: 'get-mcp-status', sessionId } as any)
+}
+
+function toggleMcpServer(sessionId: string, serverName: string, enabled: boolean) {
+  send({ type: 'toggle-mcp-server', sessionId, serverName, enabled } as any)
+}
+
+function reconnectMcpServer(sessionId: string, serverName: string) {
+  send({ type: 'reconnect-mcp-server', sessionId, serverName } as any)
+}
+
+function rewindFiles(sessionId: string, messageId: string, dryRun?: boolean) {
+  send({ type: 'rewind-files', sessionId, messageId, dryRun } as any)
+}
+
 // ── Hook (manages singleton lifecycle via ref-counting) ─────────
 export function useWebSocket() {
   useEffect(() => {
@@ -413,5 +464,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, forkSession, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
+  return { send, sendMessage, joinSession, forkSession, getContextUsage, getMcpStatus, toggleMcpServer, reconnectMcpServer, rewindFiles, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
 }

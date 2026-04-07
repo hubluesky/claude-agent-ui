@@ -1,6 +1,8 @@
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { ModelSelector } from './ModelSelector'
+import { ContextUsageIndicator } from './ContextPanel'
+import { McpIndicator } from './McpPanel'
 
 const MODE_LABELS: Record<string, { label: string; color: string }> = {
   default: { label: 'Default', color: '#a8a29e' },
@@ -51,6 +53,10 @@ export function StatusBar() {
           <span className="w-px h-3 bg-[#3d3b37]" />
         </>
       )}
+
+      {/* Context usage + MCP */}
+      <ContextUsageIndicator />
+      <McpIndicator />
 
       {/* Spacer */}
       <span className="flex-1" />
