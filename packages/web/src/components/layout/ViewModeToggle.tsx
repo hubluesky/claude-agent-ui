@@ -18,7 +18,7 @@ export function ViewModeToggle() {
   // Ctrl/Cmd+\ to toggle Single/Multi (left-hand friendly)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === '~')) {
         e.preventDefault()
         const next = useSettingsStore.getState().viewMode === 'single' ? 'multi' : 'single'
         handleSwitch(next)
@@ -52,7 +52,7 @@ export function ViewModeToggle() {
           Multi
         </button>
       </div>
-      <span className="text-[8px] text-[var(--text-dim)] font-mono">{MOD_LABEL}+\</span>
+      <span className="text-[8px] text-[var(--text-dim)] font-mono">{MOD_LABEL}+~</span>
     </div>
   )
 }
