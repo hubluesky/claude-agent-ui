@@ -277,6 +277,9 @@ export class WSHub {
         }
         client.alive = false
         if (client.ws.readyState === WebSocket.OPEN) {
+          // Send both a WS-level ping (keeps proxies alive) and an app-level ping
+          // (triggers client-side heartbeat timer reset + pong response)
+          client.ws.ping()
           client.ws.send(JSON.stringify({ type: 'ping' }))
         }
       }
