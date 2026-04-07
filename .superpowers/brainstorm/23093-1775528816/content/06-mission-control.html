@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control — 8 Sessions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1c1b18; color: #e5e2db; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+
+  .page-header { padding: 28px 40px 6px; }
+  .page-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .page-header p { font-size: 13px; color: #7c7872; line-height: 1.6; max-width: 760px; }
+
+  .options-wrap { display: flex; flex-direction: column; gap: 32px; padding: 20px 40px 60px; }
+
+  .option-section {}
+  .option-label { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; cursor: pointer; }
+  .option-letter {
+    width: 28px; height: 28px; border-radius: 8px; background: #d977061a;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #d97706; flex-shrink: 0;
+  }
+  .option-section.selected .option-letter { background: #d97706; color: #1c1b18; }
+  .ol-text h2 { font-size: 16px; font-weight: 600; }
+  .ol-text p { font-size: 12px; color: #7c7872; margin-top: 2px; }
+  .option-tag { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: #d977061a; color: #d97706; font-weight: 600; margin-left: 8px; }
+
+  .mockup-frame {
+    background: #1c1b18; border-radius: 10px; overflow: hidden;
+    border: 1px solid #3d3b37; box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+    transition: border-color 0.2s, box-shadow 0.2s; cursor: pointer;
+  }
+  .option-section.selected .mockup-frame { border-color: #d97706; box-shadow: 0 0 0 1px #d97706, 0 8px 40px rgba(217,119,6,0.1); }
+  .mockup-dots { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #2b2a27; }
+  .mockup-dots span { width: 9px; height: 9px; border-radius: 50%; background: #3d3b37; }
+
+  .brand-icon { width: 22px; height: 22px; background: #d97706; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #1c1b18; font-family: monospace; flex-shrink: 0; }
+
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+  .cursor { display: inline-block; width: 2px; height: 12px; background: #d97706; animation: blink 1s infinite; vertical-align: text-bottom; }
+  @keyframes glow { 0%,100%{box-shadow:0 0 0 1px #d97706;} 50%{box-shadow:0 0 8px 1px rgba(217,119,6,0.4);} }
+  @keyframes pulse-ring { 0%{box-shadow:0 0 0 0 rgba(245,158,11,0.4);} 100%{box-shadow:0 0 0 6px rgba(245,158,11,0);} }
+
+  .inline-summary { display: flex; gap: 16px; padding: 14px 20px; border-top: 1px solid #3d3b37; background: #242320; }
+  .is-col { flex: 1; }
+  .is-col h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+  .is-col.pro h4 { color: #22c55e; }
+  .is-col.con h4 { color: #f87171; }
+  .is-col li { font-size: 11px; color: #7c7872; margin-left: 14px; line-height: 1.7; }
+
+  /* Selection */
+  .selection-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; background: #d97706; color: #1c1b18;
+    padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; transform: translateY(100%); transition: transform 0.2s; z-index: 100;
+  }
+  .selection-bar.visible { transform: translateY(0); }
+
+  /* ================================================================
+     DESIGN A: Grid overview + focus panel
+     ================================================================ */
+  .grid-app { display: flex; flex-direction: column; height: 680px; background: #2b2a27; }
+
+  .grid-topbar {
+    display: flex; align-items: center; height: 40px; padding: 0 14px;
+    border-bottom: 1px solid #3d3b37; flex-shrink: 0; gap: 8px;
+  }
+  .gt-title { font-size: 13px; font-weight: 600; }
+  .gt-stats { display: flex; gap: 8px; margin-left: 12px; align-items: center; }
+  .gt-stat { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+  .gt-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .gt-dot.running { background: #22c55e; }
+  .gt-dot.waiting { background: #f59e0b; }
+  .gt-dot.idle { background: #3d3b37; }
+  .gt-right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+  .gt-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: none; color: #7c7872; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .gt-btn:hover { background: #3d3b37; color: #e5e2db; }
+  .gt-kbd { font-size: 9px; color: #5c5952; background: #3d3b37; padding: 1px 5px; border-radius: 3px; font-family: monospace; }
+
+  /* Grid: 4x2 tiles */
+  .tile-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    padding: 8px; flex-shrink: 0;
+  }
+
+  .tile {
+    background: #1c1b18; border: 1px solid #3d3b37; border-radius: 8px;
+    padding: 10px; cursor: pointer; transition: all 0.15s; position: relative;
+    min-height: 88px;
+  }
+  .tile:hover { border-color: #5c5952; }
+  .tile.active { border-color: #d97706; box-shadow: 0 0 0 1px #d97706; }
+  .tile.alert { border-color: #f59e0b50; }
+  .tile.alert::before {
+    content: ''; position: absolute; top: -1px; right: -1px; left: -1px;
+    height: 2px; background: #f59e0b; border-radius: 8px 8px 0 0;
+  }
+
+  .tile-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .tile-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .tile-dot.running { background: #22c55e; box-shadow: 0 0 4px rgba(34,197,94,0.4); }
+  .tile-dot.waiting { background: #f59e0b; animation: pulse-ring 1.5s infinite; }
+  .tile-dot.idle { background: #3d3b37; }
+  .tile-title { font-size: 11px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile-project { font-size: 8px; color: #d97706; background: #d977060f; padding: 1px 5px; border-radius: 2px; font-weight: 500; }
+
+  .tile-msg { font-size: 10px; color: #7c7872; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 6px; }
+  .tile-msg .ai { color: #d97706; font-weight: 600; }
+  .tile-msg .tool { color: #5c5952; font-family: monospace; font-size: 9px; }
+
+  .tile-bottom { display: flex; align-items: center; gap: 6px; }
+  .tile-progress { flex: 1; height: 2px; background: #3d3b37; border-radius: 1px; overflow: hidden; }
+  .tile-pf { height: 100%; border-radius: 1px; }
+  .tile-pf.green { background: #22c55e; }
+  .tile-pf.amber { background: #f59e0b; }
+  .tile-pct { font-size: 9px; color: #5c5952; }
+
+  .tile-alert-badge {
+    display: flex; align-items: center; gap: 3px;
+    font-size: 9px; color: #f59e0b; font-weight: 600;
+    background: #f59e0b15; padding: 2px 6px; border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  /* Divider between grid and focus */
+  .grid-divider {
+    height: 1px; background: #3d3b37; flex-shrink: 0; position: relative;
+  }
+  .grid-divider-label {
+    position: absolute; left: 16px; top: -8px; background: #2b2a27;
+    padding: 0 8px; font-size: 10px; color: #5c5952;
+  }
+
+  /* Focus panel */
+  .focus-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  .fp-header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    border-bottom: 1px solid #3d3b37; flex-shrink: 0;
+  }
+  .fp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .fp-dot.running { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+  .fp-info { flex: 1; min-width: 0; }
+  .fp-title { font-size: 13px; font-weight: 600; }
+  .fp-sub { font-size: 10px; color: #5c5952; display: flex; gap: 8px; }
+  .fp-task-badge { font-size: 10px; color: #7c7872; background: #3d3b3740; padding: 2px 8px; border-radius: 4px; }
+
+  .fp-chat { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .fp-msg { display: flex; gap: 8px; }
+  .fp-avatar { width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; }
+  .fp-avatar.u { background: #3d3b37; color: #7c7872; }
+  .fp-avatar.a { background: #d977061a; color: #d97706; }
+  .fp-body { flex: 1; min-width: 0; }
+  .fp-name { font-size: 10px; font-weight: 600; margin-bottom: 2px; }
+  .fp-name.u-n { color: #7c7872; }
+  .fp-name.a-n { color: #d97706; }
+  .fp-text { font-size: 12px; line-height: 1.5; }
+  .fp-text code { background: #1c1b18; padding: 0 4px; border-radius: 3px; font-size: 11px; font-family: monospace; color: #d97706; }
+  .fp-tool { font-size: 10px; color: #5c5952; font-family: monospace; margin: 3px 0; padding: 5px 8px; background: #1c1b18; border-radius: 5px; border-left: 2px solid #3d3b37; }
+  .fp-tool .tn { color: #d97706; font-weight: 600; }
+
+  .fp-tasks { margin: 6px 0; padding: 8px 10px; background: #1c1b18; border-radius: 6px; }
+  .fp-tasks-top { display: flex; justify-content: space-between; font-size: 10px; color: #5c5952; margin-bottom: 5px; }
+  .fp-tasks-top strong { color: #e5e2db; }
+  .fp-tasks-items { display: flex; flex-direction: column; gap: 3px; }
+  .fp-task-item { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+  .fp-task-check { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #3d3b37; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 8px; }
+  .fp-task-check.done { background: #22c55e20; border-color: #22c55e40; color: #22c55e; }
+  .fp-task-check.curr { background: #d977061a; border-color: #d9770640; }
+  .fp-task-item.done { color: #5c5952; text-decoration: line-through; }
+  .fp-task-item.curr { color: #e5e2db; }
+  .fp-task-item.pending { color: #5c5952; }
+  .fp-tasks-bar { height: 2px; background: #3d3b37; border-radius: 1px; margin-top: 6px; overflow: hidden; }
+  .fp-tasks-fill { height: 100%; background: #22c55e; border-radius: 1px; }
+
+  .fp-composer {
+    margin: 10px 14px; border-radius: 10px; border: 1px solid #3d3b37;
+    background: #1a1918; overflow: hidden;
+  }
+  .fp-composer.glow { border-color: #d97706; animation: glow 2s ease-in-out infinite; }
+  .fp-composer-input {
+    width: 100%; padding: 9px 14px; font-size: 12px; color: #e5e2db;
+    background: transparent; border: none; outline: none; font-family: inherit;
+  }
+  .fp-composer-input::placeholder { color: #7c7872; }
+  .fp-composer-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 8px; border-top: 1px solid #3d3b37;
+  }
+  .fp-cb-btns { display: flex; gap: 2px; }
+  .fp-cb-btn { width: 26px; height: 26px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #7c7872; cursor: pointer; border: none; background: none; font-size: 13px; }
+  .fp-cb-btn:hover { background: #3d3b37; color: #e5e2db; }
+  .fp-send { width: 26px; height: 26px; border-radius: 6px; background: #d97706; color: #1c1b18; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .fp-status { height: 22px; border-top: 1px solid #3d3b37; display: flex; align-items: center; padding: 0 12px; font-size: 9px; color: #5c5952; gap: 8px; flex-shrink: 0; background: #242320; }
+  .fp-status .sd { width: 4px; height: 4px; border-radius: 50%; background: #22c55e; }
+
+  /* ================================================================
+     DESIGN B: Compact list + split focus
+     ================================================================ */
+  .split-app { display: flex; height: 680px; background: #2b2a27; }
+
+  .split-left {
+    width: 300px; background: #1c1b18; border-right: 1px solid #3d3b37;
+    display: flex; flex-direction: column;
+  }
+  .sl-header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid #2b2a27;
+  }
+  .sl-stats { display: flex; gap: 2px; padding: 6px 8px; border-bottom: 1px solid #2b2a27; }
+  .sl-chip { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; }
+  .sl-chip:hover { background: #2b2a27; }
+  .sl-chip.active { background: #d977061a; }
+  .sl-chip .sd { width: 5px; height: 5px; border-radius: 50%; }
+  .sl-chip .sd.r { background: #22c55e; }
+  .sl-chip .sd.w { background: #f59e0b; }
+  .sl-chip .sd.i { background: #3d3b37; }
+  .sl-chip .sc { font-weight: 600; }
+
+  .sl-list { flex: 1; overflow-y: auto; }
+
+  .sl-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    cursor: pointer; border-left: 2px solid transparent; transition: all 0.1s;
+    border-bottom: 1px solid #2b2a2740;
+  }
+  .sl-item:hover { background: #2b2a27; }
+  .sl-item.active { background: #d977061a; border-left-color: #d97706; }
+  .sl-item.alert { border-left-color: #f59e0b; }
+
+  .sl-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sl-dot.running { background: #22c55e; box-shadow: 0 0 4px rgba(34,197,94,0.4); }
+  .sl-dot.waiting { background: #f59e0b; animation: pulse-ring 1.5s infinite; }
+  .sl-dot.idle { background: #3d3b37; }
+  .sl-info { flex: 1; min-width: 0; }
+  .sl-title { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sl-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .sl-project { font-size: 8px; color: #d97706; background: #d977060f; padding: 1px 5px; border-radius: 2px; }
+  .sl-msg { font-size: 9px; color: #5c5952; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .sl-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+  .sl-time { font-size: 9px; color: #5c5952; }
+  .sl-badge { font-size: 8px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+  .sl-badge.approval { background: #f59e0b20; color: #f59e0b; }
+  .sl-progress { width: 36px; height: 2px; background: #3d3b37; border-radius: 1px; overflow: hidden; }
+  .sl-pf { height: 100%; border-radius: 1px; background: #22c55e; }
+
+  /* Right split: can show 1 or 2 panels */
+  .split-right { flex: 1; display: flex; flex-direction: column; }
+  .split-panels { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  .split-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; border-bottom: 1px solid #3d3b37; }
+  .split-panel:last-child { border-bottom: none; }
+
+  .sp-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+    border-bottom: 1px solid #3d3b37; flex-shrink: 0;
+  }
+  .sp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sp-dot.running { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+  .sp-dot.waiting { background: #f59e0b; }
+  .sp-info { flex: 1; min-width: 0; }
+  .sp-title { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sp-sub { font-size: 9px; color: #5c5952; }
+  .sp-close { width: 22px; height: 22px; border-radius: 5px; border: none; background: none; color: #5c5952; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+
+  .sp-chat { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* Reuse fp-msg styles */
+  .sp-chat .fp-msg { display: flex; gap: 8px; }
+  .sp-chat .fp-avatar { width: 20px; height: 20px; }
+  .sp-chat .fp-text { font-size: 11px; }
+  .sp-chat .fp-tool { font-size: 9px; padding: 4px 6px; }
+
+  .sp-composer {
+    margin: 6px 10px; border-radius: 8px; border: 1px solid #3d3b37;
+    background: #1a1918; display: flex; align-items: center;
+  }
+  .sp-composer.glow { border-color: #d97706; animation: glow 2s ease-in-out infinite; }
+  .sp-composer input {
+    flex: 1; padding: 7px 10px; font-size: 11px; color: #e5e2db;
+    background: transparent; border: none; outline: none; font-family: inherit;
+  }
+  .sp-composer input::placeholder { color: #5c5952; }
+  .sp-send { width: 24px; height: 24px; margin: 3px; border-radius: 5px; background: #d97706; color: #1c1b18; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+
+  /* Approval in panel */
+  .sp-approval {
+    padding: 6px 10px; border-top: 1px solid #f59e0b30; background: #f59e0b08;
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .sp-approval-text { font-size: 10px; color: #7c7872; flex: 1; }
+  .sp-approval-text strong { color: #f59e0b; }
+  .sp-appr-btn { padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit; }
+  .sp-appr-btn.allow { background: #22c55e; color: #1c1b18; }
+  .sp-appr-btn.deny { background: #3d3b37; color: #7c7872; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>8 终端同时运行的中控台</h1>
+  <p>大量会话并行时，你大部分时间在监控，偶尔需要介入（审批/回复）。设计需要：一屏看全局，一键介入任何一个。</p>
+</div>
+
+<div class="options-wrap">
+
+  <!-- ==================== DESIGN A: Grid + Focus ==================== -->
+  <div class="option-section" id="sect-a" onclick="selectOption('a')">
+    <div class="option-label">
+      <div class="option-letter">A</div>
+      <div class="ol-text">
+        <h2>Grid 总览 + 焦点面板 <span class="option-tag">推荐</span></h2>
+        <p>上方 4x2 网格一屏展示全部 8 个会话的状态/消息/进度，下方是当前焦点会话的完整聊天。点击任何格子切换焦点。</p>
+      </div>
+    </div>
+    <div class="mockup-frame">
+      <div class="mockup-dots"><span></span><span></span><span></span></div>
+      <div class="grid-app">
+        <!-- Top bar -->
+        <div class="grid-topbar">
+          <div class="brand-icon">C</div>
+          <span class="gt-title">Claude Code</span>
+          <div class="gt-stats">
+            <div class="gt-stat"><div class="gt-dot running"></div> <strong>3</strong></div>
+            <div class="gt-stat"><div class="gt-dot waiting"></div> <strong style="color:#f59e0b;">1</strong></div>
+            <div class="gt-stat"><div class="gt-dot idle"></div> 4</div>
+          </div>
+          <div class="gt-right">
+            <span class="gt-kbd">Ctrl+K</span>
+            <button class="gt-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+          </div>
+        </div>
+
+        <!-- 4x2 Grid -->
+        <div class="tile-grid">
+          <!-- Tile 1: active, running -->
+          <div class="tile active">
+            <div class="tile-top">
+              <div class="tile-dot running"></div>
+              <div class="tile-title">重构 UI 布局</div>
+              <div class="tile-project">agent-ui</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> 正在修改 TopBar...<span class="cursor"></span></div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf green" style="width:65%;"></div></div>
+              <span class="tile-pct">65%</span>
+            </div>
+          </div>
+          <!-- Tile 2: waiting, alert -->
+          <div class="tile alert">
+            <div class="tile-top">
+              <div class="tile-dot waiting"></div>
+              <div class="tile-title">玩家碰撞检测</div>
+              <div class="tile-project">my-game</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> 需要写入 collision.ts</div>
+            <div class="tile-alert-badge">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 9v4m0 4h.01"/></svg>
+              Approval
+            </div>
+          </div>
+          <!-- Tile 3: running -->
+          <div class="tile">
+            <div class="tile-top">
+              <div class="tile-dot running"></div>
+              <div class="tile-title">修复 WebSocket</div>
+              <div class="tile-project">agent-ui</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> <span class="tool">pnpm test</span> 12/18 passed</div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf green" style="width:40%;"></div></div>
+              <span class="tile-pct">40%</span>
+            </div>
+          </div>
+          <!-- Tile 4: running -->
+          <div class="tile">
+            <div class="tile-top">
+              <div class="tile-dot running"></div>
+              <div class="tile-title">重构登录流程</div>
+              <div class="tile-project">api-server</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> <span class="tool">Edit</span> auth/login.ts<span class="cursor"></span></div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf green" style="width:30%;"></div></div>
+              <span class="tile-pct">30%</span>
+            </div>
+          </div>
+          <!-- Tile 5: idle -->
+          <div class="tile">
+            <div class="tile-top">
+              <div class="tile-dot idle"></div>
+              <div class="tile-title">修复认证中间件</div>
+              <div class="tile-project">api-server</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> 任务完成，修改 3 文件</div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf green" style="width:100%;"></div></div>
+              <span class="tile-pct" style="color:#22c55e;">Done</span>
+            </div>
+          </div>
+          <!-- Tile 6: idle -->
+          <div class="tile">
+            <div class="tile-top">
+              <div class="tile-dot idle"></div>
+              <div class="tile-title">E2E 测试</div>
+              <div class="tile-project">agent-ui</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> 3 个 Playwright 测试已创建</div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf green" style="width:100%;"></div></div>
+              <span class="tile-pct" style="color:#22c55e;">Done</span>
+            </div>
+          </div>
+          <!-- Tile 7: idle -->
+          <div class="tile">
+            <div class="tile-top">
+              <div class="tile-dot idle"></div>
+              <div class="tile-title">DB migration</div>
+              <div class="tile-project">api-server</div>
+            </div>
+            <div class="tile-msg" style="color:#5c5952;">等下个 sprint</div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf amber" style="width:15%;"></div></div>
+              <span class="tile-pct">15%</span>
+            </div>
+          </div>
+          <!-- Tile 8: idle -->
+          <div class="tile">
+            <div class="tile-top">
+              <div class="tile-dot idle"></div>
+              <div class="tile-title">场景编辑器</div>
+              <div class="tile-project">my-game</div>
+            </div>
+            <div class="tile-msg"><span class="ai">Claude</span> 场景树渲染完成</div>
+            <div class="tile-bottom">
+              <div class="tile-progress"><div class="tile-pf green" style="width:100%;"></div></div>
+              <span class="tile-pct" style="color:#22c55e;">Done</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="grid-divider">
+          <div class="grid-divider-label">Focus — 点击上方格子切换</div>
+        </div>
+
+        <!-- Focus panel -->
+        <div class="focus-panel">
+          <div class="fp-header">
+            <div class="fp-dot running"></div>
+            <div class="fp-info">
+              <div class="fp-title">重构 UI 布局</div>
+              <div class="fp-sub">
+                <span>claude-agent-ui</span>
+                <span>&bull;</span>
+                <span style="color:#22c55e;">Running</span>
+              </div>
+            </div>
+            <span class="fp-task-badge">Task 4/5</span>
+          </div>
+          <div class="fp-chat">
+            <div class="fp-msg">
+              <div class="fp-avatar u">U</div>
+              <div class="fp-body">
+                <div class="fp-name u-n">You</div>
+                <div class="fp-text">重构 UI，做统一任务中控台</div>
+              </div>
+            </div>
+            <div class="fp-msg">
+              <div class="fp-avatar a">C</div>
+              <div class="fp-body">
+                <div class="fp-name a-n">Claude</div>
+                <div class="fp-tool"><span class="tn">Read</span> SessionList.tsx</div>
+                <div class="fp-tool"><span class="tn">Edit</span> AppLayout.tsx</div>
+                <div class="fp-tasks">
+                  <div class="fp-tasks-top"><span>Tasks</span> <strong>3/5</strong></div>
+                  <div class="fp-tasks-items">
+                    <div class="fp-task-item done"><div class="fp-task-check done">&#10003;</div> 重构 sessionStore</div>
+                    <div class="fp-task-item done"><div class="fp-task-check done">&#10003;</div> 创建 ActivityFeed</div>
+                    <div class="fp-task-item done"><div class="fp-task-check done">&#10003;</div> 实时状态预览</div>
+                    <div class="fp-task-item curr"><div class="fp-task-check curr"></div> 修改 TopBar</div>
+                    <div class="fp-task-item pending"><div class="fp-task-check"></div> 添加筛选器</div>
+                  </div>
+                  <div class="fp-tasks-bar"><div class="fp-tasks-fill" style="width:65%;"></div></div>
+                </div>
+                <div class="fp-text">正在修改 <code>TopBar</code>，添加全局搜索和统计...<span class="cursor"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="fp-composer glow">
+            <input class="fp-composer-input" placeholder="Ask Claude anything..." readonly>
+            <div class="fp-composer-bar">
+              <div class="fp-cb-btns">
+                <div class="fp-cb-btn">&#128206;</div>
+                <div class="fp-cb-btn">/</div>
+                <div class="fp-cb-btn">@</div>
+              </div>
+              <div class="fp-send">&#8593;</div>
+            </div>
+          </div>
+          <div class="fp-status">
+            <span class="sd"></span> Connected &bull; Lock: You &bull; <span style="color:#d97706;">Running... 65%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inline-summary">
+      <div class="is-col pro"><h4>Pros</h4><ul><li>8 个会话状态一屏全览，不用滚动</li><li>需要关注的（审批、running）一眼定位</li><li>点击切换焦点 = 一步操作</li><li>焦点面板有完整聊天能力</li></ul></div>
+      <div class="is-col con"><h4>Cons</h4><ul><li>焦点面板空间比全屏小</li><li>超过 8 个需要滚动网格</li></ul></div>
+    </div>
+  </div>
+
+  <!-- ==================== DESIGN B: List + Split ==================== -->
+  <div class="option-section" id="sect-b" onclick="selectOption('b')">
+    <div class="option-label">
+      <div class="option-letter">B</div>
+      <div class="ol-text">
+        <h2>紧凑列表 + 分屏焦点</h2>
+        <p>左侧紧凑列表显示全部会话（一行一个），右侧可以上下分屏同时看两个会话。适合需要对比/并行操作的场景。</p>
+      </div>
+    </div>
+    <div class="mockup-frame">
+      <div class="mockup-dots"><span></span><span></span><span></span></div>
+      <div class="split-app">
+        <!-- Left: compact list -->
+        <div class="split-left">
+          <div class="sl-header">
+            <div class="brand-icon">C</div>
+            <span style="font-size:13px;font-weight:700;color:#d97706;">Claude Code</span>
+            <div style="margin-left:auto;display:flex;gap:4px;">
+              <button class="gt-btn" style="width:24px;height:24px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+              <button class="gt-btn" style="width:24px;height:24px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+            </div>
+          </div>
+          <div class="sl-stats">
+            <div class="sl-chip active"><span class="sd r" style="width:5px;height:5px;border-radius:50;background:#7c7872;display:inline-block;"></span> <span class="sc">8</span></div>
+            <div class="sl-chip"><span class="sd r" style="width:5px;height:5px;border-radius:50%;background:#22c55e;display:inline-block;"></span> <span class="sc">3</span></div>
+            <div class="sl-chip"><span class="sd w" style="width:5px;height:5px;border-radius:50%;background:#f59e0b;display:inline-block;"></span> <span class="sc">1</span></div>
+            <div class="sl-chip"><span class="sd i" style="width:5px;height:5px;border-radius:50%;background:#3d3b37;display:inline-block;"></span> <span class="sc">4</span></div>
+          </div>
+          <div class="sl-list">
+            <div class="sl-item active">
+              <div class="sl-dot running"></div>
+              <div class="sl-info">
+                <div class="sl-title">重构 UI 布局</div>
+                <div class="sl-meta">
+                  <span class="sl-project">agent-ui</span>
+                  <span class="sl-msg">正在修改 TopBar...</span>
+                </div>
+              </div>
+              <div class="sl-right">
+                <span class="sl-time">now</span>
+                <div class="sl-progress"><div class="sl-pf" style="width:65%;"></div></div>
+              </div>
+            </div>
+            <div class="sl-item alert">
+              <div class="sl-dot waiting"></div>
+              <div class="sl-info">
+                <div class="sl-title">玩家碰撞检测</div>
+                <div class="sl-meta">
+                  <span class="sl-project">my-game</span>
+                  <span class="sl-msg">Write collision.ts</span>
+                </div>
+              </div>
+              <div class="sl-right">
+                <span class="sl-badge approval">!</span>
+                <span class="sl-time">15m</span>
+              </div>
+            </div>
+            <div class="sl-item" style="border-left-color:#d9770640;">
+              <div class="sl-dot running"></div>
+              <div class="sl-info">
+                <div class="sl-title">修复 WebSocket</div>
+                <div class="sl-meta"><span class="sl-project">agent-ui</span> <span class="sl-msg">12/18 tests</span></div>
+              </div>
+              <div class="sl-right">
+                <span class="sl-time">30m</span>
+                <div class="sl-progress"><div class="sl-pf" style="width:40%;"></div></div>
+              </div>
+            </div>
+            <div class="sl-item">
+              <div class="sl-dot running"></div>
+              <div class="sl-info">
+                <div class="sl-title">重构登录流程</div>
+                <div class="sl-meta"><span class="sl-project">api-server</span> <span class="sl-msg">Edit auth/login.ts</span></div>
+              </div>
+              <div class="sl-right">
+                <span class="sl-time">45m</span>
+                <div class="sl-progress"><div class="sl-pf" style="width:30%;"></div></div>
+              </div>
+            </div>
+            <div class="sl-item">
+              <div class="sl-dot idle"></div>
+              <div class="sl-info">
+                <div class="sl-title">修复认证中间件</div>
+                <div class="sl-meta"><span class="sl-project">api-server</span> <span class="sl-msg">Done</span></div>
+              </div>
+              <div class="sl-right"><span class="sl-time">2h</span></div>
+            </div>
+            <div class="sl-item">
+              <div class="sl-dot idle"></div>
+              <div class="sl-info">
+                <div class="sl-title">E2E 测试</div>
+                <div class="sl-meta"><span class="sl-project">agent-ui</span> <span class="sl-msg">Done</span></div>
+              </div>
+              <div class="sl-right"><span class="sl-time">3h</span></div>
+            </div>
+            <div class="sl-item">
+              <div class="sl-dot idle"></div>
+              <div class="sl-info">
+                <div class="sl-title">DB migration</div>
+                <div class="sl-meta"><span class="sl-project">api-server</span> <span class="sl-msg">暂停</span></div>
+              </div>
+              <div class="sl-right"><span class="sl-time">5h</span></div>
+            </div>
+            <div class="sl-item">
+              <div class="sl-dot idle"></div>
+              <div class="sl-info">
+                <div class="sl-title">场景编辑器</div>
+                <div class="sl-meta"><span class="sl-project">my-game</span> <span class="sl-msg">Done</span></div>
+              </div>
+              <div class="sl-right"><span class="sl-time">1d</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: split panels -->
+        <div class="split-right">
+          <div class="split-panels">
+            <!-- Top panel -->
+            <div class="split-panel">
+              <div class="sp-header">
+                <div class="sp-dot running"></div>
+                <div class="sp-info">
+                  <div class="sp-title">重构 UI 布局</div>
+                  <div class="sp-sub">claude-agent-ui &bull; <span style="color:#22c55e;">Running</span> &bull; Task 4/5</div>
+                </div>
+                <button class="sp-close">&times;</button>
+              </div>
+              <div class="sp-chat">
+                <div class="fp-msg">
+                  <div class="fp-avatar u" style="width:20px;height:20px;">U</div>
+                  <div class="fp-body">
+                    <div class="fp-name u-n" style="font-size:10px;">You</div>
+                    <div class="fp-text" style="font-size:11px;">重构 UI，做统一中控台</div>
+                  </div>
+                </div>
+                <div class="fp-msg">
+                  <div class="fp-avatar a" style="width:20px;height:20px;">C</div>
+                  <div class="fp-body">
+                    <div class="fp-name a-n" style="font-size:10px;">Claude</div>
+                    <div class="fp-tool" style="font-size:9px;padding:4px 6px;"><span class="tn">Edit</span> TopBar.tsx</div>
+                    <div class="fp-text" style="font-size:11px;">正在修改 TopBar...<span class="cursor"></span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="sp-composer glow">
+                <input placeholder="Ask Claude..." readonly>
+                <div class="sp-send">&#8593;</div>
+              </div>
+            </div>
+
+            <!-- Bottom panel -->
+            <div class="split-panel">
+              <div class="sp-header">
+                <div class="sp-dot waiting"></div>
+                <div class="sp-info">
+                  <div class="sp-title">玩家碰撞检测</div>
+                  <div class="sp-sub">my-game &bull; <span style="color:#f59e0b;">Waiting</span></div>
+                </div>
+                <button class="sp-close">&times;</button>
+              </div>
+              <div class="sp-chat">
+                <div class="fp-msg">
+                  <div class="fp-avatar a" style="width:20px;height:20px;">C</div>
+                  <div class="fp-body">
+                    <div class="fp-name a-n" style="font-size:10px;">Claude</div>
+                    <div class="fp-text" style="font-size:11px;">碰撞系统设计完成，需要写入文件。</div>
+                    <div class="fp-tool" style="font-size:9px;padding:4px 6px;"><span class="tn">Write</span> collision.ts — 200 lines</div>
+                  </div>
+                </div>
+              </div>
+              <div class="sp-approval">
+                <div class="sp-approval-text"><strong>Write</strong> src/physics/collision.ts</div>
+                <button class="sp-appr-btn allow">Allow</button>
+                <button class="sp-appr-btn deny">Deny</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inline-summary">
+      <div class="is-col pro"><h4>Pros</h4><ul><li>左侧列表紧凑，8 个不用滚动</li><li>右侧分屏可同时操作两个会话</li><li>列表始终可见，随时一键切换</li></ul></div>
+      <div class="is-col con"><h4>Cons</h4><ul><li>分屏后每个面板空间有限</li><li>超过 2 个分屏就太挤了</li></ul></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="selection-bar" id="selectionBar">
+  <span>Selected: <strong id="selectionText"></strong></span>
+  <span style="opacity:0.8;font-weight:400;">在终端中告诉我你的想法</span>
+</div>
+
+<script>
+let selected = null;
+function selectOption(choice) {
+  document.querySelectorAll('.option-section').forEach(s => s.classList.remove('selected'));
+  document.getElementById('sect-' + choice).classList.add('selected');
+  selected = choice;
+  const titles = { a: 'A — Grid 总览 + 焦点面板', b: 'B — 紧凑列表 + 分屏焦点' };
+  document.getElementById('selectionText').textContent = titles[choice];
+  document.getElementById('selectionBar').classList.add('visible');
+  fetch('/events', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({type:'click',choice,text:titles[choice],timestamp:Math.floor(Date.now()/1000)}) }).catch(()=>{});
+}
+</script>
+</body>
+</html>

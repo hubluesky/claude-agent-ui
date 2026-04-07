@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 后台执行 — 设计文档</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --code-bg: #1c2128;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+  h3 {
+    font-size: 1.2rem;
+    margin-top: 1.8rem;
+    margin-bottom: 0.75rem;
+    color: var(--accent2);
+  }
+  h4 {
+    font-size: 1.05rem;
+    margin-top: 1.4rem;
+    margin-bottom: 0.5rem;
+    color: var(--purple);
+  }
+  p { margin-bottom: 1rem; }
+  ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+  li { margin-bottom: 0.4rem; }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--orange);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+  }
+  th {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  tr:nth-child(even) { background: rgba(22, 27, 34, 0.5); }
+  .callout {
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.5rem;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout.warning {
+    border-left-color: var(--orange);
+  }
+  .callout.danger {
+    border-left-color: var(--red);
+  }
+  .callout.success {
+    border-left-color: var(--accent2);
+  }
+  .callout strong { color: var(--accent); }
+  .callout.warning strong { color: var(--orange); }
+  .callout.danger strong { color: var(--red); }
+  .callout.success strong { color: var(--accent2); }
+  .flow-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text-muted);
+  }
+  .flow-diagram .highlight { color: var(--accent); font-weight: bold; }
+  .flow-diagram .action { color: var(--accent2); }
+  .flow-diagram .wait { color: var(--orange); }
+  .flow-diagram .arrow { color: var(--text-muted); }
+  .badge {
+    display: inline-block;
+    padding: 0.15em 0.5em;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 0.3rem;
+  }
+  .badge.buffer { background: #1f6feb33; color: var(--accent); border: 1px solid #1f6feb; }
+  .badge.skip { background: #f8514933; color: var(--red); border: 1px solid var(--red); }
+  .badge.latest { background: #d2992233; color: var(--orange); border: 1px solid var(--orange); }
+  .section-number {
+    display: inline-block;
+    width: 1.8rem;
+    height: 1.8rem;
+    line-height: 1.8rem;
+    text-align: center;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-right: 0.5rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Agent 后台执行 — 设计文档</h1>
+<p style="color: var(--text-muted); margin-bottom: 2rem;">2026-04-07 | claude-agent-ui</p>
+
+<h2>背景</h2>
+
+<div class="callout danger">
+  <strong>问题：</strong>在移动端浏览器中切换/关闭浏览器后再回来，Agent 会话中断。用户需要重新发送消息才能继续。
+</div>
+
+<h3>根本原因</h3>
+<p>当 Agent 执行到需要用户审批的工具调用时，<code>canUseTool</code> hook 创建一个 Promise 等待客户端通过 WebSocket 响应。如果所有客户端断开：</p>
+<ol>
+  <li><code>wsHub.sendTo()</code> 检测到 WebSocket 已关闭，<strong>静默丢弃</strong>审批请求</li>
+  <li>Promise 的 <code>resolve()</code> 永远不会被调用</li>
+  <li>Agent 的 <code>query()</code> 永远卡在 <code>await</code> 处 — <strong style="color: var(--red);">会话死锁</strong></li>
+</ol>
+
+<p>同样的问题存在于 <code>ask-user</code> 和 <code>plan-approval</code> 两个交互点。</p>
+
+<div class="flow-diagram"><span class="highlight">Agent 等待批准 Promise</span>
+        <span class="arrow">↓</span>
+<span class="action">emit('tool-approval')</span> → handler 广播
+        <span class="arrow">↓</span>
+wsHub.sendTo(connectionId, msg)
+        <span class="arrow">↓</span>
+<span class="wait">WebSocket.CLOSED?</span> → msg 丢弃，无错误
+        <span class="arrow">↓</span>
+客户端无法收到批准请求
+        <span class="arrow">↓</span>
+客户端无法发送响应
+        <span class="arrow">↓</span>
+Promise.resolve() 永不调用
+        <span class="arrow">↓</span>
+<span style="color: var(--red); font-weight: bold;">Agent 永远卡在 await — 会话死锁</span></div>
+
+<h2>设计目标</h2>
+<ol>
+  <li>Agent 不依赖客户端在线，在服务端后台持续运行</li>
+  <li>审批决策由服务端根据 PermissionMode 统一处理</li>
+  <li>客户端断开期间的消息缓冲，重连后补发</li>
+  <li><strong>统一逻辑</strong> — 不分"有客户端/无客户端"两条路径</li>
+</ol>
+
+<h2>架构设计</h2>
+
+<!-- Section 1 -->
+<h3><span class="section-number">1</span> 统一审批决策流程</h3>
+
+<div class="callout success">
+  <strong>核心原则：</strong>服务端始终是审批决策者，客户端只是通知和交互渠道。
+</div>
+
+<div class="flow-diagram"><span class="highlight">canUseTool(toolName, input)</span>
+        <span class="arrow">│</span>
+        <span class="arrow">▼</span>
+<span class="action">getAutoDecision(toolName, input)</span>  ← 服务端根据 PermissionMode 判断
+        <span class="arrow">│</span>
+        <span class="arrow">├──</span> 返回 decision → 直接返回，<span class="action">Agent 继续</span>
+        <span class="arrow">│</span>
+        <span class="arrow">└──</span> 返回 null (需要人工审批)
+                <span class="arrow">│</span>
+                <span class="arrow">▼</span>
+        创建 <span class="highlight">PendingApproval</span> (存入 pendingApprovals Map)
+                <span class="arrow">│</span>
+                <span class="arrow">▼</span>
+        emit('tool-approval') → handler <span class="wait">通知所有在线客户端 (如果有)</span>
+                <span class="arrow">│</span>
+                <span class="arrow">▼</span>
+        <span class="wait">await Promise</span>  ← 等待任意来源的 resolve
+                <span class="arrow">│</span>
+                <span class="arrow">├──</span> 客户端当场在线 → 用户响应 → <span class="action">resolve</span>
+                <span class="arrow">└──</span> 客户端断开后重连 → resendPendingRequests → <span class="action">resolve</span></div>
+
+<p><strong>改动要点</strong>（<code>v1-session.ts</code>）：</p>
+<ul>
+  <li><code>getAutoDecision()</code> 逻辑不变（已经是服务端决策）</li>
+  <li>Promise 创建逻辑不变 — 它本身不依赖客户端在线，只是 emit 后等 resolve</li>
+  <li>核心修复在 handler 层和 WSHub 层</li>
+</ul>
+
+<p><strong>对 ask-user 和 plan-approval</strong>：</p>
+<ul>
+  <li><code>ask-user</code> 在所有模式下都需要人工响应（不能自动回答）</li>
+  <li><code>plan-approval</code> 在 plan 模式下需要人工响应</li>
+  <li>它们的 Promise 同样会安静地等待，直到客户端连接后响应</li>
+</ul>
+
+<!-- Section 2 -->
+<h3><span class="section-number">2</span> 消息缓冲与补发</h3>
+
+<div class="callout">
+  <strong>目标：</strong>客户端断开期间 Agent 产生的消息不丢失，重连后按序补发。
+</div>
+
+<h4>数据结构</h4>
+<pre><code>interface BufferedMessage {
+  seq: number           // 递增序号
+  message: S2CMessage   // 原始消息
+  timestamp: number     // 时间戳
+  isStreaming: boolean   // 是否为流式消息
+}
+
+// WSHub 新增
+private sessionBuffers: Map&lt;string, {
+  messages: BufferedMessage[]
+  nextSeq: number
+  currentStreamSnapshot: S2CMessage | null
+}&gt;</code></pre>
+
+<h4>消息分类策略</h4>
+<table>
+  <tr><th>消息类型</th><th>策略</th></tr>
+  <tr><td>assistant (最终)</td><td><span class="badge buffer">缓冲</span></td></tr>
+  <tr><td>tool_use / tool_result</td><td><span class="badge buffer">缓冲</span></td></tr>
+  <tr><td>tool-approval-request</td><td><span class="badge buffer">缓冲</span> 重连后重发</td></tr>
+  <tr><td>ask-user-request</td><td><span class="badge buffer">缓冲</span> 重连后重发</td></tr>
+  <tr><td>plan-approval-request</td><td><span class="badge buffer">缓冲</span> 重连后重发</td></tr>
+  <tr><td>session-status</td><td><span class="badge latest">仅保留最新</span></td></tr>
+  <tr><td>stream_event (delta)</td><td><span class="badge skip">不缓冲</span> 仅更新 snapshot</td></tr>
+  <tr><td>error</td><td><span class="badge buffer">缓冲</span></td></tr>
+</table>
+
+<h4>流式消息处理</h4>
+<p>流式 delta 消息不逐条缓冲。WSHub 维护一个 <code>currentStreamSnapshot</code>：</p>
+<ul>
+  <li>收到 stream_event 时：更新 snapshot（累积文本）</li>
+  <li>流结束时：snapshot 清空（最终消息会作为 assistant 消息缓冲）</li>
+  <li>客户端重连时：如果有活跃 snapshot，先发送 snapshot 再发送后续缓冲消息</li>
+</ul>
+
+<h4>流式 Snapshot 格式</h4>
+<pre><code>{
+  type: 'stream-snapshot',
+  messageId: string,        // 当前正在生成的消息 ID
+  accumulatedText: string,  // 已累积的文本
+  thinking?: string,        // 已累积的 thinking 内容
+}</code></pre>
+
+<h4>重连补发流程</h4>
+<div class="flow-diagram"><span class="highlight">客户端重连</span> → join-session(sessionId, lastSeq?)
+        <span class="arrow">│</span>
+        <span class="arrow">▼</span>
+WSHub 查找 sessionBuffers[sessionId]
+        <span class="arrow">│</span>
+        <span class="arrow">├──</span> lastSeq 存在 → 发送 seq &gt; lastSeq 的消息
+        <span class="arrow">└──</span> lastSeq 不存在 → 发送全部缓冲消息
+        <span class="arrow">│</span>
+        <span class="arrow">▼</span>
+如果有 <span class="wait">currentStreamSnapshot</span> → 先发送 snapshot
+        <span class="arrow">│</span>
+        <span class="arrow">▼</span>
+按序发送缓冲消息
+        <span class="arrow">│</span>
+        <span class="arrow">▼</span>
+<span class="action">resendPendingRequests</span>（审批请求）</div>
+
+<h4>缓冲区管理</h4>
+<ul>
+  <li>每个 session 一个缓冲区</li>
+  <li>最大缓冲 500 条消息，超出后丢弃最老的</li>
+  <li>session 关闭/销毁时清理对应缓冲区</li>
+  <li>缓冲区消息保留 30 分钟，超时清理</li>
+</ul>
+
+<!-- Section 3 -->
+<h3><span class="section-number">3</span> Heartbeat 保活</h3>
+
+<div class="callout warning">
+  <strong>注意：</strong>浏览器 WebSocket API 不暴露协议级 ping/pong，需要使用应用层消息。
+</div>
+
+<table>
+  <tr><th>方向</th><th>消息</th><th>间隔</th></tr>
+  <tr><td>服务端 → 客户端</td><td><code>{ type: 'ping' }</code></td><td>每 30 秒</td></tr>
+  <tr><td>客户端 → 服务端</td><td><code>{ type: 'pong' }</code></td><td>收到 ping 后立即</td></tr>
+</table>
+
+<p><strong>服务端</strong>：每 30 秒遍历所有连接，发送 ping。如果上次 ping 后 60 秒未收到 pong → 判定死连接，主动 terminate。</p>
+<p><strong>客户端</strong>：60 秒未收到 ping → 判定连接死亡，触发重连。</p>
+
+<!-- Section 4 -->
+<h3><span class="section-number">4</span> visibilitychange 处理（增强项）</h3>
+
+<pre><code>// useWebSocket.ts 新增
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      scheduleReconnect(/* immediate: true */)
+    }
+  }
+})</code></pre>
+
+<p>这不是核心机制，是优化。核心保障由 heartbeat + 消息缓冲提供。</p>
+
+<!-- Section 5 -->
+<h3><span class="section-number">5</span> 审批与锁的解耦</h3>
+
+<div class="callout">
+  <strong>改动：</strong>审批响应不绑定锁。
+</div>
+
+<ul>
+  <li><strong>锁</strong>控制的是：谁能发送新的用户消息给 Agent（<code>send-message</code>）</li>
+  <li><strong>审批响应</strong>是对 Agent 已发出请求的回复 — 任何连接的客户端都可以响应</li>
+  <li>服务端 handler 中移除审批响应的锁检查</li>
+</ul>
+
+<h2>涉及的文件</h2>
+<table>
+  <tr><th>文件</th><th>改动</th></tr>
+  <tr><td><code>packages/server/src/ws/hub.ts</code></td><td>新增消息缓冲区、心跳、重连补发</td></tr>
+  <tr><td><code>packages/server/src/ws/handler.ts</code></td><td>解耦审批与锁、join-session 传 lastSeq、心跳消息处理</td></tr>
+  <tr><td><code>packages/shared/src/protocol.ts</code></td><td>新增 ping/pong 消息类型、join-session 增加 lastSeq 字段</td></tr>
+  <tr><td><code>packages/web/src/hooks/useWebSocket.ts</code></td><td>心跳处理、visibilitychange、重连时发送 lastSeq</td></tr>
+  <tr><td><code>packages/web/src/stores/connectionStore.ts</code></td><td>维护 lastSeq</td></tr>
+</table>
+
+<h2>不涉及的改动</h2>
+<ul>
+  <li><code>v1-session.ts</code> 的审批流程 — 现有 <code>getAutoDecision</code> + Promise 等待的设计本身是正确的，不需要改</li>
+  <li><code>SessionManager</code> — 会话生命周期管理不变</li>
+  <li><code>LockManager</code> — 锁的核心逻辑不变，只是审批响应不再检查锁</li>
+</ul>
+
+<h2>验证方案</h2>
+<ol>
+  <li><strong>移动端场景</strong>：启动 Agent 任务（bypassPermissions）→ 切后台 → 等 1-2 分钟 → 切回 → 验证消息补发</li>
+  <li><strong>需要审批的场景</strong>：default 模式 → Agent 请求审批 → 断开浏览器 → 重连 → 验证审批请求弹出</li>
+  <li><strong>心跳检测</strong>：观察 DevTools WebSocket 帧 → 确认 30 秒 ping/pong → 模拟断网 → 60 秒内检测到</li>
+  <li><strong>消息缓冲</strong>：bypassPermissions 启动长任务 → 关闭标签 → 新标签 join-session → 验证消息补发</li>
+</ol>
+
+</body>
+</html>

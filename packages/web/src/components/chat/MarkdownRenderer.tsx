@@ -1,17 +1,34 @@
-import { memo, useState, useCallback } from 'react'
+import { memo, useState, useCallback, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
+import './hljs-theme.css'
+
+const COLLAPSED_MAX_HEIGHT = 240
 
 function CodeBlock({ language, className, children, ...props }: { language?: string; className?: string; children?: React.ReactNode; [key: string]: unknown }) {
   const [copied, setCopied] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const [fullHeight, setFullHeight] = useState(0)
+  const codeRef = useRef<HTMLElement>(null)
+  const preRef = useRef<HTMLPreElement>(null)
+
+  useEffect(() => {
+    if (preRef.current) {
+      const h = preRef.current.scrollHeight
+      setFullHeight(h)
+      setIsOverflowing(h > COLLAPSED_MAX_HEIGHT)
+    }
+  }, [children])
 
   const handleCopy = useCallback(() => {
-    const text = String(children).replace(/\n$/, '')
+    const text = codeRef.current?.textContent ?? ''
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
-  }, [children])
+  }, [])
 
   return (
     <div className="relative bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-md overflow-hidden my-2">
@@ -24,11 +41,36 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
           {copied ? '✓ Copied' : 'Copy'}
         </button>
       </div>
-      <pre className="px-3 py-2.5 overflow-x-auto">
-        <code className={`text-xs font-mono text-[var(--text-secondary)] ${className ?? ''}`} {...props}>
-          {children}
-        </code>
-      </pre>
+      <div className="relative">
+        <pre
+          ref={preRef}
+          className="px-3 py-2.5 overflow-x-auto"
+          style={isOverflowing ? {
+            maxHeight: isCollapsed ? COLLAPSED_MAX_HEIGHT : fullHeight,
+            overflow: isCollapsed ? 'hidden' : undefined,
+            transition: 'max-height 0.2s ease-out',
+          } : undefined}
+        >
+          <code
+            ref={codeRef}
+            className={`text-xs font-mono text-[var(--text-secondary)] ${className ?? ''}`}
+            {...props}
+          >
+            {children}
+          </code>
+        </pre>
+        {isCollapsed && isOverflowing && (
+          <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[var(--bg-tertiary)] to-transparent pointer-events-none" />
+        )}
+      </div>
+      {isOverflowing && (
+        <button
+          onClick={() => setIsCollapsed(c => !c)}
+          className="w-full px-3 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--bg-secondary)] border-t border-[var(--border)] transition-colors cursor-pointer text-center"
+        >
+          {isCollapsed ? '▼ Show more' : '▲ Show less'}
+        </button>
+      )}
     </div>
   )
 }
@@ -41,6 +83,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight]}
       components={{
         // Code blocks
         code({ className, children, ...props }) {

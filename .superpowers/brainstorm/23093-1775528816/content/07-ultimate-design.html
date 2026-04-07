@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultimate Design — Multi-View Mission Control</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#1c1b18;color:#e5e2db;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:3px;}
+
+  .page-header{padding:28px 40px 6px;}
+  .page-header h1{font-size:20px;font-weight:700;margin-bottom:6px;}
+  .page-header p{font-size:13px;color:#7c7872;line-height:1.6;max-width:800px;}
+  .page-header .sources{font-size:11px;color:#5c5952;margin-top:6px;}
+  .page-header .sources span{color:#d97706;}
+
+  .section-title{font-size:14px;font-weight:600;padding:20px 40px 10px;color:#7c7872;}
+
+  .mockup-frame{background:#1c1b18;border-radius:10px;margin:0 40px 24px;overflow:hidden;border:1px solid #3d3b37;box-shadow:0 8px 40px rgba(0,0,0,0.3);}
+  .mockup-dots{display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid #2b2a27;}
+  .mockup-dots span{width:9px;height:9px;border-radius:50%;background:#3d3b37;}
+
+  .bi{width:20px;height:20px;background:#d97706;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#1c1b18;font-family:monospace;flex-shrink:0;}
+
+  @keyframes blink{0%,50%{opacity:1;}51%,100%{opacity:0;}}
+  .cur{display:inline-block;width:2px;height:11px;background:#d97706;animation:blink 1s infinite;vertical-align:text-bottom;}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 1px #d97706;}50%{box-shadow:0 0 8px 1px rgba(217,119,6,0.4);}}
+  @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:0.4;}}
+  @keyframes slide-in{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ================================================================
+     THE APP: Global bar + View modes
+     ================================================================ */
+  .app{display:flex;flex-direction:column;height:700px;background:#2b2a27;}
+
+  /* --- Global status bar --- */
+  .global-bar{display:flex;align-items:center;height:42px;padding:0 14px;border-bottom:1px solid #3d3b37;flex-shrink:0;gap:8px;background:#242320;}
+  .gb-brand{display:flex;align-items:center;gap:7px;}
+  .gb-brand-text{font-size:13px;font-weight:700;color:#d97706;}
+  .gb-divider{width:1px;height:20px;background:#3d3b37;margin:0 4px;}
+
+  .gb-stats{display:flex;gap:6px;align-items:center;}
+  .gb-stat{display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:10px;cursor:pointer;transition:all 0.12s;}
+  .gb-stat:hover{background:#2b2a27;}
+  .gb-stat .d{width:6px;height:6px;border-radius:50%;}
+  .gb-stat .d.r{background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.4);}
+  .gb-stat .d.w{background:#f59e0b;}
+  .gb-stat .d.i{background:#3d3b37;}
+  .gb-stat .d.e{background:#ef4444;}
+  .gb-stat .n{font-weight:600;}
+  .gb-stat .l{color:#5c5952;}
+  .gb-stat.has-alert{background:#f59e0b10;color:#f59e0b;}
+
+  .gb-cost{display:flex;align-items:center;gap:4px;font-size:10px;color:#5c5952;margin-left:4px;}
+  .gb-cost strong{color:#7c7872;}
+
+  .gb-right{margin-left:auto;display:flex;gap:3px;align-items:center;}
+  .gb-view-toggle{display:flex;background:#1c1b18;border-radius:6px;border:1px solid #3d3b37;overflow:hidden;}
+  .gb-vt{padding:4px 10px;font-size:10px;color:#5c5952;cursor:pointer;transition:all 0.12s;border:none;background:none;font-family:inherit;}
+  .gb-vt:hover{color:#7c7872;}
+  .gb-vt.active{background:#d977061a;color:#d97706;font-weight:600;}
+  .gb-btn{width:28px;height:28px;border-radius:6px;border:none;background:none;color:#7c7872;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .gb-btn:hover{background:#3d3b37;color:#e5e2db;}
+  .gb-kbd{font-size:9px;color:#5c5952;background:#3d3b37;padding:1px 5px;border-radius:3px;font-family:monospace;}
+
+  /* --- Grid View (default: overview) --- */
+  .grid-view{flex:1;display:flex;flex-direction:column;min-height:0;}
+
+  .tile-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:6px;flex-shrink:0;}
+  .tile{background:#1c1b18;border:1px solid #3d3b37;border-radius:8px;padding:8px 10px;cursor:pointer;transition:all 0.12s;position:relative;min-height:80px;}
+  .tile:hover{border-color:#5c5952;z-index:1;}
+  .tile.active{border-color:#d97706;box-shadow:0 0 0 1px #d97706;}
+  .tile.alert{border-color:#f59e0b50;}
+  .tile.alert::before{content:'';position:absolute;top:-1px;right:-1px;left:-1px;height:2px;background:#f59e0b;border-radius:8px 8px 0 0;}
+  .tile.error{border-color:#ef444450;}
+  .tile.error::before{content:'';position:absolute;top:-1px;right:-1px;left:-1px;height:2px;background:#ef4444;border-radius:8px 8px 0 0;}
+
+  .t-top{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+  .t-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .t-dot.running{background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.4);}
+  .t-dot.waiting{background:#f59e0b;animation:pulse-dot 1.5s infinite;}
+  .t-dot.idle{background:#3d3b37;}
+  .t-dot.error{background:#ef4444;}
+  .t-title{font-size:10px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .t-proj{font-size:7px;color:#d97706;background:#d977060f;padding:1px 4px;border-radius:2px;font-weight:500;}
+  .t-shortcut{font-size:8px;color:#3d3b37;font-family:monospace;font-weight:600;}
+  .tile:hover .t-shortcut{color:#5c5952;}
+
+  .t-msg{font-size:9px;color:#7c7872;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:5px;}
+  .t-msg .ai{color:#d97706;font-weight:600;}
+  .t-msg .tool{color:#5c5952;font-family:monospace;font-size:8px;}
+
+  .t-bottom{display:flex;align-items:center;gap:5px;}
+  .t-progress{flex:1;height:2px;background:#3d3b37;border-radius:1px;overflow:hidden;}
+  .t-pf{height:100%;border-radius:1px;}
+  .t-pf.green{background:#22c55e;}
+  .t-pf.amber{background:#f59e0b;}
+  .t-pf.red{background:#ef4444;}
+  .t-pct{font-size:8px;color:#5c5952;}
+
+  /* Inline quick action on tile */
+  .t-action{display:flex;gap:3px;margin-top:4px;}
+  .t-act-btn{padding:2px 8px;border-radius:4px;border:none;cursor:pointer;font-size:9px;font-weight:600;font-family:inherit;}
+  .t-act-btn.allow{background:#22c55e;color:#1c1b18;}
+  .t-act-btn.deny{background:#3d3b37;color:#7c7872;}
+  .t-act-btn.allow:hover{background:#16a34a;}
+  .t-act-btn.deny:hover{color:#f87171;background:#3d3b3780;}
+
+  /* --- Focus panel (bottom half) --- */
+  .focus-divider{height:1px;background:#3d3b37;flex-shrink:0;position:relative;}
+  .focus-divider-label{position:absolute;left:14px;top:-8px;background:#2b2a27;padding:0 8px;font-size:9px;color:#5c5952;display:flex;align-items:center;gap:4px;}
+  .focus-divider-label .fk{font-family:monospace;background:#3d3b37;padding:0 3px;border-radius:2px;font-size:8px;}
+
+  .focus{flex:1;display:flex;flex-direction:column;min-height:0;}
+  .f-header{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #3d3b37;flex-shrink:0;}
+  .f-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .f-dot.running{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);}
+  .f-info{flex:1;min-width:0;}
+  .f-title{font-size:12px;font-weight:600;}
+  .f-sub{font-size:9px;color:#5c5952;display:flex;gap:6px;align-items:center;}
+  .f-badges{display:flex;gap:4px;}
+  .f-badge{font-size:9px;padding:1px 6px;border-radius:3px;background:#3d3b3740;color:#7c7872;}
+  .f-badge.task{background:#22c55e15;color:#22c55e;}
+  .f-badge.cost{background:#d977060f;color:#d97706;}
+
+  .f-chat{flex:1;overflow-y:auto;padding:12px 18px;display:flex;flex-direction:column;gap:10px;}
+  .fm{display:flex;gap:8px;}
+  .fm-av{width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;}
+  .fm-av.u{background:#3d3b37;color:#7c7872;}
+  .fm-av.a{background:#d977061a;color:#d97706;}
+  .fm-b{flex:1;min-width:0;}
+  .fm-n{font-size:9px;font-weight:600;margin-bottom:2px;}
+  .fm-n.un{color:#7c7872;}
+  .fm-n.an{color:#d97706;}
+  .fm-t{font-size:12px;line-height:1.5;}
+  .fm-t code{background:#1c1b18;padding:0 4px;border-radius:3px;font-size:11px;font-family:monospace;color:#d97706;}
+  .fm-tool{font-size:10px;color:#5c5952;font-family:monospace;margin:3px 0;padding:4px 8px;background:#1c1b18;border-radius:4px;border-left:2px solid #3d3b37;}
+  .fm-tool .tn{color:#d97706;font-weight:600;}
+
+  .fm-tasks{margin:6px 0;padding:7px 9px;background:#1c1b18;border-radius:5px;}
+  .fmt-top{display:flex;justify-content:space-between;font-size:9px;color:#5c5952;margin-bottom:4px;}
+  .fmt-top strong{color:#e5e2db;}
+  .fmt-items{display:flex;flex-direction:column;gap:2px;}
+  .fmt-i{display:flex;align-items:center;gap:5px;font-size:10px;}
+  .fmt-ck{width:11px;height:11px;border-radius:3px;border:1px solid #3d3b37;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:7px;}
+  .fmt-ck.done{background:#22c55e20;border-color:#22c55e40;color:#22c55e;}
+  .fmt-ck.curr{background:#d977061a;border-color:#d9770640;}
+  .fmt-i.done{color:#5c5952;text-decoration:line-through;}
+  .fmt-i.curr{color:#e5e2db;}
+  .fmt-i.pend{color:#5c5952;}
+  .fmt-bar{height:2px;background:#3d3b37;border-radius:1px;margin-top:5px;overflow:hidden;}
+  .fmt-fill{height:100%;background:#22c55e;border-radius:1px;}
+
+  .f-composer{margin:8px 12px;border-radius:10px;border:1px solid #3d3b37;background:#1a1918;overflow:hidden;}
+  .f-composer.glow{border-color:#d97706;animation:glow 2s ease-in-out infinite;}
+  .fc-input{width:100%;padding:8px 12px;font-size:12px;color:#e5e2db;background:transparent;border:none;outline:none;font-family:inherit;}
+  .fc-input::placeholder{color:#7c7872;}
+  .fc-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-top:1px solid #3d3b37;}
+  .fc-btns{display:flex;gap:2px;}
+  .fc-btn{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#7c7872;cursor:pointer;border:none;background:none;font-size:12px;}
+  .fc-btn:hover{background:#3d3b37;color:#e5e2db;}
+  .fc-send{width:24px;height:24px;border-radius:5px;background:#d97706;color:#1c1b18;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;}
+  .f-status{height:20px;border-top:1px solid #3d3b37;display:flex;align-items:center;padding:0 12px;font-size:9px;color:#5c5952;gap:8px;flex-shrink:0;background:#242320;}
+  .f-status .sd{width:4px;height:4px;border-radius:50%;background:#22c55e;}
+
+  /* Highlights */
+  .highlights{padding:8px 40px 32px;}
+  .hl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .hl{background:#2b2a27;border:1px solid #3d3b37;border-radius:8px;padding:14px;}
+  .hl h3{font-size:12px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+  .hl h3 .ic{font-size:14px;}
+  .hl ul{font-size:11px;color:#7c7872;line-height:1.7;margin-left:14px;}
+  .hl .src{font-size:9px;color:#5c5952;margin-top:6px;font-style:italic;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>终极方案：Multi-View Mission Control</h1>
+  <p>融合 Cursor 3 Agent Grid、GitHub Agent HQ Mission Control、OpenClaw Dashboard、Grafana 状态网格的最佳实践。一屏总览 8 个会话状态，一键介入，三种视图模式自由切换。</p>
+  <div class="sources">灵感来源：<span>Cursor 3</span> · <span>GitHub Agent HQ</span> · <span>OpenClaw Mission Control</span> · <span>Grafana</span> · <span>Slack</span> · <span>Warp Terminal</span></div>
+</div>
+
+<div class="mockup-frame">
+  <div class="mockup-dots"><span></span><span></span><span></span></div>
+  <div class="app">
+
+    <!-- ===== Global Status Bar ===== -->
+    <div class="global-bar">
+      <div class="gb-brand">
+        <div class="bi">C</div>
+        <span class="gb-brand-text">Claude Code</span>
+      </div>
+      <div class="gb-divider"></div>
+
+      <div class="gb-stats">
+        <div class="gb-stat"><span class="d r"></span><span class="n">3</span><span class="l">running</span></div>
+        <div class="gb-stat has-alert"><span class="d w"></span><span class="n">1</span><span class="l">waiting</span></div>
+        <div class="gb-stat"><span class="d e"></span><span class="n">1</span><span class="l">error</span></div>
+        <div class="gb-stat"><span class="d i"></span><span class="n">3</span><span class="l">idle</span></div>
+      </div>
+
+      <div class="gb-cost">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 9.5h7a1.5 1.5 0 010 3H9a1.5 1.5 0 000 3h7"/></svg>
+        <strong>$2.47</strong>today
+      </div>
+
+      <div class="gb-right">
+        <div class="gb-view-toggle">
+          <button class="gb-vt active">Grid</button>
+          <button class="gb-vt">List</button>
+          <button class="gb-vt">Zen</button>
+        </div>
+        <span class="gb-kbd">Ctrl+K</span>
+        <button class="gb-btn" title="新建会话"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="gb-btn" title="设置"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+      </div>
+    </div>
+
+    <!-- ===== Grid View ===== -->
+    <div class="grid-view">
+      <div class="tile-grid">
+        <!-- 1: Active, running -->
+        <div class="tile active">
+          <div class="t-top">
+            <div class="t-dot running"></div>
+            <div class="t-title">重构 UI 布局</div>
+            <div class="t-proj">agent-ui</div>
+            <div class="t-shortcut">&#8984;1</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> 正在修改 <span class="tool">TopBar.tsx</span><span class="cur"></span></div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf green" style="width:65%;"></div></div>
+            <span class="t-pct">4/5</span>
+          </div>
+        </div>
+        <!-- 2: Waiting — inline approve -->
+        <div class="tile alert">
+          <div class="t-top">
+            <div class="t-dot waiting"></div>
+            <div class="t-title">玩家碰撞检测</div>
+            <div class="t-proj">my-game</div>
+            <div class="t-shortcut">&#8984;2</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> Write collision.ts</div>
+          <div class="t-action">
+            <button class="t-act-btn allow">Allow</button>
+            <button class="t-act-btn deny">Deny</button>
+          </div>
+        </div>
+        <!-- 3: Running -->
+        <div class="tile">
+          <div class="t-top">
+            <div class="t-dot running"></div>
+            <div class="t-title">修复 WebSocket</div>
+            <div class="t-proj">agent-ui</div>
+            <div class="t-shortcut">&#8984;3</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> <span class="tool">pnpm test</span> 15/18<span class="cur"></span></div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf green" style="width:55%;"></div></div>
+            <span class="t-pct">55%</span>
+          </div>
+        </div>
+        <!-- 4: Running -->
+        <div class="tile">
+          <div class="t-top">
+            <div class="t-dot running"></div>
+            <div class="t-title">重构登录流程</div>
+            <div class="t-proj">api-server</div>
+            <div class="t-shortcut">&#8984;4</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> <span class="tool">Edit</span> auth/login.ts<span class="cur"></span></div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf green" style="width:30%;"></div></div>
+            <span class="t-pct">2/7</span>
+          </div>
+        </div>
+        <!-- 5: Error -->
+        <div class="tile error">
+          <div class="t-top">
+            <div class="t-dot error"></div>
+            <div class="t-title">部署脚本优化</div>
+            <div class="t-proj">infra</div>
+            <div class="t-shortcut">&#8984;5</div>
+          </div>
+          <div class="t-msg" style="color:#ef4444;"><span class="ai">Claude</span> Error: ENOENT deploy.sh</div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf red" style="width:35%;"></div></div>
+            <span class="t-pct" style="color:#ef4444;">err</span>
+          </div>
+        </div>
+        <!-- 6: Done -->
+        <div class="tile">
+          <div class="t-top">
+            <div class="t-dot idle"></div>
+            <div class="t-title">修复认证中间件</div>
+            <div class="t-proj">api-server</div>
+            <div class="t-shortcut">&#8984;6</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> 完成，修改 3 文件</div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf green" style="width:100%;"></div></div>
+            <span class="t-pct" style="color:#22c55e;">&#10003;</span>
+          </div>
+        </div>
+        <!-- 7: Done -->
+        <div class="tile">
+          <div class="t-top">
+            <div class="t-dot idle"></div>
+            <div class="t-title">E2E 测试</div>
+            <div class="t-proj">agent-ui</div>
+            <div class="t-shortcut">&#8984;7</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> Playwright 3 测试创建</div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf green" style="width:100%;"></div></div>
+            <span class="t-pct" style="color:#22c55e;">&#10003;</span>
+          </div>
+        </div>
+        <!-- 8: Idle -->
+        <div class="tile">
+          <div class="t-top">
+            <div class="t-dot idle"></div>
+            <div class="t-title">场景编辑器</div>
+            <div class="t-proj">my-game</div>
+            <div class="t-shortcut">&#8984;8</div>
+          </div>
+          <div class="t-msg"><span class="ai">Claude</span> 场景树渲染完成</div>
+          <div class="t-bottom">
+            <div class="t-progress"><div class="t-pf green" style="width:100%;"></div></div>
+            <span class="t-pct" style="color:#22c55e;">&#10003;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="focus-divider">
+        <div class="focus-divider-label">Focus <span class="fk">&#8984;1</span> — 点击格子或按快捷键切换</div>
+      </div>
+
+      <!-- Focus panel -->
+      <div class="focus">
+        <div class="f-header">
+          <div class="f-dot running"></div>
+          <div class="f-info">
+            <div class="f-title">重构 UI 布局</div>
+            <div class="f-sub">
+              <span>claude-agent-ui</span>
+              <span>&bull;</span>
+              <span style="color:#22c55e;">Running</span>
+              <span>&bull;</span>
+              <span>12m</span>
+            </div>
+          </div>
+          <div class="f-badges">
+            <span class="f-badge task">Task 4/5</span>
+            <span class="f-badge cost">$0.34</span>
+          </div>
+        </div>
+        <div class="f-chat">
+          <div class="fm">
+            <div class="fm-av u">U</div>
+            <div class="fm-b">
+              <div class="fm-n un">You</div>
+              <div class="fm-t">重构 UI，做统一任务中控台</div>
+            </div>
+          </div>
+          <div class="fm">
+            <div class="fm-av a">C</div>
+            <div class="fm-b">
+              <div class="fm-n an">Claude</div>
+              <div class="fm-tool"><span class="tn">Read</span> SessionList.tsx</div>
+              <div class="fm-tool"><span class="tn">Edit</span> AppLayout.tsx</div>
+
+              <div class="fm-tasks">
+                <div class="fmt-top"><span>Tasks</span> <strong>3/5</strong></div>
+                <div class="fmt-items">
+                  <div class="fmt-i done"><div class="fmt-ck done">&#10003;</div> 重构 sessionStore</div>
+                  <div class="fmt-i done"><div class="fmt-ck done">&#10003;</div> 创建 ActivityFeed</div>
+                  <div class="fmt-i done"><div class="fmt-ck done">&#10003;</div> 实时状态预览</div>
+                  <div class="fmt-i curr"><div class="fmt-ck curr"></div> 修改 TopBar 全局搜索</div>
+                  <div class="fmt-i pend"><div class="fmt-ck"></div> 添加筛选器 + 快捷键</div>
+                </div>
+                <div class="fmt-bar"><div class="fmt-fill" style="width:65%;"></div></div>
+              </div>
+
+              <div class="fm-tool"><span class="tn">Edit</span> TopBar.tsx</div>
+              <div class="fm-t">正在重构 <code>TopBar</code>，添加全局搜索和 <code>Ctrl+K</code> 快捷键...<span class="cur"></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="f-composer glow">
+          <input class="fc-input" placeholder="Ask Claude anything..." readonly>
+          <div class="fc-bar">
+            <div class="fc-btns">
+              <div class="fc-btn">&#128206;</div>
+              <div class="fc-btn">/</div>
+              <div class="fc-btn">@</div>
+            </div>
+            <div class="fc-send">&#8593;</div>
+          </div>
+        </div>
+        <div class="f-status">
+          <span class="sd"></span> Connected &bull; Lock: You &bull; <span style="color:#d97706;">Running 65%</span>
+          <span style="margin-left:auto;">$0.34 / 340k tokens</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Key features -->
+<div class="highlights">
+  <div class="hl-grid">
+    <div class="hl">
+      <h3><span class="ic" style="color:#22c55e;">&#9638;</span> Grid 总览</h3>
+      <ul>
+        <li>4×2 网格一屏全览 8 个会话</li>
+        <li>实时流式消息 + 进度条</li>
+        <li>审批按钮直接嵌入格子</li>
+        <li>颜色编码：绿/黄/红/灰</li>
+      </ul>
+      <div class="src">← Cursor 3 Agent Grid + Grafana</div>
+    </div>
+    <div class="hl">
+      <h3><span class="ic" style="color:#d97706;">&#9889;</span> 三种视图</h3>
+      <ul>
+        <li><strong>Grid</strong>：总览 + 焦点（默认）</li>
+        <li><strong>List</strong>：侧边栏列表 + 全宽聊天</li>
+        <li><strong>Zen</strong>：单会话全屏沉浸</li>
+        <li>一键切换，记住上次偏好</li>
+      </ul>
+      <div class="src">← Cursor 3 + Windsurf + Slack</div>
+    </div>
+    <div class="hl">
+      <h3><span class="ic" style="color:#f59e0b;">&#9888;</span> 智能通知</h3>
+      <ul>
+        <li>需要审批/出错自动上浮到最前</li>
+        <li>格子内直接 Allow/Deny</li>
+        <li>全局状态栏实时计数</li>
+        <li>声音/桌面通知（可选）</li>
+      </ul>
+      <div class="src">← GitHub Agent HQ + Slack</div>
+    </div>
+    <div class="hl">
+      <h3><span class="ic" style="color:#818cf8;">&#8984;</span> 快捷键优先</h3>
+      <ul>
+        <li><strong>Ctrl+1~8</strong> 直接跳到对应会话</li>
+        <li><strong>Ctrl+K</strong> 模糊搜索全局</li>
+        <li><strong>Ctrl+N</strong> 新建会话</li>
+        <li><strong>Ctrl+G/L/Z</strong> 切换视图</li>
+      </ul>
+      <div class="src">← Warp + VS Code + tmux</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

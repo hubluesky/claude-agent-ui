@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Pushback — Visual Comparison</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#1c1b18;color:#e5e2db;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:3px;}
+
+  .page-header{padding:28px 40px 6px;} .page-header h1{font-size:20px;font-weight:700;margin-bottom:6px;} .page-header p{font-size:13px;color:#7c7872;line-height:1.6;max-width:800px;}
+
+  .issue{padding:24px 40px;}
+  .issue-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .issue-num{width:28px;height:28px;border-radius:8px;background:#ef444420;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#ef4444;flex-shrink:0;}
+  .issue-title{font-size:16px;font-weight:600;}
+  .issue-desc{font-size:12px;color:#7c7872;line-height:1.6;max-width:700px;margin-bottom:16px;}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px;}
+  .compare-card{background:#2b2a27;border:1px solid #3d3b37;border-radius:10px;overflow:hidden;}
+  .compare-card.bad{border-color:#ef444430;} .compare-card.good{border-color:#22c55e30;}
+  .cc-header{padding:10px 14px;border-bottom:1px solid #3d3b37;display:flex;align-items:center;gap:6px;}
+  .cc-header.bad{background:#ef444408;} .cc-header.good{background:#22c55e08;}
+  .cc-label{font-size:11px;font-weight:600;} .cc-label.bad{color:#ef4444;} .cc-label.good{color:#22c55e;}
+  .cc-tag{font-size:9px;padding:1px 6px;border-radius:99px;font-weight:500;}
+  .cc-tag.bad{background:#ef444415;color:#ef4444;} .cc-tag.good{background:#22c55e15;color:#22c55e;}
+  .cc-body{padding:14px;}
+  .cc-body p{font-size:11px;color:#7c7872;line-height:1.6;margin-bottom:8px;}
+  .cc-body .highlight{color:#e5e2db;font-weight:500;}
+  .cc-body code{background:#1c1b18;padding:1px 4px;border-radius:3px;font-size:10px;font-family:monospace;color:#d97706;}
+
+  /* Mini mockups inside compare cards */
+  .mini-mock{background:#1c1b18;border:1px solid #3d3b37;border-radius:6px;padding:8px;margin:8px 0;font-size:9px;line-height:1.5;}
+  .mm-row{display:flex;gap:4px;margin-bottom:3px;align-items:center;}
+  .mm-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+  .mm-dot.r{background:#22c55e;} .mm-dot.w{background:#f59e0b;} .mm-dot.i{background:#3d3b37;}
+  .mm-label{color:#5c5952;}
+  .mm-box{padding:4px 8px;border:1px solid #3d3b37;border-radius:4px;background:#2b2a27;margin:4px 0;}
+  .mm-box.alert{border-color:#f59e0b30;background:#f59e0b05;}
+  .mm-topbar{display:flex;gap:2px;margin-bottom:6px;padding:4px;background:#242320;border-radius:4px;}
+  .mm-btn{padding:2px 6px;border-radius:3px;font-size:8px;} .mm-btn.active{background:#d977061a;color:#d97706;font-weight:600;} .mm-btn.inactive{color:#5c5952;}
+  .mm-back-btn{padding:2px 8px;border-radius:3px;font-size:8px;background:#d977061a;color:#d97706;display:inline-flex;align-items:center;gap:3px;}
+
+  .mm-grid{display:grid;gap:3px;} .mm-grid.c2{grid-template-columns:1fr 1fr;} .mm-grid.c3{grid-template-columns:1fr 1fr 1fr;}
+  .mm-panel{border:1px solid #3d3b37;border-radius:4px;padding:6px;background:#2b2a27;min-height:40px;position:relative;}
+  .mm-panel.waiting{border-color:#f59e0b30;}
+  .mm-panel-header{display:flex;align-items:center;gap:3px;margin-bottom:3px;font-size:8px;font-weight:600;}
+  .mm-panel-msg{font-size:7px;color:#5c5952;margin-bottom:3px;}
+  .mm-panel-input{display:flex;gap:2px;} .mm-panel-input input{flex:1;height:14px;border-radius:3px;border:1px solid #3d3b37;background:#1a1918;font-size:7px;padding:0 4px;color:#e5e2db;} .mm-panel-input .send{width:14px;height:14px;border-radius:3px;background:#d97706;font-size:6px;display:flex;align-items:center;justify-content:center;color:#1c1b18;}
+
+  /* Notification bar mockup */
+  .mm-notif{display:flex;align-items:center;gap:6px;padding:5px 8px;background:#f59e0b10;border:1px solid #f59e0b30;border-radius:5px;margin:6px 0;font-size:8px;}
+  .mm-notif .n-dot{width:5px;height:5px;border-radius:50%;background:#f59e0b;flex-shrink:0;}
+  .mm-notif .n-text{flex:1;color:#f59e0b;}
+  .mm-notif .n-btn{padding:2px 6px;border-radius:3px;background:#f59e0b;color:#1c1b18;font-size:7px;font-weight:600;cursor:pointer;}
+
+  /* Chaos animation mockup */
+  .chaos-demo{position:relative;min-height:80px;overflow:hidden;}
+  .chaos-popup{position:absolute;padding:4px 8px;border:1px solid #f59e0b30;border-radius:4px;background:#2b2a27;font-size:7px;animation:pop-in 0.3s;}
+  .chaos-popup.p1{top:5px;left:5px;} .chaos-popup.p2{top:5px;right:5px;} .chaos-popup.p3{bottom:5px;left:30%;}
+  @keyframes pop-in{from{opacity:0;transform:scale(0.8);}to{opacity:1;transform:scale(1);}}
+  .chaos-label{position:absolute;bottom:2px;right:5px;font-size:7px;color:#ef4444;}
+
+  .summary{padding:8px 40px 40px;}
+  .summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .sg{background:#2b2a27;border:1px solid #3d3b37;border-radius:8px;padding:12px;}
+  .sg h3{font-size:11px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:4px;} .sg h3 .num{color:#ef4444;} .sg h3 .arrow{color:#5c5952;margin:0 2px;}
+  .sg .before{font-size:10px;color:#ef4444;margin-bottom:2px;text-decoration:line-through;}
+  .sg .after{font-size:10px;color:#22c55e;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>5 个设计问题 + 改进建议</h1>
+  <p>左边是当前设计的问题，右边是建议的改进方案。每个都有具体的 mockup 说明为什么当前方案有问题。</p>
+</div>
+
+<!-- ==================== Issue 1 ==================== -->
+<div class="issue">
+  <div class="issue-header"><div class="issue-num">1</div><div class="issue-title">三种模式多余 → 只需要两种</div></div>
+  <div class="issue-desc">当前设计有 Single / Focus / Multi 三种模式。但 Focus 和 Single 的界面完全一样（项目树侧边栏 + 完整聊天），唯一区别是 Focus "记得自己从 Multi 来"可以 Esc 返回。这不需要一个独立的模式。</div>
+  <div class="compare">
+    <div class="compare-card bad">
+      <div class="cc-header bad"><span class="cc-label bad">当前设计</span><span class="cc-tag bad">三种模式</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div class="mm-topbar">
+            <div class="mm-btn active">Single</div>
+            <div class="mm-btn inactive">Focus</div>
+            <div class="mm-btn inactive">Multi</div>
+          </div>
+          <p style="color:#5c5952;font-size:8px;">问题：用户点 Focus 和 Single 看到的是一模一样的界面。<br/>他会困惑："这两个有什么区别？"</p>
+        </div>
+        <p>用户需要理解三个模式的含义，但其中两个看起来完全一样。认知负担高，选择困难。</p>
+      </div>
+    </div>
+    <div class="compare-card good">
+      <div class="cc-header good"><span class="cc-label good">建议改进</span><span class="cc-tag good">两种模式 + 返回按钮</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div class="mm-topbar">
+            <div class="mm-btn active">Single</div>
+            <div class="mm-btn inactive">Multi</div>
+          </div>
+          <p style="color:#5c5952;font-size:8px;">只有两个选择，清晰明确。</p>
+          <div style="height:6px;"></div>
+          <p style="color:#7c7872;font-size:8px;">从 Multi 展开面板后：</p>
+          <div class="mm-topbar">
+            <div class="mm-back-btn">← 返回 Multi</div>
+            <div class="mm-btn inactive" style="margin-left:auto;">Single</div>
+            <div class="mm-btn inactive">Multi</div>
+          </div>
+          <p style="color:#5c5952;font-size:8px;">TopBar 出现"返回 Multi"按钮。Esc 也能返回。<br/>不是新模式，只是一个临时状态。</p>
+        </div>
+        <p>两个模式 = 简单。展开面板就是临时切到 Single 聊天，TopBar 多一个"← 返回 Multi"按钮。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Issue 2 ==================== -->
+<div class="issue">
+  <div class="issue-header"><div class="issue-num">2</div><div class="issue-title">8 个 Virtuoso 实例 → 性能灾难</div></div>
+  <div class="issue-desc">当前 ChatMessagesPane 用了 Virtuoso 虚拟滚动组件（重型）。MiniChatPanel 复用它意味着 8 个面板 = 8 个 Virtuoso 实例同时运行，内存和渲染开销巨大。</div>
+  <div class="compare">
+    <div class="compare-card bad">
+      <div class="cc-header bad"><span class="cc-label bad">当前设计</span><span class="cc-tag bad">复用 Virtuoso</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div class="mm-grid c3">
+            <div class="mm-panel"><div style="font-size:7px;color:#ef4444;">Virtuoso #1<br/>~500 DOM nodes</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#ef4444;">Virtuoso #2<br/>~500 DOM nodes</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#ef4444;">Virtuoso #3<br/>~500 DOM nodes</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#ef4444;">Virtuoso #4</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#ef4444;">Virtuoso #5</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#ef4444;">Virtuoso #6</div></div>
+          </div>
+          <p style="color:#ef4444;font-size:8px;margin-top:4px;">6 × Virtuoso = ~3000 DOM nodes，大量 ResizeObserver，帧率暴跌</p>
+        </div>
+        <p>每个 Virtuoso 实例都有自己的 DOM 测量、ResizeObserver、滚动事件。6-8 个同时运行会明显卡顿。</p>
+      </div>
+    </div>
+    <div class="compare-card good">
+      <div class="cc-header good"><span class="cc-label good">建议改进</span><span class="cc-tag good">简单 div + 最近 N 条</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div class="mm-grid c3">
+            <div class="mm-panel"><div style="font-size:7px;color:#22c55e;">div 滚动<br/>只渲染最近 20 条</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#22c55e;">div 滚动<br/>只渲染最近 20 条</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#22c55e;">div 滚动<br/>只渲染最近 20 条</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#22c55e;">轻量</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#22c55e;">轻量</div></div>
+            <div class="mm-panel"><div style="font-size:7px;color:#22c55e;">轻量</div></div>
+          </div>
+          <p style="color:#22c55e;font-size:8px;margin-top:4px;">6 × 简单 div = ~120 DOM nodes，零 ResizeObserver，丝滑</p>
+        </div>
+        <p>Mini 面板空间小，不需要虚拟滚动。用 <code>overflow-y: auto</code> 的 div，只渲染最近 20 条消息。展开到全屏（Single）时才用 Virtuoso。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Issue 3 ==================== -->
+<div class="issue">
+  <div class="issue-header"><div class="issue-num">3</div><div class="issue-title">WebSocket multi-join 重构太大 → 用多连接更简单</div></div>
+  <div class="issue-desc">当前 WSHub 是"一个连接 = 一个 session"。改成 multi-join 需要重构 WSHub（sessionId → Set）、handler（lock 逻辑）、connectionStore（全部改为 per-session Map）。这是一个巨大的改动，容易引入 bug。</div>
+  <div class="compare">
+    <div class="compare-card bad">
+      <div class="cc-header bad"><span class="cc-label bad">当前设计</span><span class="cc-tag bad">Multi-join 重构</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div style="text-align:center;margin-bottom:6px;">
+            <div style="display:inline-block;padding:4px 8px;border:1px solid #3d3b37;border-radius:4px;font-size:8px;">Browser</div>
+            <div style="font-size:7px;color:#5c5952;margin:3px 0;">↕ 1 个 WebSocket</div>
+            <div style="display:inline-block;padding:4px 8px;border:1px solid #3d3b37;border-radius:4px;font-size:8px;">Server</div>
+          </div>
+          <p style="color:#ef4444;font-size:8px;">需要改动的文件：</p>
+          <p style="font-size:7px;color:#5c5952;">
+            ❌ hub.ts — sessionId → Set&lt;string&gt;<br/>
+            ❌ handler.ts — join 不再 leave<br/>
+            ❌ protocol.ts — 新消息类型<br/>
+            ❌ connectionStore — 全部改为 per-session Map<br/>
+            ❌ useWebSocket.ts — 消息路由到对应面板
+          </p>
+        </div>
+        <p>5 个文件的深度重构。connectionStore 的 <code>pendingApproval</code>、<code>lockStatus</code> 等全是单值，改成 per-session Map 会影响所有消费这些状态的组件。</p>
+      </div>
+    </div>
+    <div class="compare-card good">
+      <div class="cc-header good"><span class="cc-label good">建议改进</span><span class="cc-tag good">每面板独立 WebSocket</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div style="text-align:center;margin-bottom:6px;">
+            <div style="display:inline-block;padding:4px 8px;border:1px solid #3d3b37;border-radius:4px;font-size:8px;">Browser</div>
+            <div style="font-size:7px;color:#22c55e;margin:3px 0;">↕ N 个 WebSocket（每面板 1 个）</div>
+            <div style="display:inline-block;padding:4px 8px;border:1px solid #3d3b37;border-radius:4px;font-size:8px;">Server</div>
+          </div>
+          <p style="color:#22c55e;font-size:8px;">需要改动的文件：</p>
+          <p style="font-size:7px;color:#5c5952;">
+            ✅ hub.ts — 不改<br/>
+            ✅ handler.ts — 不改<br/>
+            ✅ protocol.ts — 不改<br/>
+            ✅ connectionStore — 不改<br/>
+            ✅ 新建 usePanelWebSocket hook — 轻量版 useWebSocket
+          </p>
+        </div>
+        <p>每个 MiniChatPanel 创建独立 WebSocket 连接，join 自己的 session。<span class="highlight">服务端零改动</span>。8 个 WebSocket 连接对现代浏览器零压力。每个面板的锁/审批/状态天然隔离。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Issue 4 ==================== -->
+<div class="issue">
+  <div class="issue-header"><div class="issue-num">4</div><div class="issue-title">自动弹面板太混乱 → 改为通知条</div></div>
+  <div class="issue-desc">当前设计：会话变 waiting → 自动弹出新面板；会话变 idle → 10 秒后自动关闭面板。当多个会话同时变状态时，面板不停出现/消失，非常混乱。</div>
+  <div class="compare">
+    <div class="compare-card bad">
+      <div class="cc-header bad"><span class="cc-label bad">当前设计</span><span class="cc-tag bad">自动弹出/关闭面板</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <p style="font-size:8px;color:#5c5952;margin-bottom:4px;">场景：3 个会话同时需要审批</p>
+          <div class="chaos-demo">
+            <div class="chaos-popup p1"><span class="mm-dot w" style="display:inline-block;"></span> 碰撞检测 弹出!</div>
+            <div class="chaos-popup p2"><span class="mm-dot w" style="display:inline-block;"></span> 登录流程 弹出!</div>
+            <div class="chaos-popup p3"><span class="mm-dot w" style="display:inline-block;"></span> E2E 测试 弹出!</div>
+            <div class="chaos-label">面板不停跳出来 💥</div>
+          </div>
+          <p style="font-size:8px;color:#5c5952;margin-top:4px;">场景：2 个会话完成</p>
+          <p style="font-size:8px;color:#ef4444;">面板突然开始消失，你还没看完输出就没了</p>
+        </div>
+        <p>自动弹出打断你正在做的事。自动关闭让你来不及看完结果。<span class="highlight">用户失去对界面的控制感。</span></p>
+      </div>
+    </div>
+    <div class="compare-card good">
+      <div class="cc-header good"><span class="cc-label good">建议改进</span><span class="cc-tag good">通知条 + 手动添加</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <p style="font-size:8px;color:#5c5952;margin-bottom:4px;">场景：3 个会话需要审批</p>
+          <div class="mm-notif">
+            <span class="n-dot"></span>
+            <span class="n-text">3 个会话需要操作</span>
+            <span class="n-btn">添加到面板</span>
+          </div>
+          <p style="font-size:8px;color:#22c55e;">一条安静的通知，用户决定什么时候添加</p>
+          <div style="height:8px;"></div>
+          <p style="font-size:8px;color:#5c5952;">完成的面板：</p>
+          <div class="mm-grid c3">
+            <div class="mm-panel"><div style="font-size:7px;"><span class="mm-dot r" style="display:inline-block;"></span> 重构 UI (running)</div></div>
+            <div class="mm-panel"><div style="font-size:7px;"><span class="mm-dot r" style="display:inline-block;"></span> WebSocket (running)</div></div>
+            <div class="mm-panel" style="opacity:0.5;"><div style="font-size:7px;"><span class="mm-dot i" style="display:inline-block;"></span> 认证中间件 ✓</div></div>
+          </div>
+          <p style="font-size:8px;color:#22c55e;margin-top:4px;">完成的面板降低透明度排到最后，但不消失。用户手动关闭。</p>
+        </div>
+        <p>通知条不打断工作流。完成的面板保留让你看输出。<span class="highlight">用户始终掌控面板。</span></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Issue 5 ==================== -->
+<div class="issue">
+  <div class="issue-header"><div class="issue-num">5</div><div class="issue-title">Multi 侧边栏看不到未添加的会话</div></div>
+  <div class="issue-desc">Multi 模式侧边栏只显示面板中的会话。如果你有 8 个会话但只打开了 3 个面板，侧边栏看不到另外 5 个。需要点"添加"按钮才能看到它们。</div>
+  <div class="compare">
+    <div class="compare-card bad">
+      <div class="cc-header bad"><span class="cc-label bad">当前设计</span><span class="cc-tag bad">只显示面板会话</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div style="font-size:8px;font-weight:600;color:#22c55e;margin-bottom:3px;">进行中 (2)</div>
+          <div class="mm-row"><span class="mm-dot r"></span> 重构 UI</div>
+          <div class="mm-row"><span class="mm-dot r"></span> WebSocket</div>
+          <div style="font-size:8px;font-weight:600;color:#5c5952;margin:4px 0 3px;">已完成 (1)</div>
+          <div class="mm-row"><span class="mm-dot i"></span> 认证中间件</div>
+          <div style="height:6px;"></div>
+          <div class="mm-box" style="text-align:center;font-size:8px;color:#5c5952;">+ 添加会话到面板</div>
+          <p style="font-size:7px;color:#ef4444;margin-top:4px;">其他 5 个会话完全不可见 😶</p>
+        </div>
+      </div>
+    </div>
+    <div class="compare-card good">
+      <div class="cc-header good"><span class="cc-label good">建议改进</span><span class="cc-tag good">底部折叠"其他会话"</span></div>
+      <div class="cc-body">
+        <div class="mini-mock">
+          <div style="font-size:8px;font-weight:600;color:#22c55e;margin-bottom:3px;">进行中 (2)</div>
+          <div class="mm-row"><span class="mm-dot r"></span> 重构 UI</div>
+          <div class="mm-row"><span class="mm-dot r"></span> WebSocket</div>
+          <div style="font-size:8px;font-weight:600;color:#5c5952;margin:4px 0 3px;">已完成 (1)</div>
+          <div class="mm-row"><span class="mm-dot i"></span> 认证中间件</div>
+          <div style="height:6px;"></div>
+          <div class="mm-box" style="font-size:8px;color:#7c7872;">
+            <div style="margin-bottom:3px;cursor:pointer;">▸ 其他会话 (5) — 点击展开</div>
+            <div style="padding-left:8px;font-size:7px;color:#5c5952;display:none;">
+              碰撞检测 · 登录流程 · E2E 测试 ...
+            </div>
+          </div>
+          <p style="font-size:7px;color:#22c55e;margin-top:4px;">可以看到还有哪些会话，一键添加 ✓</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary -->
+<div class="summary">
+  <div class="summary-grid">
+    <div class="sg">
+      <h3><span class="num">#1</span> 模式</h3>
+      <div class="before">3 种模式</div>
+      <div class="after">→ 2 种 + 返回按钮</div>
+    </div>
+    <div class="sg">
+      <h3><span class="num">#2</span> 消息</h3>
+      <div class="before">N × Virtuoso</div>
+      <div class="after">→ 简单 div + 最近 20 条</div>
+    </div>
+    <div class="sg">
+      <h3><span class="num">#3</span> WebSocket</h3>
+      <div class="before">Multi-join 重构</div>
+      <div class="after">→ 每面板独立连接</div>
+    </div>
+    <div class="sg">
+      <h3><span class="num">#4</span> 自动面板</h3>
+      <div class="before">自动弹出/关闭</div>
+      <div class="after">→ 通知条 + 手动</div>
+    </div>
+    <div class="sg">
+      <h3><span class="num">#5</span> 侧边栏</h3>
+      <div class="before">只看面板内</div>
+      <div class="after">→ 底部折叠其他会话</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

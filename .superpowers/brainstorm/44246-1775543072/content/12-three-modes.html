@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Three Modes — Single / Focus / Multi</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#1c1b18;color:#e5e2db;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:3px;}
+  .page-header{padding:28px 40px 6px;} .page-header h1{font-size:20px;font-weight:700;margin-bottom:6px;} .page-header p{font-size:13px;color:#7c7872;line-height:1.6;max-width:800px;}
+  .section-label{font-size:14px;font-weight:600;padding:24px 40px 10px;color:#7c7872;display:flex;align-items:center;gap:8px;}
+  .section-label .tag{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600;}
+  .section-label .tag.default{background:#3d3b3740;color:#7c7872;}
+  .section-label .tag.focus{background:#22c55e20;color:#22c55e;}
+  .section-label .tag.multi{background:#818cf820;color:#818cf8;}
+  .section-desc{font-size:12px;color:#5c5952;padding:0 40px 12px;max-width:700px;}
+
+  .mockup-frame{background:#1c1b18;border-radius:10px;margin:0 40px 12px;overflow:hidden;border:1px solid #3d3b37;box-shadow:0 8px 40px rgba(0,0,0,0.3);}
+  .mockup-dots{display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid #2b2a27;} .mockup-dots span{width:9px;height:9px;border-radius:50%;background:#3d3b37;}
+
+  @keyframes blink{0%,50%{opacity:1;}51%,100%{opacity:0;}} .cur{display:inline-block;width:2px;height:11px;background:#d97706;animation:blink 1s infinite;vertical-align:text-bottom;}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 1px #d97706;}50%{box-shadow:0 0 8px 1px rgba(217,119,6,0.4);}}
+  @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+  /* ============ SHARED ============ */
+  .app{display:flex;height:420px;}
+
+  /* Sidebar — current style */
+  .sidebar{width:240px;background:#1c1b18;border-right:1px solid #3d3b37;display:flex;flex-direction:column;flex-shrink:0;}
+  .sb-brand{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #2b2a27;}
+  .sb-logo{width:22px;height:22px;background:#d97706;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#1c1b18;font-family:monospace;}
+  .sb-name{font-size:13px;font-weight:700;color:#d97706;}
+  .sb-search{margin:8px 10px;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;background:#2b2a27;border:1px solid #3d3b37;}
+  .sb-search input{background:none;border:none;outline:none;color:#e5e2db;font-size:11px;flex:1;font-family:inherit;} .sb-search input::placeholder{color:#5c5952;}
+  .sb-list{flex:1;overflow-y:auto;padding:0 6px 6px;}
+
+  /* Current sidebar: project cards */
+  .sb-project{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:2px;display:flex;align-items:start;gap:8px;transition:all 0.12s;}
+  .sb-project:hover{background:#2b2a27;}
+  .sb-project.active{background:#d977061a;border:1px solid #d9770640;} .sb-project:not(.active){border:1px solid transparent;}
+  .sbp-icon{width:20px;height:20px;border-radius:50%;background:#d9770626;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#d97706;flex-shrink:0;margin-top:1px;}
+  .sbp-info{flex:1;min-width:0;}
+  .sbp-row{display:flex;align-items:center;justify-content:space-between;gap:4px;}
+  .sbp-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sbp-time{font-size:9px;color:#5c5952;}
+
+  /* Focus sidebar: flat session list */
+  .sb-filters{display:flex;gap:3px;padding:4px 10px 6px;}
+  .sb-f{font-size:9px;padding:2px 7px;border-radius:99px;background:#2b2a27;border:1px solid #3d3b37;color:#7c7872;cursor:pointer;display:flex;align-items:center;gap:3px;}
+  .sb-f.active{background:#d977061a;border-color:#d9770640;color:#d97706;}
+  .sb-fd{width:5px;height:5px;border-radius:50%;} .sb-fd.r{background:#22c55e;} .sb-fd.w{background:#f59e0b;} .sb-fd.i{background:#3d3b37;}
+
+  .sb-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;transition:all 0.12s;margin-bottom:2px;}
+  .sb-item:hover{background:#2b2a27;}
+  .sb-item.active{background:#d977061a;}
+  .sb-item.alert{background:#f59e0b08;}
+  .si-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;} .si-dot.running{background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.4);} .si-dot.waiting{background:#f59e0b;animation:pulse-dot 1.5s infinite;} .si-dot.idle{background:#3d3b37;}
+  .si-info{flex:1;min-width:0;} .si-title{font-size:10px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .si-meta{display:flex;align-items:center;gap:4px;margin-top:1px;} .si-proj{font-size:7px;color:#d97706;background:#d977060f;padding:1px 4px;border-radius:2px;} .si-msg{font-size:7px;color:#5c5952;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+  .si-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;} .si-time{font-size:7px;color:#5c5952;}
+  .si-pbar{width:28px;height:2px;background:#3d3b37;border-radius:1px;overflow:hidden;} .si-pf{height:100%;border-radius:1px;background:#22c55e;}
+  .si-badge{font-size:6px;background:#f59e0b;color:#1c1b18;padding:0 3px;border-radius:2px;font-weight:700;}
+
+  /* Main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:#2b2a27;}
+  .topbar{display:flex;align-items:center;height:36px;padding:0 10px;border-bottom:1px solid #3d3b37;flex-shrink:0;gap:6px;background:#242320;}
+  .tb-toggle{width:28px;height:28px;border-radius:6px;border:none;background:none;color:#7c7872;cursor:pointer;display:flex;align-items:center;justify-content:center;} .tb-toggle:hover{background:#3d3b37;color:#e5e2db;}
+  .tb-title{font-size:11px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tb-proj{font-size:9px;color:#5c5952;}
+  .tb-right{margin-left:auto;display:flex;gap:3px;align-items:center;}
+  .tb-mode{display:flex;background:#1c1b18;border-radius:5px;border:1px solid #3d3b37;overflow:hidden;}
+  .tb-m{padding:3px 8px;font-size:9px;color:#5c5952;cursor:pointer;border:none;background:none;font-family:inherit;} .tb-m:hover{color:#7c7872;} .tb-m.active{color:#d97706;font-weight:600;background:#d977061a;}
+  .tb-btn{width:24px;height:24px;border-radius:5px;border:none;background:none;color:#7c7872;cursor:pointer;display:flex;align-items:center;justify-content:center;} .tb-btn:hover{background:#3d3b37;color:#e5e2db;}
+
+  /* Chat panel (shared) */
+  .chat-area{flex:1;display:flex;flex-direction:column;min-height:0;}
+  .c-msgs{flex:1;overflow-y:auto;padding:12px 18px;display:flex;flex-direction:column;gap:10px;}
+  .cm{display:flex;gap:8px;} .cm-av{width:22px;height:22px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;} .cm-av.u{background:#3d3b37;color:#7c7872;} .cm-av.a{background:#d977061a;color:#d97706;}
+  .cm-b{flex:1;min-width:0;} .cm-n{font-size:9px;font-weight:600;margin-bottom:2px;} .cm-n.un{color:#7c7872;} .cm-n.an{color:#d97706;}
+  .cm-t{font-size:12px;line-height:1.5;} .cm-t code{background:#1c1b18;padding:0 4px;border-radius:3px;font-size:11px;font-family:monospace;color:#d97706;}
+  .cm-tool{font-size:10px;color:#5c5952;font-family:monospace;margin:3px 0;padding:4px 8px;background:#1c1b18;border-radius:4px;border-left:2px solid #3d3b37;} .cm-tool .tn{color:#d97706;font-weight:600;}
+  .c-comp{margin:8px 14px;border-radius:10px;border:1px solid #3d3b37;background:#1a1918;overflow:hidden;} .c-comp.glow{border-color:#d97706;animation:glow 2s ease-in-out infinite;}
+  .c-ci{width:100%;padding:8px 12px;font-size:12px;color:#e5e2db;background:transparent;border:none;outline:none;font-family:inherit;} .c-ci::placeholder{color:#7c7872;}
+  .c-cb{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-top:1px solid #3d3b37;}
+  .c-cbs{display:flex;gap:2px;} .c-cbtn{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#7c7872;cursor:pointer;border:none;background:none;font-size:12px;} .c-cbtn:hover{background:#3d3b37;color:#e5e2db;}
+  .c-send{width:24px;height:24px;border-radius:5px;background:#d97706;color:#1c1b18;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;}
+  .c-status{height:20px;border-top:1px solid #3d3b37;display:flex;align-items:center;padding:0 12px;font-size:8px;color:#5c5952;gap:6px;flex-shrink:0;background:#242320;}
+  .c-sd{width:3px;height:3px;border-radius:50%;background:#22c55e;}
+
+  /* New session placeholder */
+  .new-placeholder{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;}
+  .np-icon{width:40px;height:40px;border-radius:50%;background:#242320;border:1px solid #3d3b37;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#d97706;font-family:monospace;}
+  .np-text{font-size:12px;color:#5c5952;}
+
+  /* Multi panels */
+  .multi-area{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1px;background:#3d3b37;min-height:0;}
+  .mp{background:#2b2a27;display:flex;flex-direction:column;min-height:0;min-width:0;}
+  .mp.empty{background:#1c1b18;display:flex;align-items:center;justify-content:center;}
+  .mp-head{display:flex;align-items:center;gap:5px;padding:5px 8px;border-bottom:1px solid #3d3b37;flex-shrink:0;background:#242320;}
+  .mph-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;} .mph-dot.r{background:#22c55e;} .mph-dot.w{background:#f59e0b;}
+  .mph-title{font-size:9px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mph-proj{font-size:7px;color:#d97706;background:#d977060f;padding:1px 3px;border-radius:2px;}
+  .mph-pct{font-size:7px;color:#5c5952;}
+  .mph-btn{width:18px;height:18px;border-radius:3px;border:none;background:none;color:#5c5952;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;}
+  .mp-msgs{flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:5px;}
+  .pm{display:flex;gap:5px;} .pm-av{width:16px;height:16px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;} .pm-av.u{background:#3d3b37;color:#7c7872;} .pm-av.a{background:#d977061a;color:#d97706;}
+  .pm-b{flex:1;min-width:0;} .pm-n{font-size:7px;font-weight:600;margin-bottom:1px;} .pm-n.un{color:#7c7872;} .pm-n.an{color:#d97706;}
+  .pm-t{font-size:10px;line-height:1.4;} .pm-t code{background:#1c1b18;padding:0 2px;border-radius:2px;font-size:9px;font-family:monospace;color:#d97706;}
+  .pm-tool{font-size:8px;color:#5c5952;font-family:monospace;margin:2px 0;padding:2px 5px;background:#1c1b18;border-radius:3px;border-left:2px solid #3d3b37;} .pm-tool .tn{color:#d97706;font-weight:600;}
+  .mp-comp{margin:4px 6px;border-radius:7px;border:1px solid #3d3b37;background:#1a1918;display:flex;align-items:center;} .mp-comp.glow{border-color:#d97706;animation:glow 2s ease-in-out infinite;}
+  .mp-ci{flex:1;padding:5px 8px;font-size:10px;color:#e5e2db;background:transparent;border:none;outline:none;font-family:inherit;} .mp-ci::placeholder{color:#5c5952;}
+  .mp-send{width:20px;height:20px;margin:2px;border-radius:4px;background:#d97706;color:#1c1b18;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;}
+  .mp-appr{display:flex;align-items:center;gap:4px;padding:4px 6px;border-top:1px solid #f59e0b30;background:#f59e0b06;flex-shrink:0;} .mp-appr-text{font-size:8px;color:#7c7872;flex:1;} .mp-appr-text strong{color:#f59e0b;}
+  .mp-ab{padding:2px 7px;border-radius:3px;border:none;cursor:pointer;font-size:8px;font-weight:600;font-family:inherit;} .mp-ab.al{background:#22c55e;color:#1c1b18;} .mp-ab.dn{background:#3d3b37;color:#7c7872;}
+  .mp-empty-inner{color:#3d3b37;text-align:center;font-size:9px;} .mp-empty-inner .plus{font-size:20px;margin-bottom:3px;}
+
+  /* Bottom highlights */
+  .hl-wrap{padding:16px 40px 40px;} .hl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .hl{background:#2b2a27;border:1px solid #3d3b37;border-radius:8px;padding:14px;}
+  .hl h3{font-size:12px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+  .hl h3 .dot{width:8px;height:8px;border-radius:50%;}
+  .hl h3 .dot.s{background:#7c7872;} .hl h3 .dot.f{background:#22c55e;} .hl h3 .dot.m{background:#818cf8;}
+  .hl p{font-size:11px;color:#7c7872;line-height:1.7;margin-bottom:6px;}
+  .hl ul{font-size:11px;color:#7c7872;line-height:1.7;margin-left:14px;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>三种模式：单聊 / 聚焦 / 多聊</h1>
+  <p>保留现有单聊体验作为默认模式，新增聚焦和多聊两种高级模式。顶栏一键切换，侧边栏根据模式自动适配。</p>
+</div>
+
+<!-- ==================== MODE 1: Single (current) ==================== -->
+<div class="section-label">模式一：单聊 <span class="tag default">Single — 现有功能</span></div>
+<div class="section-desc">和现在完全一样。侧边栏按项目分组，点击会话进入聊天。默认模式，不破坏现有体验。</div>
+
+<div class="mockup-frame">
+  <div class="mockup-dots"><span></span><span></span><span></span></div>
+  <div class="app">
+    <div class="sidebar">
+      <div class="sb-brand"><div class="sb-logo">C</div><span class="sb-name">Claude Code</span></div>
+      <div class="sb-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5c5952" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="搜索项目..." readonly></div>
+      <div class="sb-list">
+        <div class="sb-project active">
+          <div class="sbp-icon">3</div>
+          <div class="sbp-info"><div class="sbp-row"><span class="sbp-name">claude-agent-ui</span><span class="sbp-time">2m</span></div></div>
+        </div>
+        <div style="padding-left:20px;">
+          <div class="sb-item active" style="padding:5px 8px;">
+            <div class="si-info"><div class="si-title" style="font-size:11px;">重构 UI 布局</div><div style="font-size:8px;color:#5c5952;margin-top:1px;">2 min ago</div></div>
+          </div>
+          <div class="sb-item" style="padding:5px 8px;">
+            <div class="si-info"><div class="si-title" style="font-size:11px;">修复 WebSocket</div><div style="font-size:8px;color:#5c5952;margin-top:1px;">30 min ago</div></div>
+          </div>
+          <div class="sb-item" style="padding:5px 8px;">
+            <div class="si-info"><div class="si-title" style="font-size:11px;">E2E 测试</div><div style="font-size:8px;color:#5c5952;margin-top:1px;">3h ago</div></div>
+          </div>
+        </div>
+        <div class="sb-project">
+          <div class="sbp-icon">1</div>
+          <div class="sbp-info"><div class="sbp-row"><span class="sbp-name">my-game</span><span class="sbp-time">15m</span></div></div>
+        </div>
+        <div class="sb-project">
+          <div class="sbp-icon">5</div>
+          <div class="sbp-info"><div class="sbp-row"><span class="sbp-name">api-server</span><span class="sbp-time">2h</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="topbar">
+        <button class="tb-toggle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg></button>
+        <span class="tb-title">重构 UI 布局</span>
+        <span class="tb-proj">claude-agent-ui</span>
+        <div class="tb-right">
+          <div class="tb-mode"><button class="tb-m active">Single</button><button class="tb-m">Focus</button><button class="tb-m">Multi</button></div>
+          <button class="tb-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+          <button class="tb-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <div class="chat-area">
+        <div class="c-msgs">
+          <div class="cm"><div class="cm-av u">U</div><div class="cm-b"><div class="cm-n un">You</div><div class="cm-t">重构 UI，添加三种模式切换</div></div></div>
+          <div class="cm"><div class="cm-av a">C</div><div class="cm-b"><div class="cm-n an">Claude</div>
+            <div class="cm-tool"><span class="tn">Read</span> AppLayout.tsx</div>
+            <div class="cm-tool"><span class="tn">Edit</span> TopBar.tsx</div>
+            <div class="cm-t">已在 TopBar 添加 Single/Focus/Multi 三个按钮。正在实现模式切换逻辑...<span class="cur"></span></div>
+          </div></div>
+        </div>
+        <div class="c-comp glow">
+          <input class="c-ci" placeholder="Ask Claude anything..." readonly>
+          <div class="c-cb"><div class="c-cbs"><div class="c-cbtn">&#128206;</div><div class="c-cbtn">/</div><div class="c-cbtn">@</div></div><div class="c-send">&#8593;</div></div>
+        </div>
+        <div class="c-status"><span class="c-sd"></span> Connected &bull; Lock: You &bull; <span style="color:#d97706;">Running...</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODE 2: Focus ==================== -->
+<div class="section-label">模式二：聚焦 <span class="tag focus">Focus — 监控+聊天</span></div>
+<div class="section-desc">侧边栏变为扁平会话列表（跨项目），带状态指示、进度条、审批按钮。主区域完整聊天。一步切换任何会话。</div>
+
+<div class="mockup-frame">
+  <div class="mockup-dots"><span></span><span></span><span></span></div>
+  <div class="app">
+    <div class="sidebar">
+      <div class="sb-brand"><div class="sb-logo">C</div><span class="sb-name">Claude Code</span></div>
+      <div class="sb-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5c5952" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="搜索会话..." readonly></div>
+      <div class="sb-filters">
+        <div class="sb-f active">All <strong style="margin-left:2px;">8</strong></div>
+        <div class="sb-f"><div class="sb-fd r"></div> 3</div>
+        <div class="sb-f"><div class="sb-fd w"></div> 1</div>
+        <div class="sb-f"><div class="sb-fd i"></div> 4</div>
+      </div>
+      <div class="sb-list">
+        <div class="sb-item alert">
+          <div class="si-dot waiting"></div>
+          <div class="si-info"><div class="si-title">玩家碰撞检测</div><div class="si-meta"><span class="si-proj">my-game</span><span class="si-msg">Write collision.ts</span></div></div>
+          <div class="si-right"><span class="si-badge">!</span></div>
+        </div>
+        <div class="sb-item active">
+          <div class="si-dot running"></div>
+          <div class="si-info"><div class="si-title">重构 UI 布局</div><div class="si-meta"><span class="si-proj">agent-ui</span><span class="si-msg">Edit TopBar.tsx</span></div></div>
+          <div class="si-right"><div class="si-pbar"><div class="si-pf" style="width:65%;"></div></div><span class="si-time">now</span></div>
+        </div>
+        <div class="sb-item">
+          <div class="si-dot running"></div>
+          <div class="si-info"><div class="si-title">修复 WebSocket</div><div class="si-meta"><span class="si-proj">agent-ui</span><span class="si-msg">15/18 tests</span></div></div>
+          <div class="si-right"><div class="si-pbar"><div class="si-pf" style="width:55%;"></div></div><span class="si-time">30m</span></div>
+        </div>
+        <div class="sb-item">
+          <div class="si-dot running"></div>
+          <div class="si-info"><div class="si-title">重构登录流程</div><div class="si-meta"><span class="si-proj">api-server</span><span class="si-msg">Edit login.ts</span></div></div>
+          <div class="si-right"><div class="si-pbar"><div class="si-pf" style="width:30%;"></div></div><span class="si-time">45m</span></div>
+        </div>
+        <div class="sb-item" style="opacity:0.6;">
+          <div class="si-dot idle"></div>
+          <div class="si-info"><div class="si-title">认证中间件</div><div class="si-meta"><span class="si-proj">api-server</span></div></div>
+          <div class="si-right"><span class="si-time">2h</span></div>
+        </div>
+        <div class="sb-item" style="opacity:0.6;">
+          <div class="si-dot idle"></div>
+          <div class="si-info"><div class="si-title">E2E 测试</div><div class="si-meta"><span class="si-proj">agent-ui</span></div></div>
+          <div class="si-right"><span class="si-time">3h</span></div>
+        </div>
+        <div class="sb-item" style="opacity:0.6;">
+          <div class="si-dot idle"></div>
+          <div class="si-info"><div class="si-title">场景编辑器</div><div class="si-meta"><span class="si-proj">my-game</span></div></div>
+          <div class="si-right"><span class="si-time">1d</span></div>
+        </div>
+        <div class="sb-item" style="opacity:0.6;">
+          <div class="si-dot idle"></div>
+          <div class="si-info"><div class="si-title">DB migration</div><div class="si-meta"><span class="si-proj">api-server</span></div></div>
+          <div class="si-right"><span class="si-time">5h</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="topbar">
+        <button class="tb-toggle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg></button>
+        <span class="tb-title">重构 UI 布局</span>
+        <span class="tb-proj">claude-agent-ui · Running</span>
+        <div class="tb-right">
+          <div class="tb-mode"><button class="tb-m">Single</button><button class="tb-m active">Focus</button><button class="tb-m">Multi</button></div>
+          <button class="tb-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <div class="chat-area">
+        <div class="c-msgs">
+          <div class="cm"><div class="cm-av u">U</div><div class="cm-b"><div class="cm-n un">You</div><div class="cm-t">重构 UI，添加三种模式切换</div></div></div>
+          <div class="cm"><div class="cm-av a">C</div><div class="cm-b"><div class="cm-n an">Claude</div>
+            <div class="cm-tool"><span class="tn">Read</span> AppLayout.tsx</div>
+            <div class="cm-tool"><span class="tn">Edit</span> TopBar.tsx</div>
+            <div class="cm-t">已在 TopBar 添加模式切换。Focus 模式侧边栏改为扁平列表，带状态筛选...<span class="cur"></span></div>
+          </div></div>
+        </div>
+        <div class="c-comp glow">
+          <input class="c-ci" placeholder="Ask Claude anything..." readonly>
+          <div class="c-cb"><div class="c-cbs"><div class="c-cbtn">&#128206;</div><div class="c-cbtn">/</div><div class="c-cbtn">@</div></div><div class="c-send">&#8593;</div></div>
+        </div>
+        <div class="c-status"><span class="c-sd"></span> Connected &bull; Lock: You &bull; <span style="color:#d97706;">Running 65%</span> &bull; Task 4/5</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODE 3: Multi ==================== -->
+<div class="section-label">模式三：多聊 <span class="tag multi">Multi — 并行对话</span></div>
+<div class="section-desc">侧边栏不变（Focus 模式的扁平列表），主区域变为 2×2 四面板。从侧边栏点击/拖入会话。每个面板独立输入/审批。</div>
+
+<div class="mockup-frame">
+  <div class="mockup-dots"><span></span><span></span><span></span></div>
+  <div class="app">
+    <div class="sidebar">
+      <div class="sb-brand"><div class="sb-logo">C</div><span class="sb-name">Claude Code</span></div>
+      <div class="sb-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5c5952" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="搜索会话..." readonly></div>
+      <div class="sb-filters">
+        <div class="sb-f active">All <strong style="margin-left:2px;">8</strong></div>
+        <div class="sb-f"><div class="sb-fd r"></div> 3</div>
+        <div class="sb-f"><div class="sb-fd w"></div> 1</div>
+        <div class="sb-f"><div class="sb-fd i"></div> 4</div>
+      </div>
+      <div class="sb-list">
+        <div class="sb-item alert"><div class="si-dot waiting"></div><div class="si-info"><div class="si-title">玩家碰撞检测</div><div class="si-meta"><span class="si-proj">game</span></div></div><div class="si-right"><span class="si-badge">!</span></div></div>
+        <div class="sb-item active"><div class="si-dot running"></div><div class="si-info"><div class="si-title">重构 UI 布局</div><div class="si-meta"><span class="si-proj">agent-ui</span></div></div><div class="si-right"><div class="si-pbar"><div class="si-pf" style="width:65%;"></div></div></div></div>
+        <div class="sb-item active"><div class="si-dot running"></div><div class="si-info"><div class="si-title">修复 WebSocket</div><div class="si-meta"><span class="si-proj">agent-ui</span></div></div><div class="si-right"><div class="si-pbar"><div class="si-pf" style="width:55%;"></div></div></div></div>
+        <div class="sb-item"><div class="si-dot running"></div><div class="si-info"><div class="si-title">重构登录流程</div><div class="si-meta"><span class="si-proj">api</span></div></div><div class="si-right"><div class="si-pbar"><div class="si-pf" style="width:30%;"></div></div></div></div>
+        <div class="sb-item" style="opacity:0.6;"><div class="si-dot idle"></div><div class="si-info"><div class="si-title">认证中间件</div><div class="si-meta"><span class="si-proj">api</span></div></div></div>
+        <div class="sb-item" style="opacity:0.6;"><div class="si-dot idle"></div><div class="si-info"><div class="si-title">E2E 测试</div><div class="si-meta"><span class="si-proj">agent-ui</span></div></div></div>
+        <div class="sb-item" style="opacity:0.6;"><div class="si-dot idle"></div><div class="si-info"><div class="si-title">场景编辑器</div><div class="si-meta"><span class="si-proj">game</span></div></div></div>
+        <div class="sb-item" style="opacity:0.6;"><div class="si-dot idle"></div><div class="si-info"><div class="si-title">DB migration</div><div class="si-meta"><span class="si-proj">api</span></div></div></div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="topbar">
+        <button class="tb-toggle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg></button>
+        <span class="tb-title" style="color:#5c5952;">3 panels active</span>
+        <div class="tb-right">
+          <div class="tb-mode"><button class="tb-m">Single</button><button class="tb-m">Focus</button><button class="tb-m active">Multi</button></div>
+          <button class="tb-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <div class="multi-area">
+        <div class="mp">
+          <div class="mp-head"><div class="mph-dot r"></div><div class="mph-title">重构 UI 布局</div><div class="mph-proj">agent-ui</div><div class="mph-pct">4/5</div><button class="mph-btn">&times;</button></div>
+          <div class="mp-msgs">
+            <div class="pm"><div class="pm-av u">U</div><div class="pm-b"><div class="pm-n un">You</div><div class="pm-t">做三种模式</div></div></div>
+            <div class="pm"><div class="pm-av a">C</div><div class="pm-b"><div class="pm-n an">Claude</div><div class="pm-tool"><span class="tn">Edit</span> TopBar.tsx</div><div class="pm-t">添加模式切换...<span class="cur"></span></div></div></div>
+          </div>
+          <div class="mp-comp glow"><input class="mp-ci" placeholder="Ask Claude..." readonly><div class="mp-send">&#8593;</div></div>
+        </div>
+        <div class="mp">
+          <div class="mp-head"><div class="mph-dot w" style="background:#f59e0b;"></div><div class="mph-title">玩家碰撞检测</div><div class="mph-proj">my-game</div><button class="mph-btn">&times;</button></div>
+          <div class="mp-msgs">
+            <div class="pm"><div class="pm-av a">C</div><div class="pm-b"><div class="pm-n an">Claude</div><div class="pm-t">碰撞系统完成。</div><div class="pm-tool"><span class="tn">Write</span> collision.ts</div></div></div>
+          </div>
+          <div class="mp-appr"><div class="mp-appr-text"><strong>Write</strong> collision.ts</div><button class="mp-ab al">Allow</button><button class="mp-ab dn">Deny</button></div>
+        </div>
+        <div class="mp">
+          <div class="mp-head"><div class="mph-dot r"></div><div class="mph-title">修复 WebSocket</div><div class="mph-proj">agent-ui</div><div class="mph-pct">55%</div><button class="mph-btn">&times;</button></div>
+          <div class="mp-msgs">
+            <div class="pm"><div class="pm-av a">C</div><div class="pm-b"><div class="pm-n an">Claude</div><div class="pm-tool"><span class="tn">Bash</span> pnpm test</div><div class="pm-t">15/18 passed<span class="cur"></span></div></div></div>
+          </div>
+          <div class="mp-comp"><input class="mp-ci" placeholder="Ask Claude..." readonly><div class="mp-send">&#8593;</div></div>
+        </div>
+        <div class="mp empty"><div class="mp-empty-inner"><div class="plus">+</div>从侧边栏拖入会话</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Highlights -->
+<div class="hl-wrap">
+  <div class="hl-grid">
+    <div class="hl">
+      <h3><span class="dot s"></span> Single 单聊</h3>
+      <p>现有功能，零改动。</p>
+      <ul>
+        <li>侧边栏按项目分组</li>
+        <li>一个完整聊天窗口</li>
+        <li>新用户默认模式</li>
+      </ul>
+    </div>
+    <div class="hl">
+      <h3><span class="dot f"></span> Focus 聚焦</h3>
+      <p>监控所有会话+深度对话一个。</p>
+      <ul>
+        <li>侧边栏变扁平列表（跨项目）</li>
+        <li>状态筛选 + Waiting 置顶</li>
+        <li>进度条 + 消息预览</li>
+        <li>点击切换聚焦会话</li>
+      </ul>
+    </div>
+    <div class="hl">
+      <h3><span class="dot m"></span> Multi 多聊</h3>
+      <p>同时操作 3-4 个会话。</p>
+      <ul>
+        <li>2×2 四面板</li>
+        <li>每个独立输入/审批</li>
+        <li>侧边栏拖入/点击填充</li>
+        <li>空面板随时添加会话</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

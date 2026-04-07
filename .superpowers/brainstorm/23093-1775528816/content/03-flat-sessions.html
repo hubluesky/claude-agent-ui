@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flat Session Switching</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1c1b18; color: #e5e2db; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+
+  .page-header { padding: 32px 40px 8px; }
+  .page-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .page-header p { font-size: 13px; color: #7c7872; }
+
+  .options-grid { display: flex; flex-direction: column; gap: 24px; padding: 24px 40px 40px; }
+  .option-card {
+    border: 1px solid #3d3b37; border-radius: 12px; overflow: hidden; cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s; background: #2b2a27;
+  }
+  .option-card:hover { border-color: #5c5952; }
+  .option-card.selected { border-color: #d97706; box-shadow: 0 0 0 1px #d97706, 0 0 20px rgba(217,119,6,0.1); }
+  .option-header {
+    display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+    border-bottom: 1px solid #3d3b37;
+  }
+  .option-letter {
+    width: 28px; height: 28px; border-radius: 8px; background: #d977061a;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #d97706; flex-shrink: 0;
+  }
+  .option-card.selected .option-letter { background: #d97706; color: #1c1b18; }
+  .option-title { font-size: 15px; font-weight: 600; }
+  .option-desc { font-size: 12px; color: #7c7872; margin-top: 2px; }
+  .option-tag {
+    margin-left: auto; font-size: 10px; padding: 2px 8px; border-radius: 99px;
+    background: #d977061a; color: #d97706; font-weight: 600;
+  }
+
+  /* Shared app chrome */
+  .mockup-frame {
+    background: #1c1b18; border-radius: 8px; margin: 16px; overflow: hidden;
+    border: 1px solid #3d3b37;
+  }
+  .mockup-dots {
+    display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #2b2a27;
+  }
+  .mockup-dots span { width: 8px; height: 8px; border-radius: 50%; background: #3d3b37; }
+
+  .brand-icon {
+    width: 22px; height: 22px; background: #d97706; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; color: #1c1b18; font-family: monospace; flex-shrink: 0;
+  }
+
+  /* =============================================
+     OPTION A: Sidebar = flat session list
+     ============================================= */
+  .app-a { display: flex; height: 420px; }
+  .sidebar-a {
+    width: 260px; background: #1c1b18; border-right: 1px solid #3d3b37;
+    display: flex; flex-direction: column;
+  }
+  .sidebar-top {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid #2b2a27;
+  }
+  .sidebar-top .brand-text { font-size: 13px; font-weight: 700; color: #d97706; }
+  .sidebar-search {
+    margin: 8px 10px; display: flex; align-items: center; gap: 6px;
+    padding: 7px 10px; border-radius: 8px;
+    background: #2b2a27; border: 1px solid #3d3b37;
+  }
+  .sidebar-search input {
+    background: none; border: none; outline: none; color: #e5e2db; font-size: 12px;
+    flex: 1; font-family: inherit;
+  }
+  .sidebar-search input::placeholder { color: #5c5952; }
+  .sidebar-search .kbd {
+    font-size: 9px; color: #5c5952; background: #3d3b37; padding: 1px 5px;
+    border-radius: 3px; font-family: monospace;
+  }
+
+  .sidebar-filters {
+    display: flex; gap: 4px; padding: 4px 10px 8px; flex-wrap: wrap;
+  }
+  .filter-chip {
+    font-size: 10px; padding: 3px 8px; border-radius: 99px;
+    background: #2b2a27; border: 1px solid #3d3b37; color: #7c7872; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-chip:hover { border-color: #5c5952; color: #e5e2db; }
+  .filter-chip.active { background: #d977061a; border-color: #d9770640; color: #d97706; }
+
+  .session-list { flex: 1; overflow-y: auto; padding: 0 6px 8px; }
+
+  .session-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border-radius: 8px; cursor: pointer; transition: all 0.12s;
+    margin-bottom: 2px;
+  }
+  .session-item:hover { background: #2b2a27; }
+  .session-item.active { background: #d977061a; }
+
+  .si-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .si-dot.running { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+  .si-dot.waiting { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.3); }
+  .si-dot.idle { background: #3d3b37; }
+
+  .si-content { flex: 1; min-width: 0; }
+  .si-title { font-size: 12px; font-weight: 500; color: #e5e2db; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-item.active .si-title { color: #fff; }
+  .si-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .si-project {
+    font-size: 9px; color: #d97706; background: #d9770612; padding: 1px 5px;
+    border-radius: 3px; font-weight: 500;
+  }
+  .si-time { font-size: 9px; color: #5c5952; }
+
+  .si-badge {
+    width: 18px; height: 18px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; flex-shrink: 0;
+  }
+  .si-badge.alert { background: #f59e0b20; color: #f59e0b; }
+
+  /* Main area */
+  .main-area { flex: 1; display: flex; flex-direction: column; background: #2b2a27; }
+  .topbar {
+    display: flex; align-items: center; height: 40px; padding: 0 14px;
+    border-bottom: 1px solid #3d3b37; flex-shrink: 0; gap: 8px;
+  }
+  .topbar-toggle {
+    width: 28px; height: 28px; border-radius: 6px; border: none; background: none;
+    color: #7c7872; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .topbar-toggle:hover { background: #3d3b37; color: #e5e2db; }
+  .topbar-title { font-size: 12px; font-weight: 500; color: #e5e2db; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-project { font-size: 10px; color: #5c5952; }
+  .topbar-btns { display: flex; gap: 2px; }
+  .topbar-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: none; background: none;
+    color: #7c7872; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .topbar-btn:hover { background: #3d3b37; color: #e5e2db; }
+
+  .chat-area { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { display: flex; gap: 10px; }
+  .msg-avatar {
+    width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+  }
+  .msg-avatar.user { background: #3d3b37; color: #7c7872; }
+  .msg-avatar.ai { background: #d977061a; color: #d97706; }
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-name { font-size: 11px; font-weight: 600; margin-bottom: 3px; }
+  .msg-name.user-n { color: #7c7872; }
+  .msg-name.ai-n { color: #d97706; }
+  .msg-text { font-size: 13px; line-height: 1.5; }
+  .msg-text code { background: #1c1b18; padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: monospace; color: #d97706; }
+  .tool-block {
+    margin: 4px 0; padding: 8px 10px; background: #1c1b18; border-radius: 6px;
+    border-left: 2px solid #3d3b37; font-size: 11px; color: #7c7872; font-family: monospace;
+  }
+  .tool-block .tool-name { color: #d97706; font-weight: 600; }
+
+  .composer-bar {
+    margin: 12px 16px; border-radius: 12px; border: 1px solid #3d3b37;
+    background: #1a1918; overflow: hidden;
+  }
+  .composer-bar.glow { border-color: #d97706; animation: glow 2s ease-in-out infinite; }
+  @keyframes glow { 0%,100% { box-shadow: 0 0 0 1px #d97706; } 50% { box-shadow: 0 0 8px 1px rgba(217,119,6,0.4); } }
+  .composer-input {
+    width: 100%; padding: 10px 14px; font-size: 13px; color: #e5e2db;
+    background: transparent; border: none; outline: none; resize: none; font-family: inherit;
+  }
+  .composer-input::placeholder { color: #7c7872; }
+  .composer-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; border-top: 1px solid #3d3b37;
+  }
+  .composer-btns { display: flex; gap: 2px; }
+  .composer-btn {
+    width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center;
+    justify-content: center; color: #7c7872; cursor: pointer; border: none; background: none; font-size: 14px;
+  }
+  .composer-btn:hover { background: #3d3b37; color: #e5e2db; }
+  .send-btn {
+    width: 28px; height: 28px; border-radius: 6px; background: #d97706;
+    color: #1c1b18; border: none; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; font-size: 14px;
+  }
+  .status-bar {
+    height: 24px; border-top: 1px solid #3d3b37; display: flex; align-items: center;
+    padding: 0 12px; font-size: 10px; color: #5c5952; gap: 12px; flex-shrink: 0;
+    background: #242320;
+  }
+  .status-bar .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #22c55e; }
+
+  /* =============================================
+     OPTION B: No sidebar, Cmd+K palette
+     ============================================= */
+  .app-b { display: flex; flex-direction: column; height: 420px; background: #2b2a27; position: relative; }
+
+  .topbar-b {
+    display: flex; align-items: center; height: 40px; padding: 0 14px;
+    border-bottom: 1px solid #3d3b37; flex-shrink: 0; gap: 8px;
+  }
+  .tb-session-nav { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+  .tb-prev, .tb-next {
+    width: 24px; height: 24px; border-radius: 5px; border: none; background: none;
+    color: #5c5952; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .tb-prev:hover, .tb-next:hover { background: #3d3b37; color: #7c7872; }
+  .tb-current {
+    display: flex; align-items: center; gap: 8px; padding: 4px 10px;
+    border-radius: 6px; cursor: pointer; flex: 1; min-width: 0;
+  }
+  .tb-current:hover { background: #3d3b3780; }
+  .tb-current .tbc-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .tb-current .tbc-title { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tb-current .tbc-project { font-size: 10px; color: #5c5952; margin-left: 6px; white-space: nowrap; }
+  .tb-current .tbc-kbd { font-size: 9px; color: #5c5952; background: #3d3b37; padding: 1px 5px; border-radius: 3px; font-family: monospace; margin-left: auto; flex-shrink: 0; }
+
+  .tb-indicators { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .tb-indicator {
+    display: flex; align-items: center; gap: 4px; padding: 3px 8px;
+    border-radius: 6px; font-size: 10px; cursor: pointer; transition: all 0.15s;
+  }
+  .tb-indicator:hover { background: #3d3b37; }
+  .tb-indicator .ind-dot { width: 5px; height: 5px; border-radius: 50%; }
+  .tb-indicator .ind-dot.running { background: #22c55e; }
+  .tb-indicator .ind-dot.waiting { background: #f59e0b; }
+  .tb-indicator .ind-count { font-weight: 600; }
+  .tb-indicator.has-alert { background: #f59e0b15; color: #f59e0b; }
+
+  /* Command palette overlay */
+  .palette-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: flex-start; justify-content: center; padding-top: 60px;
+    z-index: 50;
+  }
+  .palette {
+    width: 480px; background: #1c1b18; border: 1px solid #3d3b37;
+    border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .palette-search {
+    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    border-bottom: 1px solid #3d3b37;
+  }
+  .palette-search svg { color: #5c5952; flex-shrink: 0; }
+  .palette-search input {
+    flex: 1; background: none; border: none; outline: none;
+    color: #e5e2db; font-size: 14px; font-family: inherit;
+  }
+  .palette-search input::placeholder { color: #5c5952; }
+
+  .palette-section { padding: 8px 0; }
+  .palette-label { font-size: 10px; color: #5c5952; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 16px; font-weight: 600; }
+  .palette-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .palette-item:hover { background: #2b2a27; }
+  .palette-item.highlighted { background: #d977061a; }
+  .pi-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .pi-content { flex: 1; min-width: 0; }
+  .pi-title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pi-meta { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  .pi-project { font-size: 10px; color: #d97706; }
+  .pi-time { font-size: 10px; color: #5c5952; }
+  .pi-status { font-size: 10px; color: #7c7872; }
+  .pi-kbd { font-size: 9px; color: #5c5952; background: #3d3b37; padding: 1px 5px; border-radius: 3px; font-family: monospace; flex-shrink: 0; }
+
+  .palette-footer {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+    border-top: 1px solid #3d3b37; font-size: 10px; color: #5c5952;
+  }
+  .palette-footer kbd { background: #3d3b37; padding: 1px 4px; border-radius: 2px; font-family: monospace; }
+
+  /* Inline pros/cons */
+  .inline-pros-cons {
+    display: flex; gap: 16px; padding: 12px 20px; border-top: 1px solid #3d3b37;
+    background: #242320;
+  }
+  .ipc-col { flex: 1; }
+  .ipc-col h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+  .ipc-col.pro h4 { color: #22c55e; }
+  .ipc-col.con h4 { color: #f87171; }
+  .ipc-col li { font-size: 11px; color: #7c7872; margin-left: 14px; line-height: 1.6; }
+
+  /* Selection */
+  .selection-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #d97706; color: #1c1b18; padding: 12px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; transform: translateY(100%);
+    transition: transform 0.2s ease; z-index: 100;
+  }
+  .selection-bar.visible { transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>扁平会话切换：一步直达任何会话</h1>
+  <p>去掉项目层级，所有会话平铺。两种交互方式，你喜欢哪个？</p>
+</div>
+
+<div class="options-grid">
+
+  <!-- ===================== OPTION A: Flat sidebar ===================== -->
+  <div class="option-card" id="opt-a" onclick="selectOption('a')">
+    <div class="option-header">
+      <div class="option-letter">A</div>
+      <div>
+        <div class="option-title">扁平侧边栏：所有会话一个列表</div>
+        <div class="option-desc">侧边栏按最近活跃排序，项目名只是标签。搜索/筛选即时过滤，一键切换。</div>
+      </div>
+    </div>
+    <div class="option-body">
+      <div class="mockup-frame">
+        <div class="mockup-dots"><span></span><span></span><span></span></div>
+        <div class="app-a">
+          <div class="sidebar-a">
+            <div class="sidebar-top">
+              <div class="brand-icon">C</div>
+              <div class="brand-text">Claude Code</div>
+            </div>
+            <div class="sidebar-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5c5952" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input placeholder="搜索所有会话..." readonly>
+              <span class="kbd">Ctrl+K</span>
+            </div>
+            <div class="sidebar-filters">
+              <div class="filter-chip active">全部</div>
+              <div class="filter-chip"><span style="color:#22c55e;">&#9679;</span> Running</div>
+              <div class="filter-chip"><span style="color:#f59e0b;">&#9679;</span> Waiting</div>
+              <div class="filter-chip">Idle</div>
+            </div>
+            <div class="session-list">
+              <div class="session-item active">
+                <div class="si-dot running"></div>
+                <div class="si-content">
+                  <div class="si-title">重构 UI 布局</div>
+                  <div class="si-meta">
+                    <span class="si-project">claude-agent-ui</span>
+                    <span class="si-time">2 min ago</span>
+                  </div>
+                </div>
+              </div>
+              <div class="session-item">
+                <div class="si-dot waiting"></div>
+                <div class="si-content">
+                  <div class="si-title">添加玩家碰撞检测</div>
+                  <div class="si-meta">
+                    <span class="si-project">my-game</span>
+                    <span class="si-time">15 min ago</span>
+                  </div>
+                </div>
+                <div class="si-badge alert">!</div>
+              </div>
+              <div class="session-item">
+                <div class="si-dot running"></div>
+                <div class="si-content">
+                  <div class="si-title">修复 WebSocket 断连问题</div>
+                  <div class="si-meta">
+                    <span class="si-project">claude-agent-ui</span>
+                    <span class="si-time">30 min ago</span>
+                  </div>
+                </div>
+              </div>
+              <div class="session-item">
+                <div class="si-dot idle"></div>
+                <div class="si-content">
+                  <div class="si-title">修复认证中间件</div>
+                  <div class="si-meta">
+                    <span class="si-project">api-server</span>
+                    <span class="si-time">2h ago</span>
+                  </div>
+                </div>
+              </div>
+              <div class="session-item">
+                <div class="si-dot idle"></div>
+                <div class="si-content">
+                  <div class="si-title">添加 E2E 测试</div>
+                  <div class="si-meta">
+                    <span class="si-project">claude-agent-ui</span>
+                    <span class="si-time">3h ago</span>
+                  </div>
+                </div>
+              </div>
+              <div class="session-item">
+                <div class="si-dot idle"></div>
+                <div class="si-content">
+                  <div class="si-title">数据库 migration 优化</div>
+                  <div class="si-meta">
+                    <span class="si-project">api-server</span>
+                    <span class="si-time">5h ago</span>
+                  </div>
+                </div>
+              </div>
+              <div class="session-item">
+                <div class="si-dot idle"></div>
+                <div class="si-content">
+                  <div class="si-title">场景编辑器 UI</div>
+                  <div class="si-meta">
+                    <span class="si-project">my-game</span>
+                    <span class="si-time">1d ago</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="main-area">
+            <div class="topbar">
+              <div class="topbar-toggle">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+              </div>
+              <div class="topbar-title">重构 UI 布局</div>
+              <div class="topbar-project">claude-agent-ui</div>
+              <div class="topbar-btns">
+                <div class="topbar-btn" title="历史">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="topbar-btn" title="新会话">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="chat-area">
+              <div class="msg">
+                <div class="msg-avatar user">U</div>
+                <div class="msg-body">
+                  <div class="msg-name user-n">You</div>
+                  <div class="msg-text">重构侧边栏，支持项目状态实时显示</div>
+                </div>
+              </div>
+              <div class="msg">
+                <div class="msg-avatar ai">C</div>
+                <div class="msg-body">
+                  <div class="msg-name ai-n">Claude</div>
+                  <div class="tool-block"><span class="tool-name">Read</span> packages/web/src/components/sidebar/SessionList.tsx</div>
+                  <div class="tool-block"><span class="tool-name">Edit</span> packages/web/src/components/sidebar/ProjectCard.tsx</div>
+                  <div class="msg-text">已完成。每个项目旁边现在有实时状态指示器，<code>running</code> 显示绿色脉冲，<code>waiting</code> 显示黄色 badge。</div>
+                </div>
+              </div>
+            </div>
+            <div class="composer-bar glow">
+              <input class="composer-input" placeholder="Ask Claude anything..." readonly>
+              <div class="composer-toolbar">
+                <div class="composer-btns">
+                  <div class="composer-btn">&#128206;</div>
+                  <div class="composer-btn">/</div>
+                  <div class="composer-btn">@</div>
+                </div>
+                <div class="send-btn">&#8593;</div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span class="status-dot"></span>
+              <span>Connected</span>
+              <span>&bull;</span>
+              <span>Lock: You</span>
+              <span>&bull;</span>
+              <span style="color:#d97706;">Running...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inline-pros-cons">
+      <div class="ipc-col pro"><h4>Pros</h4><ul><li>始终可见，一键切换</li><li>状态筛选快速定位需要关注的会话</li><li>与现有结构改动最小</li></ul></div>
+      <div class="ipc-col con"><h4>Cons</h4><ul><li>侧边栏占用水平空间</li><li>会话多了仍需滚动</li></ul></div>
+    </div>
+  </div>
+
+  <!-- ===================== OPTION B: Cmd+K palette ===================== -->
+  <div class="option-card" id="opt-b" onclick="selectOption('b')">
+    <div class="option-header">
+      <div class="option-letter">B</div>
+      <div>
+        <div class="option-title">命令面板：Ctrl+K 全局快速切换</div>
+        <div class="option-desc">隐藏侧边栏，腾出全部空间给聊天。Ctrl+K 呼出面板搜索任意会话，顶栏显示当前会话+全局状态汇总。</div>
+      </div>
+      <div class="option-tag">推荐</div>
+    </div>
+    <div class="option-body">
+      <div class="mockup-frame">
+        <div class="mockup-dots"><span></span><span></span><span></span></div>
+        <div class="app-b">
+          <!-- Top bar with session nav -->
+          <div class="topbar-b">
+            <div class="brand-icon">C</div>
+            <div class="tb-session-nav">
+              <button class="tb-prev">&#8249;</button>
+              <div class="tb-current">
+                <div class="tbc-dot" style="background:#22c55e;"></div>
+                <span class="tbc-title">重构 UI 布局</span>
+                <span class="tbc-project">claude-agent-ui</span>
+                <span class="tbc-kbd">Ctrl+K</span>
+              </div>
+              <button class="tb-next">&#8250;</button>
+            </div>
+            <div class="tb-indicators">
+              <div class="tb-indicator">
+                <span class="ind-dot running"></span>
+                <span class="ind-count">2</span>
+              </div>
+              <div class="tb-indicator has-alert">
+                <span class="ind-dot waiting"></span>
+                <span class="ind-count">1</span>
+              </div>
+            </div>
+            <div class="topbar-btns">
+              <div class="topbar-btn" title="新会话">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat area (full width) -->
+          <div class="chat-area" style="flex:1;">
+            <div class="msg">
+              <div class="msg-avatar user">U</div>
+              <div class="msg-body">
+                <div class="msg-name user-n">You</div>
+                <div class="msg-text">重构侧边栏，支持项目状态实时显示</div>
+              </div>
+            </div>
+            <div class="msg">
+              <div class="msg-avatar ai">C</div>
+              <div class="msg-body">
+                <div class="msg-name ai-n">Claude</div>
+                <div class="tool-block"><span class="tool-name">Read</span> packages/web/src/components/sidebar/SessionList.tsx</div>
+                <div class="tool-block"><span class="tool-name">Edit</span> packages/web/src/components/sidebar/ProjectCard.tsx</div>
+                <div class="msg-text">已完成。每个项目旁边现在有实时状态指示器，<code>running</code> 显示绿色脉冲，<code>waiting</code> 显示黄色 badge。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer-bar glow" style="margin:12px 16px;">
+            <input class="composer-input" placeholder="Ask Claude anything..." readonly>
+            <div class="composer-toolbar">
+              <div class="composer-btns">
+                <div class="composer-btn">&#128206;</div>
+                <div class="composer-btn">/</div>
+                <div class="composer-btn">@</div>
+              </div>
+              <div class="send-btn">&#8593;</div>
+            </div>
+          </div>
+          <div class="status-bar">
+            <span class="status-dot"></span>
+            <span>Connected</span>
+            <span>&bull;</span>
+            <span>Lock: You</span>
+            <span>&bull;</span>
+            <span style="color:#d97706;">Running...</span>
+          </div>
+
+          <!-- Command palette overlay -->
+          <div class="palette-overlay">
+            <div class="palette">
+              <div class="palette-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5c5952" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input placeholder="搜索会话、项目或命令..." value="碰撞" readonly>
+              </div>
+              <div class="palette-section">
+                <div class="palette-label">Sessions</div>
+                <div class="palette-item highlighted">
+                  <div class="pi-dot" style="background:#f59e0b;"></div>
+                  <div class="pi-content">
+                    <div class="pi-title">添加玩家碰撞检测</div>
+                    <div class="pi-meta">
+                      <span class="pi-project">my-game</span>
+                      <span class="pi-status">&#9679; Waiting for approval</span>
+                      <span class="pi-time">15 min ago</span>
+                    </div>
+                  </div>
+                  <span class="pi-kbd">Enter</span>
+                </div>
+              </div>
+              <div class="palette-section">
+                <div class="palette-label">Recent</div>
+                <div class="palette-item">
+                  <div class="pi-dot" style="background:#22c55e;"></div>
+                  <div class="pi-content">
+                    <div class="pi-title">重构 UI 布局</div>
+                    <div class="pi-meta">
+                      <span class="pi-project">claude-agent-ui</span>
+                      <span class="pi-time">2 min ago</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="palette-item">
+                  <div class="pi-dot" style="background:#22c55e;"></div>
+                  <div class="pi-content">
+                    <div class="pi-title">修复 WebSocket 断连问题</div>
+                    <div class="pi-meta">
+                      <span class="pi-project">claude-agent-ui</span>
+                      <span class="pi-time">30 min ago</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="palette-item">
+                  <div class="pi-dot" style="background:#3d3b37;"></div>
+                  <div class="pi-content">
+                    <div class="pi-title">修复认证中间件</div>
+                    <div class="pi-meta">
+                      <span class="pi-project">api-server</span>
+                      <span class="pi-time">2h ago</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="palette-footer">
+                <span><kbd>↑↓</kbd> 导航</span>
+                <span><kbd>Enter</kbd> 选择</span>
+                <span><kbd>Esc</kbd> 关闭</span>
+                <span style="margin-left:auto;"><kbd>Ctrl+N</kbd> 新会话</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inline-pros-cons">
+      <div class="ipc-col pro"><h4>Pros</h4><ul><li>聊天区域最大化，零空间浪费</li><li>键盘操作极快，模糊搜索即时匹配</li><li>顶栏状态汇总一眼看到需要关注的会话</li></ul></div>
+      <div class="ipc-col con"><h4>Cons</h4><ul><li>需要 Ctrl+K 才能看到全部会话</li><li>新用户需要学习快捷键</li></ul></div>
+    </div>
+  </div>
+
+  <!-- ===================== OPTION C: Both ===================== -->
+  <div class="option-card" id="opt-c" onclick="selectOption('c')">
+    <div class="option-header">
+      <div class="option-letter">C</div>
+      <div>
+        <div class="option-title">两者兼得：可收起扁平侧边栏 + Ctrl+K</div>
+        <div class="option-desc">默认侧边栏可见，可以 toggle 收起获得全宽。Ctrl+K 在任何时候都能呼出。</div>
+      </div>
+    </div>
+    <div class="option-body" style="padding: 16px 20px; font-size: 13px; color: #7c7872; line-height: 1.6;">
+      就是 A + B 的组合：
+      <ul style="margin: 8px 0 0 18px;">
+        <li>侧边栏打开时 = 方案 A 的体验</li>
+        <li>侧边栏收起时 = 方案 B 的体验，聊天全宽</li>
+        <li>Ctrl+K 随时可用，不管侧边栏开不开</li>
+        <li>用户自己选择习惯的工作方式</li>
+      </ul>
+    </div>
+    <div class="inline-pros-cons">
+      <div class="ipc-col pro"><h4>Pros</h4><ul><li>灵活，适配不同习惯</li><li>侧边栏现有基础上改造即可</li></ul></div>
+      <div class="ipc-col con"><h4>Cons</h4><ul><li>两套导航都要维护</li></ul></div>
+    </div>
+  </div>
+</div>
+
+<div class="selection-bar" id="selectionBar">
+  <span>Selected: <strong id="selectionText"></strong></span>
+  <span style="opacity:0.8;font-weight:400;">在终端中告诉我你的想法</span>
+</div>
+
+<script>
+let selected = null;
+function selectOption(choice) {
+  document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('opt-' + choice).classList.add('selected');
+  selected = choice;
+  const titles = { a: 'A — 扁平侧边栏', b: 'B — Ctrl+K 命令面板', c: 'C — 两者兼得' };
+  document.getElementById('selectionText').textContent = titles[choice];
+  document.getElementById('selectionBar').classList.add('visible');
+  fetch('/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'click', choice, text: titles[choice], timestamp: Math.floor(Date.now()/1000) })
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>
