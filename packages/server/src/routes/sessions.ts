@@ -61,6 +61,54 @@ export function sessionRoutes(sessionManager: SessionManager) {
       }
     )
 
+    // GET /api/sessions/:id/export?format=md|json
+    app.get<{
+      Params: { id: string }
+      Querystring: { format?: string }
+    }>('/api/sessions/:id/export', async (request, reply) => {
+      const format = request.query.format ?? 'md'
+      const messages = await sessionManager.getSessionMessages(request.params.id, { limit: 10000 })
+      const info = await sessionManager.getSessionInfo(request.params.id)
+
+      if (format === 'json') {
+        reply.header('Content-Type', 'application/json')
+        reply.header('Content-Disposition', `attachment; filename="session-${request.params.id.slice(0, 8)}.json"`)
+        return { session: info, messages: messages.messages }
+      }
+
+      // Markdown export
+      const lines: string[] = []
+      lines.push(`# ${(info as any)?.title ?? 'Session'}\n`)
+      lines.push(`Session ID: ${request.params.id}`)
+      lines.push(`Created: ${(info as any)?.createdAt ?? 'unknown'}\n`)
+      lines.push('---\n')
+
+      for (const msg of (messages.messages ?? [])) {
+        const role = (msg as any).type ?? 'system'
+        const content = (msg as any).message?.content
+        let text = ''
+        if (typeof content === 'string') {
+          text = content
+        } else if (Array.isArray(content)) {
+          text = content
+            .filter((b: any) => b.type === 'text' || b.type === 'thinking')
+            .map((b: any) => b.text ?? b.thinking ?? '')
+            .join('\n\n')
+        }
+        if (!text) continue
+
+        if (role === 'user') {
+          lines.push(`## User\n\n${text}\n`)
+        } else if (role === 'assistant') {
+          lines.push(`## Assistant\n\n${text}\n`)
+        }
+      }
+
+      reply.header('Content-Type', 'text/markdown; charset=utf-8')
+      reply.header('Content-Disposition', `attachment; filename="session-${request.params.id.slice(0, 8)}.md"`)
+      return lines.join('\n')
+    })
+
     // POST /api/sessions/:id/tag
     app.post<{ Params: { id: string }; Body: { tag: string | null } }>(
       '/api/sessions/:id/tag',

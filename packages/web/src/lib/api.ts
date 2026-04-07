@@ -29,3 +29,15 @@ export async function fetchSessionMessages(
   const res = await fetch(`${BASE}/api/sessions/${sessionId}/messages?${params}`)
   return await res.json()
 }
+
+export async function exportSession(sessionId: string, format: 'md' | 'json' = 'md'): Promise<void> {
+  const res = await fetch(`${BASE}/api/sessions/${sessionId}/export?format=${format}`)
+  const blob = await res.blob()
+  const ext = format === 'json' ? 'json' : 'md'
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `session-${sessionId.slice(0, 8)}.${ext}`
+  a.click()
+  URL.revokeObjectURL(url)
+}

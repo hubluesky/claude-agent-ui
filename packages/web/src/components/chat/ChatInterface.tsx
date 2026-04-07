@@ -6,7 +6,10 @@ import { buildToolApprovalConfig, buildPlanApprovalConfig, buildAskUserConfig } 
 import { PlanModal } from './PlanModal'
 import { ConnectionBanner } from './ConnectionBanner'
 import { StatusBar } from './StatusBar'
+import { ShortcutsDialog } from './ShortcutsDialog'
+import { SearchBar } from './SearchBar'
 import { useWebSocket } from '../../hooks/useWebSocket'
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -15,6 +18,7 @@ import type { ApprovalPanelConfig } from './ApprovalPanel'
 
 export function ChatInterface() {
   const { sendMessage, joinSession, abort, respondToolApproval, respondAskUser, respondPlanApproval } = useWebSocket()
+  const { helpOpen, setHelpOpen, searchOpen, setSearchOpen } = useKeyboardShortcuts()
   const { currentSessionId, currentProjectCwd } = useSessionStore()
   const pendingAskUser = useConnectionStore((s) => s.pendingAskUser)
   const pendingApproval = useConnectionStore((s) => s.pendingApproval)
@@ -99,6 +103,7 @@ export function ChatInterface() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <ConnectionBanner />
+      {searchOpen && <SearchBar onClose={() => setSearchOpen(false)} />}
       {isNewSession ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <div className="w-12 h-12 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center">
@@ -116,6 +121,7 @@ export function ChatInterface() {
       )}
       <StatusBar />
       <PlanModal />
+      {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
     </div>
   )
 }
