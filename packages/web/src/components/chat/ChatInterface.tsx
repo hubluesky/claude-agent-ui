@@ -107,22 +107,33 @@ export function ChatInterface({
   }, [ctx.pendingAskUser, ctx.pendingApproval, ctx.pendingPlanApproval,
       ctx.respondToolApproval, ctx.respondAskUser, ctx.respondPlanApproval])
 
-  // Esc to return from expanded panel
+  // Unified Esc handler: priority order → input focus → modal → returnToMulti → abort AI
   const returnToMulti = useSettingsStore((s) => s.returnToMulti)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
   const setReturnToMulti = useSettingsStore((s) => s.setReturnToMulti)
 
   useEffect(() => {
-    if (!returnToMulti) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !ctx.planModalOpen) {
+      if (e.key !== 'Escape') return
+      // Let textarea/input handle their own Esc (e.g. close slash/file popup)
+      const tag = (document.activeElement as HTMLElement)?.tagName
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return
+      // PlanModal handles its own Esc
+      if (ctx.planModalOpen) return
+      // Return to Multi mode from expanded panel
+      if (returnToMulti) {
         setViewMode('multi')
         setReturnToMulti(false)
+        return
+      }
+      // Abort running AI session (like Claude Code CLI Esc)
+      if (ctx.sessionStatus === 'running' && ctx.lockStatus === 'locked_self') {
+        ctx.abort()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [returnToMulti, setViewMode, setReturnToMulti])
+  }, [ctx, returnToMulti, setViewMode, setReturnToMulti])
 
   if (!ctx.sessionId) return null
 
