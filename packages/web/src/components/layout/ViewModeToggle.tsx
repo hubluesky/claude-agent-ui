@@ -15,10 +15,10 @@ export function ViewModeToggle() {
     if (mode !== 'single') setReturnToMulti(false)
   }
 
-  // Ctrl/Cmd+\ to toggle Single/Multi (left-hand friendly)
+  // Ctrl/Cmd+` to toggle Single/Multi (left-hand friendly)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === '~')) {
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Backquote') {
         e.preventDefault()
         const next = useSettingsStore.getState().viewMode === 'single' ? 'multi' : 'single'
         handleSwitch(next)

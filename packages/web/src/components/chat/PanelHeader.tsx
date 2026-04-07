@@ -28,10 +28,11 @@ export function PanelHeader({ title, projectName, onExpand, onClose }: PanelHead
       <span className="text-[7px] text-[var(--accent)] bg-[var(--accent-subtle-bg)] px-1 rounded">{projectName}</span>
       <button
         onClick={onExpand}
-        className="w-[18px] h-[18px] rounded text-[10px] text-[var(--text-muted)] hover:bg-[var(--accent-subtle-bg)] hover:text-[var(--accent)] flex items-center justify-center"
-        title="展开全屏"
+        className="flex items-center gap-0.5 px-1 h-[18px] rounded text-[var(--text-muted)] hover:bg-[var(--accent-subtle-bg)] hover:text-[var(--accent)]"
+        title="展开全屏（双击标题也可展开）"
       >
-        ↗
+        <span className="text-[10px]">↗</span>
+        <span className="text-[7px] font-mono opacity-60">展开</span>
       </button>
       <button
         onClick={onClose}
