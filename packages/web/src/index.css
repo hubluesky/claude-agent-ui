@@ -22,6 +22,23 @@
   --info: #60a5fa;
   --purple: #a855f7;
   --cyan: #0ea5e9;
+  /* Semi-transparent variants */
+  --border-half: #3d3b3780;
+  --accent-subtle-bg: #d977061a;
+  --accent-subtle-border: #d9770626;
+  --accent-hover-bg: #d9770640;
+  --error-subtle-bg: #f871710a;
+  --error-subtle-border: #f8717126;
+  --info-subtle-bg: #0ea5e90a;
+  --info-subtle-border: #0ea5e926;
+  --purple-subtle-bg: #8b5cf60f;
+  --purple-subtle-border: #a855f726;
+  --warning-subtle-bg: #eab3080f;
+  --warning-subtle-border: #eab30826;
+  --success-subtle-bg: #a3e6350a;
+  --success-subtle-border: #a3e63526;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="light"] {
@@ -44,6 +61,23 @@
   --info: #2563eb;
   --purple: #7c3aed;
   --cyan: #0284c7;
+  /* Semi-transparent variants (lighter for light theme) */
+  --border-half: #d6d3d180;
+  --accent-subtle-bg: #d9770610;
+  --accent-subtle-border: #d9770630;
+  --accent-hover-bg: #d9770618;
+  --error-subtle-bg: #dc262608;
+  --error-subtle-border: #dc262620;
+  --info-subtle-bg: #2563eb08;
+  --info-subtle-border: #2563eb20;
+  --purple-subtle-bg: #7c3aed08;
+  --purple-subtle-border: #7c3aed20;
+  --warning-subtle-bg: #d9770608;
+  --warning-subtle-border: #d9770620;
+  --success-subtle-bg: #16a34a08;
+  --success-subtle-border: #16a34a20;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
 }
 
 /* ---- Base Styles ---- */
@@ -62,7 +96,7 @@ html, body, #root {
 /* Subtle dark scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -75,12 +109,12 @@ html, body, #root {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--scrollbar-thumb-hover);
 }
 
 @keyframes glow {
