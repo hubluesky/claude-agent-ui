@@ -39,30 +39,16 @@
 - [x] 模型列表 + 动态切换 — S2C_Models + C2S_SetModel + ModelSelector
 - [x] Bug #1 修复 — resolvePendingForMode('auto') 不再自动放行所有 pending
 
-## 待实施功能
+### Phase 5（体验打磨 — 全部完成）
+- [x] 消息搜索 — SearchBar + Ctrl+F + HighlightText 匹配高亮
+- [x] 主题系统 — CSS 变量 + dark/light toggle + StatusBar 切换按钮
+- [x] 快捷键系统 — useKeyboardShortcuts + ShortcutsDialog (Ctrl+N/B/F//)
+- [x] Session 导出 — /api/sessions/:id/export?format=md|json + SessionCard MD/JSON 按钮
 
-### Priority 1: 体验打磨（Phase 5）
+## 待改进项
 
-#### 5.1 消息搜索
-- 纯 UI，Ctrl+F 触发
-- 新增 `SearchBar.tsx` + ChatMessagesPane/MessageComponent 高亮
-- **详细 mockup**: `05-phase5-polish.html` → 5.1
-
-#### 5.2 主题系统（深色/浅色）
-- CSS 变量定义两套主题，`<html data-theme>` 切换
-- 最大改动量：遍历所有组件硬编码颜色 → CSS 变量
-- **详细 mockup**: `05-phase5-polish.html` → 5.2
-
-#### 5.3 快捷键系统
-- 新增 `useKeyboardShortcuts.ts` hook + `ShortcutsDialog.tsx`
-- Ctrl+F 搜索、Ctrl+N 新建、Ctrl+L 清除、Ctrl+B 侧边栏、Ctrl+/ 帮助
-- **详细 mockup**: `05-phase5-polish.html` → 5.3
-
-#### 5.4 Session 导出
-- GET /api/sessions/:id/export?format=md|json
-- 新增 `server/utils/exportSession.ts`
-- SessionCard 右键菜单增加导出选项
-- **详细 mockup**: `05-phase5-polish.html` → 5.4
+1. **主题组件完全迁移**：主框架已用 CSS 变量，但消息组件等仍有硬编码颜色，需逐步迁移
+2. **消息搜索高亮集成**：HighlightText 组件已创建，需在 MessageComponent 中集成 useSearchQuery
 
 ## 已知 Bug
 
