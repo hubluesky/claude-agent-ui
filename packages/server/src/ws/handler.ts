@@ -7,7 +7,7 @@ import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
 import { V1QuerySession } from '../agent/v1-session.js'
-import { forkSession, getSubagentMessages } from '@anthropic-ai/claude-agent-sdk'
+import { forkSession, getSubagentMessages, getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 
@@ -178,13 +178,7 @@ export function createWsHandler(deps: HandlerDeps) {
       permissionMode: activeSession?.permissionMode,
     })
 
-    // Replay buffered messages the client missed
-    const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
-    for (const entry of missed) {
-      wsHub.sendTo(connectionId, entry.message)
-    }
-
-    // Send stream snapshot if streaming is in progress
+    // Send stream snapshot FIRST if streaming is in progress (design spec order)
     const snapshot = wsHub.getStreamSnapshot(sessionId)
     if (snapshot) {
       wsHub.sendTo(connectionId, {
@@ -193,6 +187,29 @@ export function createWsHandler(deps: HandlerDeps) {
         messageId: snapshot.messageId,
         blocks: snapshot.blocks,
       })
+    }
+
+    // Then replay buffered messages the client missed (with _seq for client tracking)
+    const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
+    for (const entry of missed) {
+      wsHub.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
+    }
+
+    // Send model name from session history (async, non-blocking)
+    if (sessionId && sessionId !== '__new__') {
+      getSessionMessages(sessionId).then((msgs: any[]) => {
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const model = msgs[i]?.message?.model
+          if (msgs[i].type === 'assistant' && model) {
+            wsHub.sendTo(connectionId, {
+              type: 'account-info',
+              sessionId,
+              model,
+            } as any)
+            break
+          }
+        }
+      }).catch(() => {})
     }
 
     // Re-send any pending tool-approval or ask-user requests for this session
@@ -395,16 +412,15 @@ export function createWsHandler(deps: HandlerDeps) {
         toolName: req.toolName,
         payload: req,
       })
-      wsHub.sendTo(connectionId, {
-        type: 'tool-approval-request',
-        ...req,
-        readonly: false,
-      })
-      wsHub.broadcastExcept(realSessionId, connectionId, {
-        type: 'tool-approval-request',
-        ...req,
-        readonly: true,
-      })
+      // Approval requests are NOT buffered — resendPendingRequests handles reconnection.
+      // Send directly to each client (lock holder gets readonly=false, others readonly=true).
+      for (const connId of wsHub.getSessionClients(realSessionId)) {
+        wsHub.sendTo(connId, {
+          type: 'tool-approval-request',
+          ...req,
+          readonly: connId !== connectionId,
+        })
+      }
     })
 
     session.on('ask-user', (req) => {
@@ -413,16 +429,13 @@ export function createWsHandler(deps: HandlerDeps) {
         type: 'ask-user',
         payload: req,
       })
-      wsHub.sendTo(connectionId, {
-        type: 'ask-user-request',
-        ...req,
-        readonly: false,
-      })
-      wsHub.broadcastExcept(realSessionId, connectionId, {
-        type: 'ask-user-request',
-        ...req,
-        readonly: true,
-      })
+      for (const connId of wsHub.getSessionClients(realSessionId)) {
+        wsHub.sendTo(connId, {
+          type: 'ask-user-request',
+          ...req,
+          readonly: connId !== connectionId,
+        })
+      }
     })
 
     session.on('plan-approval', (req) => {
@@ -431,18 +444,14 @@ export function createWsHandler(deps: HandlerDeps) {
         type: 'plan-approval',
         payload: req,
       })
-      wsHub.sendTo(connectionId, {
-        type: 'plan-approval',
-        sessionId: realSessionId,
-        ...req,
-        readonly: false,
-      })
-      wsHub.broadcastExcept(realSessionId, connectionId, {
-        type: 'plan-approval',
-        sessionId: realSessionId,
-        ...req,
-        readonly: true,
-      })
+      for (const connId of wsHub.getSessionClients(realSessionId)) {
+        wsHub.sendTo(connId, {
+          type: 'plan-approval',
+          sessionId: realSessionId,
+          ...req,
+          readonly: connId !== connectionId,
+        })
+      }
     })
 
     session.on('commands', (commands) => {
@@ -502,6 +511,8 @@ export function createWsHandler(deps: HandlerDeps) {
         sessionId: realSessionId,
         result,
       })
+      // Clean up buffer after session completes — messages are no longer needed
+      wsHub.clearBuffer(realSessionId)
     })
 
     session.on('error', (err) => {
@@ -767,10 +778,7 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   async function handleGetContextUsage(connectionId: string, sessionId: string) {
-    let session = sessionManager.getActive(sessionId)
-    if (!session && sessionId && !sessionId.startsWith('pending-') && sessionId !== '__new__') {
-      try { session = await sessionManager.resumeSession(sessionId) } catch { /* ignore */ }
-    }
+    const session = sessionManager.getActive(sessionId)
     if (!session || !('getContextUsage' in session)) return
     try {
       const usage = await (session as any).getContextUsage()
@@ -789,15 +797,7 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   async function handleGetMcpStatus(connectionId: string, sessionId: string) {
-    let session = sessionManager.getActive(sessionId)
-    // If no active session, resume one so we can query MCP status
-    if (!session && sessionId && !sessionId.startsWith('pending-') && sessionId !== '__new__') {
-      try {
-        session = await sessionManager.resumeSession(sessionId)
-      } catch {
-        // Can't resume
-      }
-    }
+    const session = sessionManager.getActive(sessionId)
     if (!session || !('getMcpStatus' in session)) return
     try {
       const servers = await (session as any).getMcpStatus()

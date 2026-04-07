@@ -93,7 +93,8 @@ export class WSHub {
   /** Broadcast to all session subscribers AND buffer the message. Returns assigned seq. */
   broadcast(sessionId: string, msg: S2CMessage): number {
     const seq = this.bufferMessage(sessionId, msg)
-    const envelope = JSON.stringify(msg)
+    // Attach _seq so clients can track their position for reconnection replay
+    const envelope = JSON.stringify({ ...msg, _seq: seq })
     const subs = this.sessionSubscribers.get(sessionId)
     if (subs) {
       for (const connId of subs) {
@@ -128,7 +129,7 @@ export class WSHub {
 
   broadcastExcept(sessionId: string, excludeConnectionId: string, msg: S2CMessage): number {
     const seq = this.bufferMessage(sessionId, msg)
-    const data = JSON.stringify(msg)
+    const data = JSON.stringify({ ...msg, _seq: seq })
     const subs = this.sessionSubscribers.get(sessionId)
     if (subs) {
       for (const connId of subs) {

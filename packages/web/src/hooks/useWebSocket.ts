@@ -103,6 +103,12 @@ function disconnect() {
 }
 
 function handleServerMessage(msg: S2CMessage) {
+  // Track message sequence number for reconnection replay
+  const seq = (msg as any)._seq as number | undefined
+  if (seq != null) {
+    useConnectionStore.getState().setLastSeq(seq)
+  }
+
   const conn = useConnectionStore.getState()
   const msgs = useMessageStore.getState()
   const sess = useSessionStore.getState()
@@ -475,8 +481,9 @@ function sendMessage(
 }
 
 function joinSession(sessionId: string) {
-  const lastSeq = useConnectionStore.getState().lastSeq
-  send({ type: 'join-session', sessionId, lastSeq } as any)
+  // Reset lastSeq when switching sessions (seq numbers are per-session on server)
+  useConnectionStore.getState().setLastSeq(0)
+  send({ type: 'join-session', sessionId, lastSeq: 0 } as any)
 }
 
 function respondToolApproval(requestId: string, decision: ToolApprovalDecision) {
