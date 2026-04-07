@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMultiPanelStore, type PanelSummary } from '../../stores/multiPanelStore'
 import { useSessionStore } from '../../stores/sessionStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 interface BackgroundStatusDropdownProps {
   onClose: () => void
@@ -31,10 +32,11 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
     }
   }, [onClose])
 
-  // Get all panel summaries except current session
+  // In Multi mode show all panels; in Single mode exclude current session
+  const viewMode = useSettingsStore((s) => s.viewMode)
   const items: PanelSummary[] = []
   for (const [sid, summary] of panelSummaries) {
-    if (sid !== currentSessionId) {
+    if (viewMode === 'multi' || sid !== currentSessionId) {
       items.push(summary)
     }
   }

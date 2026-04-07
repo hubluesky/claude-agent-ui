@@ -32,34 +32,47 @@ export function MultiPanelGrid() {
     addPanel(sessionId, { sessionId, title, projectCwd: cwd, projectName })
   }, [addPanel])
 
-  const totalSlots = panelIds.length + 1 // +1 for add slot
-  const cols = getGridCols(totalSlots)
+  // Grid cols based on panel count only (AddPanelSlot is a floating overlay)
+  const cols = getGridCols(panelIds.length)
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <div
-        className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-y-auto"
-        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
-      >
-        {panelIds.map((sid) => {
-          const summary = summaries.get(sid)
-          return (
-            <ChatSessionProvider key={sid} sessionId={sid} independent>
-              <ChatInterface
-                compact
-                panelTitle={summary?.title}
-                panelProjectName={summary?.projectName}
-                onExpandPanel={() => handleExpand(sid, summary?.projectCwd ?? '')}
-                onClosePanel={() => removePanel(sid)}
-              />
-            </ChatSessionProvider>
-          )
-        })}
-        <AddPanelSlot
-          existingPanelIds={panelIds}
-          onAddSession={handleAddSession}
-        />
-      </div>
+    <div className="flex-1 flex flex-col min-h-0 relative">
+      {panelIds.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <AddPanelSlot
+            existingPanelIds={panelIds}
+            onAddSession={handleAddSession}
+          />
+        </div>
+      ) : (
+        <>
+          <div
+            className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-y-auto"
+            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+          >
+            {panelIds.map((sid) => {
+              const summary = summaries.get(sid)
+              return (
+                <ChatSessionProvider key={sid} sessionId={sid} independent>
+                  <ChatInterface
+                    compact
+                    panelTitle={summary?.title}
+                    panelProjectName={summary?.projectName}
+                    onExpandPanel={() => handleExpand(sid, summary?.projectCwd ?? '')}
+                    onClosePanel={() => removePanel(sid)}
+                  />
+                </ChatSessionProvider>
+              )
+            })}
+          </div>
+          {/* Floating add button */}
+          <AddPanelSlot
+            existingPanelIds={panelIds}
+            onAddSession={handleAddSession}
+            floating
+          />
+        </>
+      )}
     </div>
   )
 }
