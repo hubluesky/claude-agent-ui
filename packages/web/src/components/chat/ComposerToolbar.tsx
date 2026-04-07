@@ -22,11 +22,11 @@ interface ComposerToolbarProps {
 
 // modeColorClass is module-level so it's not recreated on every render
 const modeColorClass: Record<string, { text: string; hover: string; hoverBg: string }> = {
-  default: { text: 'text-[#a8a29e]', hover: 'hover:text-[#e5e2db]', hoverBg: 'hover:bg-[#3d3b3780]' },
-  acceptEdits: { text: 'text-[#60a5fa]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
-  auto: { text: 'text-[#d97706]', hover: 'hover:text-[#f59e0b]', hoverBg: 'hover:bg-[#d977061a]' },
+  default: { text: 'text-[var(--text-secondary)]', hover: 'hover:text-[var(--text-primary)]', hoverBg: 'hover:bg-[#3d3b3780]' },
+  acceptEdits: { text: 'text-[var(--info)]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
+  auto: { text: 'text-[var(--accent)]', hover: 'hover:text-[var(--warning)]', hoverBg: 'hover:bg-[#d977061a]' },
   plan: { text: 'text-[#a78bfa]', hover: 'hover:text-[#c4b5fd]', hoverBg: 'hover:bg-[#a78bfa1a]' },
-  bypassPermissions: { text: 'text-[#f87171]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
+  bypassPermissions: { text: 'text-[var(--error)]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
 }
 
 export function ComposerToolbar({
@@ -45,7 +45,7 @@ export function ComposerToolbar({
   // Status config (migrated from StatusBar)
   const statusConfig: Record<string, { color: string; text: string; pulse: boolean }> = {
     idle: { color: 'bg-[#a3e635]', text: 'idle', pulse: false },
-    running: { color: 'bg-[#d97706]', text: 'running', pulse: true },
+    running: { color: 'bg-[var(--accent)]', text: 'running', pulse: true },
     awaiting_approval: { color: 'bg-[#eab308]', text: 'awaiting approval', pulse: true },
     awaiting_user_input: { color: 'bg-[#eab308]', text: 'awaiting input', pulse: true },
   }
@@ -53,7 +53,7 @@ export function ComposerToolbar({
   const statusInfo = isLocked
     ? null // locked state has no status indicator
     : isDisconnected
-      ? { color: 'bg-[#7c7872]', text: connectionStatus, pulse: connectionStatus === 'connecting' || connectionStatus === 'reconnecting' }
+      ? { color: 'bg-[var(--text-muted)]', text: connectionStatus, pulse: connectionStatus === 'connecting' || connectionStatus === 'reconnecting' }
       : statusConfig[sessionStatus]
 
   const currentModeInfo = MODES.find((m) => m.mode === permissionMode) ?? MODES[0]
@@ -94,7 +94,7 @@ export function ComposerToolbar({
           <button
             onClick={() => !isLocked && setShowPlusMenu(!showPlusMenu)}
             disabled={isLocked}
-            className="w-7 h-7 flex items-center justify-center text-[#7c7872] hover:text-[#e5e2db] hover:bg-[#2b2a27] rounded transition-colors text-lg"
+            className="w-7 h-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors text-lg"
           >
             +
           </button>
@@ -110,7 +110,7 @@ export function ComposerToolbar({
         <button
           onClick={() => !isLocked && onSlashClick()}
           disabled={isLocked}
-          className="w-7 h-7 flex items-center justify-center text-[#7c7872] hover:text-[#e5e2db] hover:bg-[#2b2a27] rounded transition-colors text-sm font-mono font-bold"
+          className="w-7 h-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors text-sm font-mono font-bold"
         >
           /
         </button>
@@ -118,18 +118,18 @@ export function ComposerToolbar({
         <button
           onClick={() => !isLocked && onAtClick()}
           disabled={isLocked}
-          className="w-7 h-7 flex items-center justify-center text-[#7c7872] hover:text-[#e5e2db] hover:bg-[#2b2a27] rounded transition-colors text-sm"
+          className="w-7 h-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors text-sm"
         >
           @
         </button>
 
         {fileRefs.length > 0 && (
           <>
-            <div className="w-px h-4 bg-[#3d3b37] mx-1.5" />
+            <div className="w-px h-4 bg-[var(--border)] mx-1.5" />
             <div className="flex items-center gap-2">
               {fileRefs.map((ref) => (
-                <span key={ref} className="flex items-center gap-1 text-xs text-[#a8a29e]">
-                  <span className="text-[#7c7872]">📄</span>
+                <span key={ref} className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                  <span className="text-[var(--text-muted)]">📄</span>
                   {ref.split('/').pop()}
                 </span>
               ))}
@@ -145,12 +145,12 @@ export function ComposerToolbar({
             <div className="flex items-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full ${statusInfo.color} ${statusInfo.pulse ? 'animate-pulse' : ''}`} />
               <span className={`text-[11px] font-mono ${
-                sessionStatus === 'running' ? 'text-[#d97706]' : 'text-[#7c7872]'
+                sessionStatus === 'running' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'
               }`}>
                 {statusInfo.text}
               </span>
             </div>
-            <span className="text-[#3d3b37]">|</span>
+            <span className="text-[var(--border)]">|</span>
           </>
         )}
 
@@ -158,7 +158,7 @@ export function ComposerToolbar({
           <>
             <button
               onClick={onReleaseLock}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[#a8a29e] hover:text-[#e5e2db] hover:bg-[#3d3b3780] transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[#3d3b3780] transition-colors"
               title="Release lock"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -166,7 +166,7 @@ export function ComposerToolbar({
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
             </button>
-            <span className="text-[#3d3b37]">|</span>
+            <span className="text-[var(--border)]">|</span>
           </>
         )}
 
@@ -183,7 +183,7 @@ export function ComposerToolbar({
         {isRunning && !canSend ? (
           <button
             onClick={onAbort}
-            className="w-7 h-7 rounded-md bg-[#f87171] flex items-center justify-center shrink-0"
+            className="w-7 h-7 rounded-md bg-[var(--error)] flex items-center justify-center shrink-0"
           >
             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
               <rect x="6" y="6" width="12" height="12" rx="1" />
@@ -195,11 +195,11 @@ export function ComposerToolbar({
             disabled={!canSend || isLocked || isDisconnected}
             className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors ${
               canSend && !isLocked && !isDisconnected
-                ? 'bg-[#e5e2db] hover:bg-white'
-                : 'bg-[#242320] opacity-40'
+                ? 'bg-[var(--text-primary)] hover:bg-white'
+                : 'bg-[var(--bg-secondary)] opacity-40'
             }`}
           >
-            <svg className={`w-3.5 h-3.5 ${canSend && !isLocked ? 'text-[#1a1918]' : 'text-[#7c7872]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className={`w-3.5 h-3.5 ${canSend && !isLocked ? 'text-[var(--bg-input)]' : 'text-[var(--text-muted)]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
             </svg>
           </button>

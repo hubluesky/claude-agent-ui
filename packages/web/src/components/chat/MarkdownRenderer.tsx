@@ -14,18 +14,18 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
   }, [children])
 
   return (
-    <div className="relative bg-[#1e1d1a] border border-[#3d3b37] rounded-md overflow-hidden my-2">
-      <div className="flex items-center justify-between px-3 py-1 bg-[#242320] border-b border-[#3d3b37]">
-        <span className="text-[10px] font-mono text-[#7c7872]">{language ?? 'text'}</span>
+    <div className="relative bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-md overflow-hidden my-2">
+      <div className="flex items-center justify-between px-3 py-1 bg-[var(--bg-secondary)] border-b border-[var(--border)]">
+        <span className="text-[10px] font-mono text-[var(--text-muted)]">{language ?? 'text'}</span>
         <button
           onClick={handleCopy}
-          className="text-[10px] text-[#7c7872] hover:text-[#e5e2db] transition-colors cursor-pointer"
+          className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
         >
           {copied ? '✓ Copied' : 'Copy'}
         </button>
       </div>
       <pre className="px-3 py-2.5 overflow-x-auto">
-        <code className={`text-xs font-mono text-[#a8a29e] ${className ?? ''}`} {...props}>
+        <code className={`text-xs font-mono text-[var(--text-secondary)] ${className ?? ''}`} {...props}>
           {children}
         </code>
       </pre>
@@ -48,7 +48,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
           const isInline = !match && !className
           if (isInline) {
             return (
-              <code className="px-1.5 py-0.5 bg-[#1e1d1a] border border-[#3d3b37] rounded text-[#d97706] text-[13px] font-mono" {...props}>
+              <code className="px-1.5 py-0.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded text-[var(--accent)] text-[13px] font-mono" {...props}>
                 {children}
               </code>
             )
@@ -62,7 +62,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
         // Links
         a({ href, children }) {
           return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#0ea5e9] hover:underline">
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--cyan)] hover:underline">
               {children}
             </a>
           )
@@ -79,22 +79,22 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
           return <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>
         },
         li({ children }) {
-          return <li className="text-sm text-[#e5e2db]">{children}</li>
+          return <li className="text-sm text-[var(--text-primary)]">{children}</li>
         },
         // Headers
         h1({ children }) {
-          return <h1 className="text-lg font-bold text-[#e5e2db] mb-2 mt-3">{children}</h1>
+          return <h1 className="text-lg font-bold text-[var(--text-primary)] mb-2 mt-3">{children}</h1>
         },
         h2({ children }) {
-          return <h2 className="text-base font-bold text-[#e5e2db] mb-2 mt-3">{children}</h2>
+          return <h2 className="text-base font-bold text-[var(--text-primary)] mb-2 mt-3">{children}</h2>
         },
         h3({ children }) {
-          return <h3 className="text-sm font-bold text-[#e5e2db] mb-1.5 mt-2">{children}</h3>
+          return <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1.5 mt-2">{children}</h3>
         },
         // Blockquote
         blockquote({ children }) {
           return (
-            <blockquote className="border-l-2 border-[#d97706] pl-3 my-2 text-[#a8a29e]">
+            <blockquote className="border-l-2 border-[var(--accent)] pl-3 my-2 text-[var(--text-secondary)]">
               {children}
             </blockquote>
           )
@@ -103,26 +103,26 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
         table({ children }) {
           return (
             <div className="overflow-x-auto my-2">
-              <table className="text-xs border-collapse border border-[#3d3b37]">{children}</table>
+              <table className="text-xs border-collapse border border-[var(--border)]">{children}</table>
             </div>
           )
         },
         th({ children }) {
-          return <th className="border border-[#3d3b37] bg-[#242320] px-3 py-1.5 text-left text-[#a8a29e] font-medium">{children}</th>
+          return <th className="border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-1.5 text-left text-[var(--text-secondary)] font-medium">{children}</th>
         },
         td({ children }) {
-          return <td className="border border-[#3d3b37] px-3 py-1.5 text-[#e5e2db]">{children}</td>
+          return <td className="border border-[var(--border)] px-3 py-1.5 text-[var(--text-primary)]">{children}</td>
         },
         // Strong / emphasis
         strong({ children }) {
-          return <strong className="font-semibold text-[#e5e2db]">{children}</strong>
+          return <strong className="font-semibold text-[var(--text-primary)]">{children}</strong>
         },
         em({ children }) {
-          return <em className="italic text-[#a8a29e]">{children}</em>
+          return <em className="italic text-[var(--text-secondary)]">{children}</em>
         },
         // Horizontal rule
         hr() {
-          return <hr className="border-[#3d3b37] my-3" />
+          return <hr className="border-[var(--border)] my-3" />
         },
       }}
     >

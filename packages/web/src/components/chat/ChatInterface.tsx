@@ -52,12 +52,13 @@ export function ChatInterface() {
     } as any)
 
     const sessionId = isNewSession ? null : currentSessionId
-    const { thinkingMode, effort, maxBudgetUsd, maxTurns } = useSettingsStore.getState()
+    const { thinkingMode, effort, maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
     sendMessage(prompt, sessionId, {
       cwd: currentProjectCwd ?? undefined,
       images,
       thinkingMode,
       effort,
+      permissionMode,
       ...(maxBudgetUsd ? { maxBudgetUsd } : {}),
       ...(maxTurns ? { maxTurns } : {}),
     })

@@ -92,7 +92,7 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
   return (
     <div
       ref={panelRef}
-      className="absolute top-10 right-2 w-80 bg-[#1c1b18] border border-[#3d3b37] rounded-b-lg shadow-2xl z-50"
+      className="absolute top-10 right-2 w-80 bg-[var(--bg-primary)] border border-[var(--border)] rounded-b-lg shadow-2xl z-50"
     >
       <div className="p-2">
         <input
@@ -100,7 +100,7 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="搜索会话..."
           autoFocus
-          className="w-full bg-[#2b2a27] border border-[#3d3b37] rounded px-2.5 py-1.5 text-xs text-[#e5e2db] placeholder-[#7c7872] outline-none focus:border-[#d97706]"
+          className="w-full bg-[var(--bg-hover)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
         />
       </div>
 
@@ -110,7 +110,7 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
         className="max-h-72 overflow-y-auto px-2 pb-2 space-y-0.5"
       >
         {filtered.length === 0 && !loading ? (
-          <p className="text-center text-[#7c7872] text-xs py-4">
+          <p className="text-center text-[var(--text-muted)] text-xs py-4">
             {search ? '没有匹配的会话' : '暂无会话'}
           </p>
         ) : (
@@ -121,18 +121,18 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
                 onClick={() => onSelect(s.sessionId)}
                 className={`w-full text-left px-2.5 py-2 rounded-md transition-colors ${
                   currentSessionId === s.sessionId
-                    ? 'bg-[#d977061a] border-l-2 border-[#d97706]'
-                    : 'hover:bg-[#2b2a27]'
+                    ? 'bg-[#d977061a] border-l-2 border-[var(--accent)]'
+                    : 'hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#e5e2db] truncate flex-1">{s.title || '新会话'}</span>
-                  <span className="text-[10px] text-[#7c7872] shrink-0 ml-2">{relativeTime(s.updatedAt)}</span>
+                  <span className="text-xs text-[var(--text-primary)] truncate flex-1">{s.title || '新会话'}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] shrink-0 ml-2">{relativeTime(s.updatedAt)}</span>
                 </div>
               </button>
             ))}
             {loading && (
-              <p className="text-center text-[#7c7872] text-xs py-2">加载中...</p>
+              <p className="text-center text-[var(--text-muted)] text-xs py-2">加载中...</p>
             )}
           </>
         )}

@@ -107,8 +107,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     return (
       <div className="flex items-start">
         <div className="flex-1 min-w-0 flex gap-3 items-start">
-          <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
+          <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
           </div>
           <div className="flex-1 min-w-0 space-y-2">
             {contentBlocks.map((block: any, i: number) => {
@@ -118,12 +118,12 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                 if (textClass === 'compact-summary') {
                   return (
                     <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-                      <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
-                      <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
+                      <summary className="text-xs text-[var(--cyan)] cursor-pointer">Context summary (compacted)</summary>
+                      <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
                     </details>
                   )
                 }
-                return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
+                return <div key={i} className="text-sm text-[var(--text-primary)] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
               }
               if (block.type === 'thinking' || block.type === 'redacted_thinking') {
                 const thinkingText = block.thinking || block.text || ''
@@ -136,8 +136,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                 }
                 return (
                   <details key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
-                    <summary className="text-xs text-[#8b5cf6] cursor-pointer">Thinking...</summary>
-                    <p className="text-xs text-[#a8a29e] mt-1 whitespace-pre-wrap">{thinkingText}</p>
+                    <summary className="text-xs text-[var(--purple)] cursor-pointer">Thinking...</summary>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{thinkingText}</p>
                   </details>
                 )
               }
@@ -158,11 +158,11 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     if (subtype.startsWith('error')) {
       return (
         <div className="flex items-start gap-2.5 bg-[#f871710a] border border-[#f8717126] rounded-md px-4 py-3">
-          <div className="w-5 h-5 rounded-full bg-[#f87171] flex items-center justify-center shrink-0">
-            <span className="text-[11px] font-bold text-[#1c1b18]">!</span>
+          <div className="w-5 h-5 rounded-full bg-[var(--error)] flex items-center justify-center shrink-0">
+            <span className="text-[11px] font-bold text-[var(--bg-primary)]">!</span>
           </div>
           <div>
-            <p className="text-xs font-medium text-[#f87171]">
+            <p className="text-xs font-medium text-[var(--error)]">
               {subtype === 'error_max_turns' ? '已达最大轮次'
                 : subtype === 'error_max_budget_usd' ? '已达预算上限'
                 : '执行出错'}
@@ -184,18 +184,18 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     if (blockType === 'text') {
       return (
         <div className="flex gap-3 items-start">
-          <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
+          <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
           </div>
-          <p className="text-sm text-[#e5e2db] whitespace-pre-wrap leading-relaxed flex-1">{content}<span className="inline-block w-2 h-4 bg-[#d97706] rounded-sm ml-0.5 animate-pulse" /></p>
+          <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed flex-1">{content}<span className="inline-block w-2 h-4 bg-[var(--accent)] rounded-sm ml-0.5 animate-pulse" /></p>
         </div>
       )
     }
     if (blockType === 'thinking') {
       return (
         <details open className="bg-[#8b5cf60f] rounded-md px-3 py-2 ml-10">
-          <summary className="text-xs text-[#8b5cf6] cursor-pointer">Thinking...</summary>
-          <p className="text-xs text-[#a8a29e] mt-1 whitespace-pre-wrap">{content}</p>
+          <summary className="text-xs text-[var(--purple)] cursor-pointer">Thinking...</summary>
+          <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{content}</p>
         </details>
       )
     }
@@ -207,7 +207,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const sub = (message as any).subtype
     if (sub === 'api_retry') {
       return (
-        <div className="flex items-center gap-2 text-xs text-[#7c7872] bg-[#eab3080a] border border-[#eab30826] rounded-md px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[#eab3080a] border border-[#eab30826] rounded-md px-3 py-2">
           <svg className="w-3.5 h-3.5 text-[#eab308] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
           </svg>
@@ -217,8 +217,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     }
     if (sub === 'status' && (message as any).status === 'compacting') {
       return (
-        <div className="flex items-center gap-2 text-xs text-[#7c7872] bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-          <svg className="w-3.5 h-3.5 text-[#0ea5e9] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+          <svg className="w-3.5 h-3.5 text-[var(--cyan)] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
           </svg>
           Compacting context...
@@ -234,8 +234,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const content = (message as any).content ?? (message as any).message ?? ''
       if (!content) return null
       return (
-        <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10 pl-5 border-l-2 border-[#a855f726]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#a855f7]" />
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10 pl-5 border-l-2 border-[#a855f726]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--purple)]" />
           <span className="truncate">{typeof content === 'string' ? content.slice(0, 120) : JSON.stringify(content).slice(0, 120)}</span>
         </div>
       )
@@ -245,10 +245,10 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const isError = status === 'error' || status === 'failed'
       return (
         <div className={`flex items-center gap-2 text-xs ml-10 px-3 py-2 rounded-md ${
-          isError ? 'text-[#f87171] bg-[#f871710a] border border-[#f8717126]'
+          isError ? 'text-[var(--error)] bg-[#f871710a] border border-[#f8717126]'
             : 'text-[#a3e635] bg-[#a3e6350a] border border-[#a3e63526]'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isError ? 'bg-[#f87171]' : 'bg-[#a3e635]'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${isError ? 'bg-[var(--error)]' : 'bg-[#a3e635]'}`} />
           {(message as any).agent_name ?? 'subagent'} {status}
           {(message as any).duration_ms ? ` — ${((message as any).duration_ms / 1000).toFixed(1)}s` : ''}
           {(message as any).tool_count ? `, ${(message as any).tool_count} tools` : ''}
@@ -262,8 +262,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const output = (message as any).output ?? (message as any).content ?? ''
       if (!output) return null
       return (
-        <div className="border border-[#3d3b37] rounded-md overflow-hidden ml-10">
-          <div className="px-3 py-2 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all">
+        <div className="border border-[var(--border)] rounded-md overflow-hidden ml-10">
+          <div className="px-3 py-2 text-xs font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-all">
             {typeof output === 'string' ? output : JSON.stringify(output)}
           </div>
         </div>
@@ -277,11 +277,11 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const toolName = (message as any).tool_name ?? (message as any).name ?? 'tool'
     const summary = (message as any).summary ?? (message as any).result_summary ?? ''
     return (
-      <div className="border border-[#3d3b37] rounded-md overflow-hidden ml-10">
-        <div className="flex items-center gap-2 px-3 py-2 bg-[#242320]">
+      <div className="border border-[var(--border)] rounded-md overflow-hidden ml-10">
+        <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)]">
           <div className="w-0.5 h-4 rounded-full bg-[#6b7280]" />
           <span className="text-xs font-mono font-semibold text-[#6b7280]">{toolName}</span>
-          {summary && <span className="text-xs font-mono text-[#7c7872] truncate flex-1">{typeof summary === 'string' ? summary.slice(0, 200) : JSON.stringify(summary).slice(0, 200)}</span>}
+          {summary && <span className="text-xs font-mono text-[var(--text-muted)] truncate flex-1">{typeof summary === 'string' ? summary.slice(0, 200) : JSON.stringify(summary).slice(0, 200)}</span>}
         </div>
       </div>
     )
@@ -295,7 +295,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const elapsed = typeof rawElapsed === 'number' ? rawElapsed : undefined
     const elapsedStr = elapsed != null ? `${elapsed.toFixed(1)}s` : null
     return (
-      <div className="flex items-center gap-2 text-xs text-[#7c7872] ml-10">
+      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10">
         <svg className="w-3 h-3 text-[#059669] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
         </svg>
@@ -313,12 +313,12 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const wrapCls = isWarning
       ? 'bg-[#f59e0b0a] border border-[#f59e0b26]'
       : 'bg-[#f871710a] border border-[#f8717126]'
-    const dotCls = isWarning ? 'bg-[#f59e0b]' : 'bg-[#f87171]'
-    const textCls = isWarning ? 'text-[#f59e0b]' : 'text-[#f87171]'
+    const dotCls = isWarning ? 'bg-[var(--warning)]' : 'bg-[var(--error)]'
+    const textCls = isWarning ? 'text-[var(--warning)]' : 'text-[var(--error)]'
     return (
       <div className={`flex items-center gap-2 rounded-md px-4 py-3 ${wrapCls}`}>
         <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${dotCls}`}>
-          <span className="text-[11px] font-bold text-[#1c1b18]">{isWarning ? '⚠' : '!'}</span>
+          <span className="text-[11px] font-bold text-[var(--bg-primary)]">{isWarning ? '⚠' : '!'}</span>
         </div>
         <p className={`text-xs ${textCls}`}>
           {isWarning
@@ -394,22 +394,22 @@ function MessageActions({ messageId }: { messageId: string }) {
       <div ref={ref} className="relative shrink-0 ml-1">
         <button
           onClick={() => setOpen(!open)}
-          className="px-1 py-0.5 text-[11px] text-[#5c5952] hover:text-[#a8a29e] cursor-pointer transition-colors"
+          className="px-1 py-0.5 text-[11px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer transition-colors"
           title="操作"
         >
           ⋯
         </button>
         {open && (
-          <div className="absolute top-full right-0 mt-1 bg-[#242320] border border-[#3d3b37] rounded-md shadow-lg z-10 py-1 min-w-[100px]">
+          <div className="absolute top-full right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md shadow-lg z-10 py-1 min-w-[100px]">
             <button
               onClick={handleFork}
-              className="w-full text-left px-3 py-1.5 text-[10px] text-[#a8a29e] hover:text-[#d97706] hover:bg-[#2b2a27] cursor-pointer transition-colors"
+              className="w-full text-left px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
             >
               Fork
             </button>
             <button
               onClick={handleRewindDryRun}
-              className="w-full text-left px-3 py-1.5 text-[10px] text-[#a8a29e] hover:text-[#60a5fa] hover:bg-[#2b2a27] cursor-pointer transition-colors"
+              className="w-full text-left px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:text-[var(--info)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
             >
               Rewind
             </button>
@@ -419,33 +419,33 @@ function MessageActions({ messageId }: { messageId: string }) {
       {showRewindPreview && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30" onClick={handleRewindClose} />
-          <div className="absolute right-0 top-full mt-1 w-72 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 p-3">
-            <p className="text-xs text-[#a8a29e] mb-2 font-medium">Rewind Preview</p>
+          <div className="absolute right-0 top-full mt-1 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50 p-3">
+            <p className="text-xs text-[var(--text-secondary)] mb-2 font-medium">Rewind Preview</p>
             {!preview ? (
-              <p className="text-[10px] text-[#7c7872]">Loading...</p>
+              <p className="text-[10px] text-[var(--text-muted)]">Loading...</p>
             ) : !preview.filesChanged?.length ? (
-              <p className="text-[10px] text-[#7c7872]">No files to rewind</p>
+              <p className="text-[10px] text-[var(--text-muted)]">No files to rewind</p>
             ) : (
               <>
                 <div className="space-y-1 max-h-40 overflow-y-auto mb-2">
                   {preview.filesChanged.map((f: string) => (
-                    <div key={f} className="text-[10px] font-mono text-[#a8a29e] truncate">{f}</div>
+                    <div key={f} className="text-[10px] font-mono text-[var(--text-secondary)] truncate">{f}</div>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-[#7c7872] mb-2">
-                  <span className="text-[#3fb950]">+{preview.insertions ?? 0}</span>
-                  <span className="text-[#f87171]">-{preview.deletions ?? 0}</span>
+                <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] mb-2">
+                  <span className="text-[var(--success)]">+{preview.insertions ?? 0}</span>
+                  <span className="text-[var(--error)]">-{preview.deletions ?? 0}</span>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleRewindConfirm}
-                    className="flex-1 px-2 py-1.5 text-xs text-[#e5e2db] bg-[#60a5fa] rounded hover:bg-[#3b82f6] cursor-pointer"
+                    className="flex-1 px-2 py-1.5 text-xs text-[var(--text-primary)] bg-[var(--info)] rounded hover:bg-[#3b82f6] cursor-pointer"
                   >
                     Confirm Rewind
                   </button>
                   <button
                     onClick={handleRewindClose}
-                    className="px-2 py-1.5 text-xs text-[#7c7872] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer"
+                    className="px-2 py-1.5 text-xs text-[var(--text-muted)] border border-[var(--border)] rounded hover:bg-[var(--bg-tertiary)] cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -476,10 +476,10 @@ function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string
   return (
     <div className="ml-10 border border-[#a855f726] rounded-md overflow-hidden">
       <div
-        className="flex items-center gap-2 text-xs text-[#a855f7] bg-[#a855f70a] px-3 py-2 cursor-pointer hover:bg-[#a855f712]"
+        className="flex items-center gap-2 text-xs text-[var(--purple)] bg-[#a855f70a] px-3 py-2 cursor-pointer hover:bg-[#a855f712]"
         onClick={handleExpand}
       >
-        <svg className="w-3.5 h-3.5 text-[#a855f7]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-3.5 h-3.5 text-[var(--purple)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197" />
         </svg>
         <span className="flex-1">Agent: {agentName}</span>
@@ -490,11 +490,11 @@ function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string
         </svg>
       </div>
       {expanded && (
-        <div className="border-t border-[#a855f726] bg-[#1a1918] max-h-60 overflow-y-auto">
+        <div className="border-t border-[#a855f726] bg-[var(--bg-input)] max-h-60 overflow-y-auto">
           {messages === null ? (
-            <div className="px-3 py-2 text-[10px] text-[#7c7872]">Loading messages...</div>
+            <div className="px-3 py-2 text-[10px] text-[var(--text-muted)]">Loading messages...</div>
           ) : messages.length === 0 ? (
-            <div className="px-3 py-2 text-[10px] text-[#7c7872]">No messages yet</div>
+            <div className="px-3 py-2 text-[10px] text-[var(--text-muted)]">No messages yet</div>
           ) : (
             <div className="py-1 space-y-1 px-2">
               {messages.map((m: any, i: number) => (
@@ -523,12 +523,12 @@ function SubagentMessageRow({ msg }: { msg: any }) {
   if (!text) return null
 
   const preview = text.length > 200 ? text.slice(0, 200) + '...' : text
-  const roleColor = role === 'assistant' ? '#d97706' : role === 'user' ? '#60a5fa' : '#7c7872'
+  const roleColor = role === 'assistant' ? 'var(--accent)' : role === 'user' ? 'var(--info)' : 'var(--text-muted)'
 
   return (
     <div className="text-[10px] leading-relaxed">
       <span className="font-medium" style={{ color: roleColor }}>{role}: </span>
-      <span className="text-[#a8a29e]">{preview}</span>
+      <span className="text-[var(--text-secondary)]">{preview}</span>
     </div>
   )
 }
@@ -546,7 +546,7 @@ function StopTaskButton({ taskId }: { taskId: string }) {
   return (
     <button
       onClick={handleStop}
-      className="px-1.5 py-0.5 text-[10px] text-[#f87171] bg-[#f871710a] border border-[#f8717126] rounded hover:bg-[#f871711a] transition-colors cursor-pointer"
+      className="px-1.5 py-0.5 text-[10px] text-[var(--error)] bg-[#f871710a] border border-[#f8717126] rounded hover:bg-[#f871711a] transition-colors cursor-pointer"
       title="Stop this task"
     >
       Stop
@@ -565,10 +565,10 @@ function PromptSuggestionCard({ suggestion }: { suggestion: string }) {
     <div className="ml-10 mt-1">
       <button
         onClick={handleClick}
-        className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-[#3d3b37] bg-[#1e1d1a] hover:border-[#d97706] hover:bg-[#d977060a] transition-colors text-left cursor-pointer"
+        className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] hover:border-[var(--accent)] hover:bg-[#d977060a] transition-colors text-left cursor-pointer"
       >
-        <span className="text-[#d97706] text-xs shrink-0">&#10148;</span>
-        <span className="text-xs text-[#a8a29e] group-hover:text-[#e5e2db] transition-colors">{suggestion}</span>
+        <span className="text-[var(--accent)] text-xs shrink-0">&#10148;</span>
+        <span className="text-xs text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{suggestion}</span>
       </button>
     </div>
   )
@@ -589,7 +589,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
               const src = `data:${block.source.media_type};base64,${block.source.data}`
               return (
                 <div key={i} className="flex justify-end">
-                  <img src={src} alt="attached" loading="lazy" className="max-w-[300px] max-h-[200px] rounded-lg border border-[#3d3b37]" />
+                  <img src={src} alt="attached" loading="lazy" className="max-w-[300px] max-h-[200px] rounded-lg border border-[var(--border)]" />
                 </div>
               )
             }
@@ -599,8 +599,8 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
               if (textClass === 'compact-summary') {
                 return (
                   <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-                    <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
-                    <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{block.text}</div>
+                    <summary className="text-xs text-[var(--cyan)] cursor-pointer">Context summary (compacted)</summary>
+                    <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed whitespace-pre-wrap">{block.text}</div>
                   </details>
                 )
               }
@@ -608,18 +608,18 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
               if (cmdText) {
                 return (
                   <div key={i} className="flex justify-end">
-                    <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
-                      <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
-                      <span className="text-sm text-[#e5e2db]">{cmdText}</span>
+                    <div className="bg-[var(--accent-bg)] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
+                      <span className="text-xs font-mono text-[var(--accent)] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
+                      <span className="text-sm text-[var(--text-primary)]">{cmdText}</span>
                     </div>
                   </div>
                 )
               }
               return (
                 <div key={i} className="flex justify-end">
-                  <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-                    <HighlightText text={block.text} className="text-sm text-[#e5e2db] whitespace-pre-wrap" />
-                    {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
+                  <div className={`bg-[var(--accent-bg)] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
+                    <HighlightText text={block.text} className="text-sm text-[var(--text-primary)] whitespace-pre-wrap" />
+                    {isOptimistic && <span className="text-[10px] text-[var(--text-muted)] float-right mt-0.5 tracking-widest">···</span>}
                   </div>
                 </div>
               )
@@ -636,8 +636,8 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
     if (rawTextClass === 'compact-summary') {
       return (
         <details className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-          <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
-          <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed whitespace-pre-wrap">{rawText}</div>
+          <summary className="text-xs text-[var(--cyan)] cursor-pointer">Context summary (compacted)</summary>
+          <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed whitespace-pre-wrap">{rawText}</div>
         </details>
       )
     }
@@ -645,18 +645,18 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
     if (cmdText) {
       return (
         <div className="flex justify-end">
-          <div className="bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
-            <span className="text-xs font-mono text-[#d97706] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
-            <span className="text-sm text-[#e5e2db]">{cmdText}</span>
+          <div className="bg-[var(--accent-bg)] rounded-xl rounded-br-sm px-4 py-2.5 max-w-[70%] flex items-center gap-2">
+            <span className="text-xs font-mono text-[var(--accent)] bg-[#d9770620] px-1.5 py-0.5 rounded">/</span>
+            <span className="text-sm text-[var(--text-primary)]">{cmdText}</span>
           </div>
         </div>
       )
     }
     return (
       <div className="flex justify-end">
-        <div className={`bg-[#3d2e14] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
-          <HighlightText text={rawText} className="text-sm text-[#e5e2db] whitespace-pre-wrap" />
-          {isOptimistic && <span className="text-[10px] text-[#7c7872] float-right mt-0.5 tracking-widest">···</span>}
+        <div className={`bg-[var(--accent-bg)] rounded-xl rounded-br-sm px-4 py-3 max-w-[70%]${isOptimistic ? ' opacity-60' : ''}`}>
+          <HighlightText text={rawText} className="text-sm text-[var(--text-primary)] whitespace-pre-wrap" />
+          {isOptimistic && <span className="text-[10px] text-[var(--text-muted)] float-right mt-0.5 tracking-widest">···</span>}
         </div>
       </div>
     )
@@ -686,23 +686,23 @@ function ToolUseBlock({ block }: { block: any }) {
   const detail = getToolDetail(name, input)
 
   return (
-    <div className="border border-[#3d3b37] rounded-md overflow-hidden">
+    <div className="border border-[var(--border)] rounded-md overflow-hidden">
       <div
-        className="flex items-center gap-2 px-3 py-2 bg-[#242320] cursor-pointer hover:bg-[#2b2a2780]"
+        className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)] cursor-pointer hover:bg-[#2b2a2780]"
         onClick={() => detail && setExpanded(!expanded)}
       >
         <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: color }} />
         <ToolIcon category={category} />
         <span className="text-xs font-mono font-semibold" style={{ color }}>{name}</span>
-        <span className="text-xs font-mono text-[#7c7872] truncate flex-1">{summary}</span>
+        <span className="text-xs font-mono text-[var(--text-muted)] truncate flex-1">{summary}</span>
         {detail && (
-          <svg className={`w-3 h-3 text-[#7c7872] transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className={`w-3 h-3 text-[var(--text-muted)] transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         )}
       </div>
       {expanded && detail && (
-        <div className="border-t border-[#3d3b37] bg-[#1e1d1a] px-3 py-2.5 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all">
+        <div className="border-t border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2.5 text-xs font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-all">
           {detail}
         </div>
       )}
@@ -731,24 +731,24 @@ function ToolResultBlock({ block }: { block: any }) {
     <div className={`border rounded-md overflow-hidden ml-10 ${
       isDenial ? 'border-[#d9770626] bg-[#d977060a]'
         : isError ? 'border-[#f8717126] bg-[#f871710a]'
-        : 'border-[#3d3b37] bg-[#242320]'
+        : 'border-[var(--border)] bg-[var(--bg-secondary)]'
     }`}>
       <div
         className={`flex items-center gap-2 px-3 py-1.5 ${isLong ? 'cursor-pointer hover:bg-[#2b2a2780]' : ''}`}
         onClick={() => isLong && setExpanded(!expanded)}
       >
-        <div className={`w-0.5 h-3 rounded-full ${isDenial ? 'bg-[#d97706]' : isError ? 'bg-[#f87171]' : 'bg-[#6b7280]'}`} />
-        <span className={`text-[10px] font-mono ${isDenial ? 'text-[#d97706]' : isError ? 'text-[#f87171]' : 'text-[#7c7872]'}`}>
+        <div className={`w-0.5 h-3 rounded-full ${isDenial ? 'bg-[var(--accent)]' : isError ? 'bg-[var(--error)]' : 'bg-[#6b7280]'}`} />
+        <span className={`text-[10px] font-mono ${isDenial ? 'text-[var(--accent)]' : isError ? 'text-[var(--error)]' : 'text-[var(--text-muted)]'}`}>
           {isDenial ? '拒绝' : isError ? '错误' : '结果'}
         </span>
         <span className="flex-1" />
         {isLong && (
-          <svg className={`w-3 h-3 text-[#7c7872] transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className={`w-3 h-3 text-[var(--text-muted)] transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         )}
       </div>
-      <div className="px-3 py-2 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all">
+      <div className="px-3 py-2 text-xs font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-all">
         {expanded || !isLong ? text : preview}
       </div>
     </div>
@@ -763,24 +763,24 @@ function InlineDiff({ filePath, oldStr, newStr }: { filePath?: string; oldStr: s
 
   return (
     <div className="font-mono text-[11px] leading-[1.6]">
-      {filePath && <div className="text-[10px] text-[#7c7872] mb-1 font-sans">{filePath}</div>}
-      <div className="rounded overflow-hidden border border-[#3d3b37]">
+      {filePath && <div className="text-[10px] text-[var(--text-muted)] mb-1 font-sans">{filePath}</div>}
+      <div className="rounded overflow-hidden border border-[var(--border)]">
         {oldLines.map((line, i) => (
           <div key={`d${i}`} className="flex bg-[#f871710a]">
-            <span className="w-8 text-right pr-2 text-[#f8717166] select-none shrink-0 border-r border-[#3d3b37]">{i + 1}</span>
+            <span className="w-8 text-right pr-2 text-[#f8717166] select-none shrink-0 border-r border-[var(--border)]">{i + 1}</span>
             <span className="px-2 text-[#f87171cc] whitespace-pre-wrap break-all">- {line}</span>
           </div>
         ))}
         {newLines.map((line, i) => (
           <div key={`a${i}`} className="flex bg-[#3fb95010]">
-            <span className="w-8 text-right pr-2 text-[#3fb95066] select-none shrink-0 border-r border-[#3d3b37]">{i + 1}</span>
+            <span className="w-8 text-right pr-2 text-[#3fb95066] select-none shrink-0 border-r border-[var(--border)]">{i + 1}</span>
             <span className="px-2 text-[#3fb950cc] whitespace-pre-wrap break-all">+ {line}</span>
           </div>
         ))}
       </div>
-      <div className="flex gap-3 mt-1 text-[10px] text-[#7c7872] font-sans">
-        <span className="text-[#f87171]">-{oldLines.length}</span>
-        <span className="text-[#3fb950]">+{newLines.length}</span>
+      <div className="flex gap-3 mt-1 text-[10px] text-[var(--text-muted)] font-sans">
+        <span className="text-[var(--error)]">-{oldLines.length}</span>
+        <span className="text-[var(--success)]">+{newLines.length}</span>
       </div>
     </div>
   )
@@ -795,7 +795,7 @@ function getToolDetail(toolName: string, input: any): React.ReactNode | null {
       return input.command ? (
         <div>
           <div className="text-[#059669] mb-1">$ {input.command}</div>
-          {input.description && <div className="text-[#7c7872] text-[10px] mb-1">{input.description}</div>}
+          {input.description && <div className="text-[var(--text-muted)] text-[10px] mb-1">{input.description}</div>}
         </div>
       ) : null
     case 'Edit':

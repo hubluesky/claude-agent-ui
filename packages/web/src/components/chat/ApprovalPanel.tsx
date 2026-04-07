@@ -44,10 +44,10 @@ export interface ApprovalPanelConfig {
 }
 
 const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: string; numBorder: string; numText: string; activeBg: string; activeBorder: string }> = {
-  green:  { border: 'border-[#22c55e30]', hoverBg: 'hover:bg-[#22c55e0f]', numBorder: 'border-[#22c55e50]', numText: 'text-[#22c55e]', activeBg: 'bg-[#22c55e15]', activeBorder: 'border-[#22c55e60]' },
-  amber:  { border: 'border-[#d9770630]', hoverBg: 'hover:bg-[#d977060f]', numBorder: 'border-[#d9770650]', numText: 'text-[#d97706]',  activeBg: 'bg-[#d9770615]', activeBorder: 'border-[#d9770660]' },
-  purple: { border: 'border-[#a855f730]', hoverBg: 'hover:bg-[#a855f70f]', numBorder: 'border-[#a855f750]', numText: 'text-[#a855f7]',  activeBg: 'bg-[#a855f715]', activeBorder: 'border-[#a855f760]' },
-  gray:   { border: 'border-[#3d3b37]',   hoverBg: 'hover:bg-[#3d3b3780]', numBorder: 'border-[#3d3b37]',   numText: 'text-[#7c7872]',  activeBg: 'bg-[#3d3b3780]', activeBorder: 'border-[#5c5952]' },
+  green:  { border: 'border-[#22c55e30]', hoverBg: 'hover:bg-[#22c55e0f]', numBorder: 'border-[#22c55e50]', numText: 'text-[var(--success)]', activeBg: 'bg-[#22c55e15]', activeBorder: 'border-[#22c55e60]' },
+  amber:  { border: 'border-[#d9770630]', hoverBg: 'hover:bg-[#d977060f]', numBorder: 'border-[#d9770650]', numText: 'text-[var(--accent)]',  activeBg: 'bg-[#d9770615]', activeBorder: 'border-[#d9770660]' },
+  purple: { border: 'border-[#a855f730]', hoverBg: 'hover:bg-[#a855f70f]', numBorder: 'border-[#a855f750]', numText: 'text-[var(--purple)]',  activeBg: 'bg-[#a855f715]', activeBorder: 'border-[#a855f760]' },
+  gray:   { border: 'border-[var(--border)]',   hoverBg: 'hover:bg-[#3d3b3780]', numBorder: 'border-[var(--border)]',   numText: 'text-[var(--text-muted)]',  activeBg: 'bg-[#3d3b3780]', activeBorder: 'border-[var(--text-dim)]' },
   red:    { border: 'border-[#ef444430]',  hoverBg: 'hover:bg-[#ef44440f]', numBorder: 'border-[#ef444450]', numText: 'text-[#ef4444]',  activeBg: 'bg-[#ef444415]', activeBorder: 'border-[#ef444460]' },
 }
 
@@ -149,26 +149,26 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
 
   return (
     <div className="px-4 py-3 shrink-0">
-      <div className={`rounded-xl border ${canInteract ? 'bg-[#1a1918] border-[#d9770626]' : 'bg-[#1a1918] border-[#3d3b37]'}`}>
+      <div className={`rounded-xl border ${canInteract ? 'bg-[var(--bg-input)] border-[#d9770626]' : 'bg-[var(--bg-input)] border-[var(--border)]'}`}>
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
           {canInteract ? (
             <>
-              <svg className="w-4 h-4 text-[#d97706] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-[var(--accent)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
               </svg>
-              <span className="text-[13px] font-semibold text-[#d97706] flex-1">{config.title}</span>
+              <span className="text-[13px] font-semibold text-[var(--accent)] flex-1">{config.title}</span>
             </>
           ) : (
             <>
-              <svg className="w-4 h-4 text-[#7c7872] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
-              <span className="text-[13px] text-[#7c7872] flex-1">等待操作者响应...</span>
+              <span className="text-[13px] text-[var(--text-muted)] flex-1">等待操作者响应...</span>
             </>
           )}
           {config.badge && (
-            <span className="text-[10px] text-[#7c7872] bg-[#2b2a27] border border-[#3d3b37] rounded px-1.5 py-0.5 shrink-0">
+            <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-hover)] border border-[var(--border)] rounded px-1.5 py-0.5 shrink-0">
               {config.badge}
             </span>
           )}
@@ -197,7 +197,7 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left transition-colors border ${borderCls} ${bgCls} ${canInteract ? cls.hoverBg : 'opacity-60 cursor-default'}`}
                 >
                   {config.multiSelect ? (
-                    <div className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${isSelected ? `${cls.activeBg} ${cls.activeBorder}` : 'border-[#3d3b37]'}`}>
+                    <div className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${isSelected ? `${cls.activeBg} ${cls.activeBorder}` : 'border-[var(--border)]'}`}>
                       {isSelected && (
                         <svg className={`w-2.5 h-2.5 ${cls.numText}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -206,24 +206,24 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
                     </div>
                   ) : (
                     <div className={`w-5 h-5 rounded-full border shrink-0 flex items-center justify-center ${cls.numBorder}`}>
-                      <span className={`text-[10px] font-semibold ${canInteract ? cls.numText : 'text-[#7c7872]'}`}>{idx + 1}</span>
+                      <span className={`text-[10px] font-semibold ${canInteract ? cls.numText : 'text-[var(--text-muted)]'}`}>{idx + 1}</span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <span className={`text-[13px] font-medium ${canInteract ? 'text-[#e5e2db]' : 'text-[#7c7872]'}`}>{opt.label}</span>
+                    <span className={`text-[13px] font-medium ${canInteract ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{opt.label}</span>
                     {opt.description && (
-                      <p className={`text-xs mt-0.5 ${canInteract ? 'text-[#a8a29e]' : 'text-[#7c7872]'}`}>{opt.description}</p>
+                      <p className={`text-xs mt-0.5 ${canInteract ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'}`}>{opt.description}</p>
                     )}
                   </div>
                   {opt.preview && !config.multiSelect && (
-                    <svg className={`w-3.5 h-3.5 text-[#7c7872] transition-transform ${isPreview ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform ${isPreview ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   )}
                 </button>
                 {/* Preview block */}
                 {opt.preview && isPreview && (
-                  <div className="mt-1 px-4 py-2.5 bg-[#1e1d1a] border border-[#3d3b37] rounded-md text-xs text-[#a8a29e] whitespace-pre-wrap">
+                  <div className="mt-1 px-4 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-md text-xs text-[var(--text-secondary)] whitespace-pre-wrap">
                     {opt.preview}
                   </div>
                 )}
@@ -242,12 +242,12 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
                   onKeyDown={(e) => { if (e.key === 'Enter') handleOtherSubmit() }}
                   placeholder={config.otherField.placeholder}
                   autoFocus
-                  className="flex-1 bg-transparent border-none outline-none text-sm text-[#e5e2db] placeholder-[#7c7872]"
+                  className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                 />
                 <button
                   onClick={handleOtherSubmit}
                   disabled={!otherText.trim()}
-                  className="px-3 py-1 text-xs font-semibold text-[#1c1b18] bg-[#d97706] rounded hover:bg-[#b45309] disabled:opacity-40 transition-colors"
+                  className="px-3 py-1 text-xs font-semibold text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[#b45309] disabled:opacity-40 transition-colors"
                 >发送</button>
               </div>
             ) : (
@@ -256,9 +256,9 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
                   if (canClaim) handleClaim()
                   setShowOther(true)
                 }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left border border-dashed border-[#3d3b37] hover:bg-[#3d3b3780] transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left border border-dashed border-[var(--border)] hover:bg-[#3d3b3780] transition-colors"
               >
-                <span className="text-xs text-[#7c7872]">其他...</span>
+                <span className="text-xs text-[var(--text-muted)]">其他...</span>
               </button>
             )
           )}
@@ -269,7 +269,7 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
           <div className="mx-4 mb-3">
             <button
               onClick={handleMultiSubmit}
-              className="w-full py-2 text-[13px] font-semibold text-[#1c1b18] bg-[#d97706] rounded-md hover:bg-[#b45309] transition-colors"
+              className="w-full py-2 text-[13px] font-semibold text-[var(--bg-primary)] bg-[var(--accent)] rounded-md hover:bg-[#b45309] transition-colors"
             >
               确认选择 ({selectedKeys.size})
             </button>
@@ -285,13 +285,13 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
               onChange={(e) => setFeedback(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFeedbackSubmit() } }}
               placeholder={config.feedbackField.placeholder}
-              className="w-full px-4 py-2.5 text-sm bg-transparent border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#7c7872] outline-none focus:border-[#d97706] transition-colors"
+              className="w-full px-4 py-2.5 text-sm bg-transparent border border-[var(--border)] rounded-md text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--accent)] transition-colors"
             />
           </div>
         )}
 
         {/* Hint */}
-        <div className="px-4 pb-3 text-[10px] text-[#5c5952]">
+        <div className="px-4 pb-3 text-[10px] text-[var(--text-dim)]">
           {canInteract
             ? config.multiSelect
               ? `按 1-${config.options.length} 选择，Enter 确认`

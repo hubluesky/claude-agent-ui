@@ -48,7 +48,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
   return (
     <div className={`flex items-start gap-2 px-4 py-3 rounded-lg border ${colors[toast.type]} animate-[slideIn_0.2s_ease-out]`}>
       <p className="text-xs flex-1">{toast.message}</p>
-      <button onClick={onDismiss} className="text-[#7c7872] hover:text-[#a8a29e] shrink-0">
+      <button onClick={onDismiss} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>

@@ -58,16 +58,16 @@ export function TopBar() {
   const handleCloseHistory = useCallback(() => setShowHistory(false), [])
 
   return (
-    <div className="flex items-center justify-between h-10 shrink-0 px-3 border-b border-[#3d3b37] relative">
+    <div className="flex items-center justify-between h-10 shrink-0 px-3 border-b border-[var(--border)] relative">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {isEmbed ? (
-          <div className="w-5 h-5 bg-[#d97706] rounded flex items-center justify-center shrink-0">
-            <span className="text-[10px] font-bold text-[#1c1b18]">C</span>
+          <div className="w-5 h-5 bg-[var(--accent)] rounded flex items-center justify-center shrink-0">
+            <span className="text-[10px] font-bold text-[var(--bg-primary)]">C</span>
           </div>
         ) : (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872] shrink-0"
+            className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[var(--border)] text-[var(--text-muted)] shrink-0"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -85,15 +85,15 @@ export function TopBar() {
               if (e.key === 'Enter') handleTitleSubmit()
               if (e.key === 'Escape') setEditing(false)
             }}
-            className="flex-1 min-w-0 bg-[#1e1d1a] border border-[#d97706] rounded px-2 py-0.5 text-xs text-[#e5e2db] outline-none"
+            className="flex-1 min-w-0 bg-[var(--bg-tertiary)] border border-[var(--accent)] rounded px-2 py-0.5 text-xs text-[var(--text-primary)] outline-none"
           />
         ) : (
           <span
             onClick={handleTitleClick}
             className={`text-xs truncate ${
               isNewSession || !currentSessionId
-                ? 'text-[#7c7872]'
-                : 'text-[#e5e2db] cursor-pointer hover:text-[#d97706]'
+                ? 'text-[var(--text-muted)]'
+                : 'text-[var(--text-primary)] cursor-pointer hover:text-[var(--accent)]'
             }`}
             title={isNewSession || !currentSessionId ? undefined : '点击编辑标题'}
           >
@@ -106,7 +106,7 @@ export function TopBar() {
         <button
           onClick={() => setShowHistory(!showHistory)}
           className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-            showHistory ? 'bg-[#3d3b37] text-[#e5e2db]' : 'hover:bg-[#3d3b37] text-[#7c7872]'
+            showHistory ? 'bg-[var(--border)] text-[var(--text-primary)]' : 'hover:bg-[var(--border)] text-[var(--text-muted)]'
           }`}
           title="历史会话"
         >
@@ -117,7 +117,7 @@ export function TopBar() {
         </button>
         <button
           onClick={handleNewSession}
-          className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[#3d3b37] text-[#7c7872]"
+          className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[var(--border)] text-[var(--text-muted)]"
           title="新建会话"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -4,11 +4,11 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 
 const STATUS_STYLES: Record<string, { color: string; label: string }> = {
-  connected: { color: '#3fb950', label: 'connected' },
-  failed: { color: '#f87171', label: 'failed' },
-  'needs-auth': { color: '#f59e0b', label: 'needs-auth' },
-  pending: { color: '#60a5fa', label: 'connecting...' },
-  disabled: { color: '#5c5952', label: 'disabled' },
+  connected: { color: 'var(--success)', label: 'connected' },
+  failed: { color: 'var(--error)', label: 'failed' },
+  'needs-auth': { color: 'var(--warning)', label: 'needs-auth' },
+  pending: { color: 'var(--info)', label: 'connecting...' },
+  disabled: { color: 'var(--text-dim)', label: 'disabled' },
 }
 
 export function McpPanel({ onClose }: { onClose: () => void }) {
@@ -38,20 +38,20 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[80vh] bg-[#242320] border border-[#3d3b37] rounded-lg shadow-2xl overflow-hidden pointer-events-auto flex flex-col">
+        <div className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[80vh] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-2xl overflow-hidden pointer-events-auto flex flex-col">
         {/* Header */}
-        <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-[#3d3b37] shrink-0">
-          <span className="text-sm font-semibold text-[#d97706]">MCP Servers</span>
+        <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-[var(--border)] shrink-0">
+          <span className="text-sm font-semibold text-[var(--accent)]">MCP Servers</span>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-[#5c5952]">{servers.length} servers</span>
-            <button onClick={onClose} className="text-[#5c5952] hover:text-[#a8a29e] cursor-pointer">
+            <span className="text-[11px] text-[var(--text-dim)]">{servers.length} servers</span>
+            <button onClick={onClose} className="text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>
 
         {servers.length === 0 ? (
-          <div className="px-5 py-4 text-xs text-[#5c5952]">No MCP servers configured</div>
+          <div className="px-5 py-4 text-xs text-[var(--text-dim)]">No MCP servers configured</div>
         ) : (
           <div className="pb-2 overflow-y-auto">
             {servers.map((srv, i) => {
@@ -67,7 +67,7 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: style.color }} />
-                      <span className="text-[13px] font-medium truncate" style={{ color: isEnabled ? style.color : '#5c5952' }}>
+                      <span className="text-[13px] font-medium truncate" style={{ color: isEnabled ? style.color : 'var(--text-dim)' }}>
                         {srv.name}
                       </span>
                     </div>
@@ -78,14 +78,14 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
 
                   {/* Server info */}
                   {srv.serverInfo && (
-                    <div className="text-[10px] text-[#7c7872] ml-4 mb-1">
+                    <div className="text-[10px] text-[var(--text-muted)] ml-4 mb-1">
                       {srv.serverInfo.name} v{srv.serverInfo.version}
                     </div>
                   )}
 
                   {/* Error message */}
                   {srv.error && (
-                    <div className="text-[11px] text-[#f87171] ml-4 mb-1.5">{srv.error}</div>
+                    <div className="text-[11px] text-[var(--error)] ml-4 mb-1.5">{srv.error}</div>
                   )}
 
                   {/* Action buttons */}
@@ -94,13 +94,13 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
                       <>
                         <button
                           onClick={() => handleToggle(srv.name, true)}
-                          className="px-2.5 py-1 text-[11px] text-[#a8a29e] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer transition-colors"
+                          className="px-2.5 py-1 text-[11px] text-[var(--text-secondary)] border border-[var(--border)] rounded hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors"
                         >
                           Disable
                         </button>
                         <button
                           onClick={() => handleReconnect(srv.name)}
-                          className="px-2.5 py-1 text-[11px] text-[#a8a29e] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer transition-colors"
+                          className="px-2.5 py-1 text-[11px] text-[var(--text-secondary)] border border-[var(--border)] rounded hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors"
                         >
                           Reconnect
                         </button>
@@ -109,7 +109,7 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
                     {isFailed && (
                       <button
                         onClick={() => handleReconnect(srv.name)}
-                        className="px-2.5 py-1 text-[11px] text-[#3fb950] border border-[#3fb95040] rounded hover:bg-[#3fb9500a] cursor-pointer transition-colors"
+                        className="px-2.5 py-1 text-[11px] text-[var(--success)] border border-[#3fb95040] rounded hover:bg-[#3fb9500a] cursor-pointer transition-colors"
                       >
                         Reconnect
                       </button>
@@ -117,7 +117,7 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
                     {needsAuth && (
                       <button
                         onClick={() => handleReconnect(srv.name)}
-                        className="px-2.5 py-1 text-[11px] text-[#f59e0b] border border-[#f59e0b40] rounded hover:bg-[#f59e0b0a] cursor-pointer transition-colors"
+                        className="px-2.5 py-1 text-[11px] text-[var(--warning)] border border-[#f59e0b40] rounded hover:bg-[#f59e0b0a] cursor-pointer transition-colors"
                       >
                         Authenticate
                       </button>
@@ -125,7 +125,7 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
                     {!isEnabled && (
                       <button
                         onClick={() => handleToggle(srv.name, false)}
-                        className="px-2.5 py-1 text-[11px] text-[#a8a29e] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer transition-colors"
+                        className="px-2.5 py-1 text-[11px] text-[var(--text-secondary)] border border-[var(--border)] rounded hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors"
                       >
                         Enable
                       </button>
@@ -159,13 +159,13 @@ export function McpIndicator() {
   const connectedCount = servers.filter((s) => s.status === 'connected').length
   const failedCount = servers.filter((s) => s.status === 'failed' || s.status === 'needs-auth').length
   const hasServers = servers.length > 0
-  const color = !hasServers ? '#5c5952' : failedCount > 0 ? '#f87171' : '#3fb950'
+  const color = !hasServers ? 'var(--text-dim)' : failedCount > 0 ? 'var(--error)' : 'var(--success)'
 
   return (
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-[#242320] transition-colors cursor-pointer"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
         title="MCP Servers"
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth={2}>

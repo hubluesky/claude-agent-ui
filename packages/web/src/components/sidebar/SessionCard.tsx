@@ -48,7 +48,7 @@ export function SessionCard({ session, isSelected, onClick, onRename }: SessionC
       className={`w-full flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors duration-150 ${
         isSelected
           ? 'bg-[#d977061a] border border-[#d9770640]'
-          : 'bg-[#2b2a27] border border-transparent hover:bg-[#3d3b37]'
+          : 'bg-[var(--bg-hover)] border border-transparent hover:bg-[var(--border)]'
       }`}
     >
       <div className="flex-1 min-w-0 space-y-1">
@@ -63,35 +63,35 @@ export function SessionCard({ session, isSelected, onClick, onRename }: SessionC
               if (e.key === 'Escape') setEditing(false)
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full bg-[#1e1d1a] border border-[#d97706] rounded px-1.5 py-0.5 text-[13px] text-[#e5e2db] outline-none"
+            className="w-full bg-[var(--bg-tertiary)] border border-[var(--accent)] rounded px-1.5 py-0.5 text-[13px] text-[var(--text-primary)] outline-none"
           />
         ) : (
-          <p className="text-[13px] font-medium text-[#e5e2db] truncate">
+          <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
             {session.title || '新会话'}
           </p>
         )}
-        <div className="flex gap-2 text-[10px] text-[#7c7872]">
+        <div className="flex gap-2 text-[10px] text-[var(--text-muted)]">
           <span>{relativeTime(session.updatedAt)}</span>
         </div>
         <div className="flex items-center gap-1">
           <p
             onClick={handleCopyId}
             title="点击复制恢复命令"
-            className="text-[9px] font-mono text-[#5c5952] truncate cursor-pointer hover:text-[#7c7872] select-all"
+            className="text-[9px] font-mono text-[var(--text-dim)] truncate cursor-pointer hover:text-[var(--text-muted)] select-all"
           >
             {copied ? '✓ 已复制' : `claude -r ${session.sessionId}`}
           </p>
           <span className="flex-1" />
           <button
             onClick={(e) => { e.stopPropagation(); exportSession(session.sessionId, 'md') }}
-            className="text-[9px] text-[#5c5952] hover:text-[#a8a29e] cursor-pointer px-1"
+            className="text-[9px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer px-1"
             title="导出 Markdown"
           >
             MD
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); exportSession(session.sessionId, 'json') }}
-            className="text-[9px] text-[#5c5952] hover:text-[#a8a29e] cursor-pointer px-1"
+            className="text-[9px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer px-1"
             title="导出 JSON"
           >
             JSON

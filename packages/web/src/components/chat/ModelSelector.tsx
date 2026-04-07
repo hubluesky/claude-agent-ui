@@ -60,18 +60,18 @@ export function ModelSelector() {
     <div className="relative">
       <button
         onClick={() => hasModels && setOpen(!open)}
-        className={`flex items-center gap-1.5 transition-colors ${hasModels ? 'hover:text-[#e5e2db] cursor-pointer' : 'cursor-default'}`}
+        className={`flex items-center gap-1.5 transition-colors ${hasModels ? 'hover:text-[var(--text-primary)] cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="text-[#a8a29e]">{displayName ?? 'Model'}</span>
-        {hasModels && <span className="text-[8px] text-[#7c7872]">&#9660;</span>}
+        <span className="text-[var(--text-secondary)]">{displayName ?? 'Model'}</span>
+        {hasModels && <span className="text-[8px] text-[var(--text-muted)]">&#9660;</span>}
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full left-0 mb-1 w-72 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="absolute bottom-full left-0 mb-1 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50 overflow-hidden">
             <div className="px-3 pt-2 pb-1">
-              <span className="text-[10px] text-[#7c7872] uppercase tracking-wide font-medium">模型</span>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide font-medium">模型</span>
             </div>
             <div className="max-h-64 overflow-y-auto">
               {models.map((m) => {
@@ -85,17 +85,17 @@ export function ModelSelector() {
                     }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className={`text-[12px] font-medium truncate ${isActive ? 'text-[#e5e2db]' : 'text-[#a8a29e]'}`}>
+                      <div className={`text-[12px] font-medium truncate ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                         {m.displayName}
                       </div>
-                      <div className="text-[10px] text-[#7c7872] truncate">{m.description}</div>
+                      <div className="text-[10px] text-[var(--text-muted)] truncate">{m.description}</div>
                       <div className="flex gap-2 mt-0.5">
-                        {m.supportsAutoMode && <span className="text-[9px] text-[#d97706]">Auto</span>}
-                        {m.supportedEffortLevels && <span className="text-[9px] text-[#7c7872]">{m.supportedEffortLevels.join('/')}</span>}
+                        {m.supportsAutoMode && <span className="text-[9px] text-[var(--accent)]">Auto</span>}
+                        {m.supportedEffortLevels && <span className="text-[9px] text-[var(--text-muted)]">{m.supportedEffortLevels.join('/')}</span>}
                       </div>
                     </div>
                     {isActive && (
-                      <svg className="w-3.5 h-3.5 text-[#d97706] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3.5 h-3.5 text-[var(--accent)] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                       </svg>
                     )}

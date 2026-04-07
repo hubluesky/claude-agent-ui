@@ -21,9 +21,9 @@ export function FileReferencePopup({ files, selectedIndex, onSelect }: FileRefer
   }, [selectedIndex])
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#1a1918] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
-      <div className="px-4 py-2 border-b border-[#3d3b37]">
-        <span className="text-xs text-[#7c7872]">Files</span>
+    <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-input)] border border-[var(--border)] rounded-lg shadow-xl z-50 overflow-hidden">
+      <div className="px-4 py-2 border-b border-[var(--border)]">
+        <span className="text-xs text-[var(--text-muted)]">Files</span>
       </div>
       <div className="max-h-[320px] overflow-y-auto py-1">
         {files.map((file, i) => (
@@ -44,8 +44,8 @@ export function FileReferencePopup({ files, selectedIndex, onSelect }: FileRefer
           </button>
         ))}
       </div>
-      <div className="px-4 py-1.5 border-t border-[#3d3b37]">
-        <span className="text-[11px] text-[#7c7872]">↑↓ navigate · Enter select · Esc cancel</span>
+      <div className="px-4 py-1.5 border-t border-[var(--border)]">
+        <span className="text-[11px] text-[var(--text-muted)]">↑↓ navigate · Enter select · Esc cancel</span>
       </div>
     </div>
   )

@@ -39,13 +39,13 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute bottom-full right-0 w-80 mb-1 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 overflow-hidden">
+      <div className="absolute bottom-full right-0 w-80 mb-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50 overflow-hidden">
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">模式</span>
-          <div className="flex items-center gap-1 text-[10px] text-[#5c5952]">
-            <kbd className="px-1 py-0.5 bg-[#3d3b37] rounded text-[9px]">⇧</kbd>
+          <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">模式</span>
+          <div className="flex items-center gap-1 text-[10px] text-[var(--text-dim)]">
+            <kbd className="px-1 py-0.5 bg-[var(--border)] rounded text-[9px]">⇧</kbd>
             <span>+</span>
-            <kbd className="px-1 py-0.5 bg-[#3d3b37] rounded text-[9px]">tab</kbd>
+            <kbd className="px-1 py-0.5 bg-[var(--border)] rounded text-[9px]">tab</kbd>
             <span className="ml-0.5">切换</span>
           </div>
         </div>
@@ -63,11 +63,11 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
               >
                 <ModeIcon type={m.icon} active={isActive} />
                 <div className="flex-1">
-                  <span className={`text-[13px] font-medium ${isActive ? 'text-[#e5e2db]' : 'text-[#a8a29e]'}`}>{m.label}</span>
-                  <p className="text-[11px] text-[#7c7872]">{m.desc}</p>
+                  <span className={`text-[13px] font-medium ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{m.label}</span>
+                  <p className="text-[11px] text-[var(--text-muted)]">{m.desc}</p>
                 </div>
                 {isActive && (
-                  <svg className="w-4 h-4 text-[#d97706]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 )}
@@ -76,11 +76,11 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
           })}
         </div>
 
-        <div className="border-t border-[#3d3b37] px-4 pt-3 pb-4">
-          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">推理强度</span>
+        <div className="border-t border-[var(--border)] px-4 pt-3 pb-4">
+          <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">推理强度</span>
           <div className="relative flex items-center mt-3">
             {/* Track line */}
-            <div className="absolute left-0 right-0 h-0.5 bg-[#3d3b37]" />
+            <div className="absolute left-0 right-0 h-0.5 bg-[var(--border)]" />
             <div className="relative flex items-center justify-between w-full">
               {EFFORTS.map((e) => {
                 const isActive = e === currentEffort
@@ -95,21 +95,21 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
                   >
                     <div className={`w-3.5 h-3.5 rounded-full border-2 transition-colors ${
                       isActive
-                        ? 'bg-[#d97706] border-[#d97706]'
-                        : 'bg-[#242320] border-[#5c5952] hover:border-[#7c7872]'
+                        ? 'bg-[var(--accent)] border-[var(--accent)]'
+                        : 'bg-[var(--bg-secondary)] border-[var(--text-dim)] hover:border-[var(--text-muted)]'
                     }`} />
-                    <span className={`text-[11px] ${isActive ? 'text-[#d97706] font-semibold' : 'text-[#7c7872]'}`}>{e}</span>
+                    <span className={`text-[11px] ${isActive ? 'text-[var(--accent)] font-semibold' : 'text-[var(--text-muted)]'}`}>{e}</span>
                   </button>
                 )
               })}
             </div>
           </div>
         </div>
-        <div className="border-t border-[#3d3b37] px-4 pt-3 pb-3">
-          <span className="text-xs font-medium text-[#7c7872] uppercase tracking-wide">预算限制</span>
+        <div className="border-t border-[var(--border)] px-4 pt-3 pb-3">
+          <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">预算限制</span>
           <div className="flex gap-3 mt-2">
             <div className="flex-1">
-              <label className="text-[10px] text-[#5c5952] mb-1 block">Max Cost ($)</label>
+              <label className="text-[10px] text-[var(--text-dim)] mb-1 block">Max Cost ($)</label>
               <input
                 type="number"
                 step="0.1"
@@ -118,11 +118,11 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
                 value={budgetInput}
                 onChange={(e) => setBudgetInput(e.target.value)}
                 onBlur={handleBudgetBlur}
-                className="w-full px-2 py-1.5 text-xs bg-[#1a1918] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#5c5952] outline-none focus:border-[#d97706]"
+                className="w-full px-2 py-1.5 text-xs bg-[var(--bg-input)] border border-[var(--border)] rounded-md text-[var(--text-primary)] placeholder-[var(--text-dim)] outline-none focus:border-[var(--accent)]"
               />
             </div>
             <div className="flex-1">
-              <label className="text-[10px] text-[#5c5952] mb-1 block">Max Turns</label>
+              <label className="text-[10px] text-[var(--text-dim)] mb-1 block">Max Turns</label>
               <input
                 type="number"
                 step="1"
@@ -131,7 +131,7 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
                 value={turnsInput}
                 onChange={(e) => setTurnsInput(e.target.value)}
                 onBlur={handleTurnsBlur}
-                className="w-full px-2 py-1.5 text-xs bg-[#1a1918] border border-[#3d3b37] rounded-md text-[#e5e2db] placeholder-[#5c5952] outline-none focus:border-[#d97706]"
+                className="w-full px-2 py-1.5 text-xs bg-[var(--bg-input)] border border-[var(--border)] rounded-md text-[var(--text-primary)] placeholder-[var(--text-dim)] outline-none focus:border-[var(--accent)]"
               />
             </div>
           </div>
@@ -142,7 +142,7 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
 }
 
 export function ModeIcon({ type, active, className }: { type: string; active: boolean; className?: string }) {
-  const cls = className ?? `w-5 h-5 ${active ? 'text-[#d97706]' : 'text-[#7c7872]'}`
+  const cls = className ?? `w-5 h-5 ${active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`
   switch (type) {
     case 'shield':
       return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>

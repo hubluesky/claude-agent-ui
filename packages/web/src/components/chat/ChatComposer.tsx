@@ -211,17 +211,26 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
         setText('')
       }
     } else {
-      // For agent commands: send command + remaining text as argument
-      let argument = ''
+      // For agent commands: fill command into input, don't send yet.
+      // User may want to add arguments after the command name.
+      let remaining = ''
       if (slashCursorStart !== null) {
         const cursorPos = textareaRef.current?.selectionStart ?? text.length
         const before = text.slice(0, slashCursorStart).trim()
         const after = text.slice(cursorPos).trim()
-        argument = [before, after].filter(Boolean).join(' ')
+        remaining = [before, after].filter(Boolean).join(' ')
       }
-      const prompt = argument ? `/${cmd.name} ${argument}` : `/${cmd.name}`
-      onSend(prompt)
-      setText('')
+      const filled = remaining ? `/${cmd.name} ${remaining}` : `/${cmd.name} `
+      setText(filled)
+      // Move cursor to end so user can continue typing
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          const pos = filled.length
+          textareaRef.current.selectionStart = pos
+          textareaRef.current.selectionEnd = pos
+          textareaRef.current.focus()
+        }
+      })
     }
     setSelectedIndex(0)
     setSlashCursorStart(null)
@@ -371,14 +380,14 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
 
   // --- Border style based on state ---
   const borderClass = isRunning
-    ? 'border-[#d97706] animate-[glow_2s_ease-in-out_infinite]'
+    ? 'border-[var(--accent)] animate-[glow_2s_ease-in-out_infinite]'
     : isLocked
       ? 'border-[#b91c1c]'
-      : 'border-[#3d3b37]'
+      : 'border-[var(--border)]'
 
   return (
     <div className="px-4 py-3 shrink-0">
-      <div className={`relative rounded-xl border ${borderClass} bg-[#1a1918]`}>
+      <div className={`relative rounded-xl border ${borderClass} bg-[var(--bg-input)]`}>
         {/* Image preview bar */}
         <ImagePreviewBar images={images} onRemove={removeImage} />
 
@@ -420,12 +429,12 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
         {/* Textarea */}
         <div>
           {inputDisabled ? (
-            <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[#7c7872]">
-              <svg className="w-3.5 h-3.5 shrink-0 text-[#f87171]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[var(--text-muted)]">
+              <svg className="w-3.5 h-3.5 shrink-0 text-[var(--error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <rect x="3" y="11" width="18" height="11" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <span className="text-[#f87171]">Session locked by another client</span>
+              <span className="text-[var(--error)]">Session locked by another client</span>
             </div>
           ) : (
             <textarea
@@ -437,14 +446,14 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
               onPaste={handlePaste}
               placeholder="Ask Claude anything..."
               rows={1}
-              className="w-full bg-transparent px-3.5 py-2.5 text-sm text-[#e5e2db] placeholder-[#7c7872] resize-none outline-none"
+              className="w-full bg-transparent px-3.5 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] resize-none outline-none"
               style={{ maxHeight: '200px' }}
             />
           )}
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-[#3d3b37]" />
+        <div className="h-px bg-[var(--border)]" />
 
         {/* Toolbar */}
         <ComposerToolbar

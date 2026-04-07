@@ -57,8 +57,8 @@ export function SearchBar({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#242320] border-b border-[#3d3b37]">
-      <svg className="w-3.5 h-3.5 text-[#7c7872] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-secondary)] border-b border-[var(--border)]">
+      <svg className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
       </svg>
       <input
@@ -68,14 +68,14 @@ export function SearchBar({ onClose }: { onClose: () => void }) {
         value={query}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        className="flex-1 bg-transparent text-xs text-[#e5e2db] placeholder-[#5c5952] outline-none"
+        className="flex-1 bg-transparent text-xs text-[var(--text-primary)] placeholder-[var(--text-dim)] outline-none"
       />
       {query && (
-        <span className="text-[10px] text-[#7c7872] tabular-nums shrink-0">
+        <span className="text-[10px] text-[var(--text-muted)] tabular-nums shrink-0">
           {matchCount} match{matchCount !== 1 ? 'es' : ''}
         </span>
       )}
-      <button onClick={handleClose} className="text-[#5c5952] hover:text-[#a8a29e] cursor-pointer">
+      <button onClick={handleClose} className="text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer">
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     </div>
@@ -123,7 +123,7 @@ export function HighlightText({ text, className }: { text: string; className?: s
     <span className={className}>
       {parts.map((p, i) =>
         p.match
-          ? <mark key={i} className="bg-[#d97706] text-[#1c1b18] rounded-sm px-0.5">{p.text}</mark>
+          ? <mark key={i} className="bg-[var(--accent)] text-[var(--bg-primary)] rounded-sm px-0.5">{p.text}</mark>
           : <span key={i}>{p.text}</span>
       )}
     </span>
