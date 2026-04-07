@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)
-const MOD_KEY = IS_MAC ? '⌘' : 'Ctrl'
+const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl'
 
 export function ViewModeToggle() {
   const viewMode = useSettingsStore((s) => s.viewMode)
@@ -15,10 +15,10 @@ export function ViewModeToggle() {
     if (mode !== 'single') setReturnToMulti(false)
   }
 
-  // Ctrl/Cmd+Shift+M to toggle Single/Multi
+  // Ctrl/Cmd+\ to toggle Single/Multi (left-hand friendly)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
         e.preventDefault()
         const next = useSettingsStore.getState().viewMode === 'single' ? 'multi' : 'single'
         handleSwitch(next)
@@ -52,7 +52,7 @@ export function ViewModeToggle() {
           Multi
         </button>
       </div>
-      <span className="text-[8px] text-[var(--text-dim)] font-mono">{MOD_KEY}+⇧+M</span>
+      <span className="text-[8px] text-[var(--text-dim)] font-mono">{MOD_LABEL}+\</span>
     </div>
   )
 }
