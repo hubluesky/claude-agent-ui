@@ -1,7 +1,7 @@
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useChatSession } from '../../providers/ChatSessionContext'
 
 export function ConnectionBanner() {
-  const { connectionStatus } = useConnectionStore()
+  const { connectionStatus } = useChatSession()
 
   if (connectionStatus === 'connected') return null
 

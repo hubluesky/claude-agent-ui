@@ -4,36 +4,49 @@ import { ChatComposer } from './ChatComposer'
 import { ApprovalPanel } from './ApprovalPanel'
 import { buildToolApprovalConfig, buildPlanApprovalConfig, buildAskUserConfig } from './approval-configs'
 import { PlanModal } from './PlanModal'
+import { PanelHeader } from './PanelHeader'
 import { ConnectionBanner } from './ConnectionBanner'
 import { StatusBar } from './StatusBar'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { SearchBar } from './SearchBar'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useMessageStore } from '../../stores/messageStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useConnectionStore } from '../../stores/connectionStore'
 import type { ApprovalPanelConfig } from './ApprovalPanel'
 
-export function ChatInterface() {
-  const { sendMessage, joinSession, abort, respondToolApproval, respondAskUser, respondPlanApproval } = useWebSocket()
-  const { helpOpen, setHelpOpen, searchOpen, setSearchOpen } = useKeyboardShortcuts()
-  const { currentSessionId, currentProjectCwd } = useSessionStore()
-  const pendingAskUser = useConnectionStore((s) => s.pendingAskUser)
-  const pendingApproval = useConnectionStore((s) => s.pendingApproval)
-  const pendingPlanApproval = useConnectionStore((s) => s.pendingPlanApproval)
+interface ChatInterfaceProps {
+  compact?: boolean
+  panelTitle?: string
+  panelProjectName?: string
+  onExpandPanel?: () => void
+  onClosePanel?: () => void
+}
 
-  const isNewSession = currentSessionId === '__new__'
+export function ChatInterface({
+  compact = false,
+  panelTitle,
+  panelProjectName,
+  onExpandPanel,
+  onClosePanel,
+}: ChatInterfaceProps) {
+  const ctx = useChatSession()
+  const { joinSession } = useWebSocket()
+  const { helpOpen, setHelpOpen, searchOpen, setSearchOpen } = useKeyboardShortcuts()
+  const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
+
+  const isNewSession = ctx.sessionId === '__new__'
 
   useEffect(() => {
-    if (currentSessionId && !isNewSession) {
-      joinSession(currentSessionId)
+    if (ctx.sessionId && !isNewSession) {
+      joinSession(ctx.sessionId)
     }
     if (isNewSession) {
       useMessageStore.getState().clear()
     }
-  }, [currentSessionId, joinSession, isNewSession])
+  }, [ctx.sessionId, joinSession, isNewSession])
 
   const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
     const contentBlocks: any[] = []
@@ -51,78 +64,98 @@ export function ChatInterface() {
       message: { role: 'user', content: contentBlocks },
     } as any)
 
-    const sessionId = isNewSession ? null : currentSessionId
-    const { thinkingMode, effort, maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
-    sendMessage(prompt, sessionId, {
-      cwd: currentProjectCwd ?? undefined,
+    const { maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
+    ctx.send(prompt, {
       images,
-      thinkingMode,
-      effort,
       permissionMode,
       ...(maxBudgetUsd ? { maxBudgetUsd } : {}),
       ...(maxTurns ? { maxTurns } : {}),
     })
-  }, [currentSessionId, currentProjectCwd, sendMessage, isNewSession])
+  }, [ctx])
 
-  const handleAbort = useCallback(() => {
-    if (currentSessionId && !isNewSession) abort(currentSessionId)
-  }, [currentSessionId, abort, isNewSession])
+  const handleAbort = useCallback(() => ctx.abort(), [ctx])
 
   const approvalConfig = useMemo((): ApprovalPanelConfig | null => {
-    if (pendingAskUser) {
+    if (ctx.pendingAskUser) {
       return buildAskUserConfig(
-        pendingAskUser.requestId,
-        pendingAskUser.questions,
-        respondAskUser,
-        pendingAskUser.readonly,
+        ctx.pendingAskUser.requestId,
+        ctx.pendingAskUser.questions,
+        ctx.respondAskUser,
+        ctx.pendingAskUser.readonly,
       )
     }
-    if (pendingApproval) {
+    if (ctx.pendingApproval) {
       return buildToolApprovalConfig(
-        pendingApproval.requestId,
-        pendingApproval.toolName,
-        pendingApproval.toolInput,
-        pendingApproval.title,
-        pendingApproval.description,
-        respondToolApproval,
-        pendingApproval.readonly,
+        ctx.pendingApproval.requestId,
+        ctx.pendingApproval.toolName,
+        ctx.pendingApproval.toolInput,
+        ctx.pendingApproval.title,
+        ctx.pendingApproval.description,
+        ctx.respondToolApproval,
+        ctx.pendingApproval.readonly,
       )
     }
-    if (pendingPlanApproval) {
+    if (ctx.pendingPlanApproval) {
       return buildPlanApprovalConfig(
-        pendingPlanApproval.requestId,
-        pendingPlanApproval.contextUsagePercent,
-        respondPlanApproval,
-        pendingPlanApproval.readonly,
+        ctx.pendingPlanApproval.requestId,
+        ctx.pendingPlanApproval.contextUsagePercent,
+        ctx.respondPlanApproval,
+        ctx.pendingPlanApproval.readonly,
       )
     }
     return null
-  }, [pendingAskUser, pendingApproval, pendingPlanApproval, respondToolApproval, respondAskUser, respondPlanApproval])
+  }, [ctx.pendingAskUser, ctx.pendingApproval, ctx.pendingPlanApproval,
+      ctx.respondToolApproval, ctx.respondAskUser, ctx.respondPlanApproval])
 
-  if (!currentSessionId) return null
+  // Esc to return from expanded panel
+  const returnToMulti = useSettingsStore((s) => s.returnToMulti)
+  const setViewMode = useSettingsStore((s) => s.setViewMode)
+  const setReturnToMulti = useSettingsStore((s) => s.setReturnToMulti)
+
+  useEffect(() => {
+    if (!returnToMulti) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setViewMode('multi')
+        setReturnToMulti(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [returnToMulti, setViewMode, setReturnToMulti])
+
+  if (!ctx.sessionId) return null
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {compact && panelTitle !== undefined && onExpandPanel && onClosePanel && (
+        <PanelHeader
+          title={panelTitle}
+          projectName={panelProjectName ?? ''}
+          onExpand={onExpandPanel}
+          onClose={onClosePanel}
+        />
+      )}
       <ConnectionBanner />
-      {searchOpen && <SearchBar onClose={() => setSearchOpen(false)} />}
+      {!compact && searchOpen && <SearchBar onClose={() => setSearchOpen(false)} />}
       {isNewSession ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center">
-            <span className="text-xl font-bold font-mono text-[#d97706]">C</span>
+          <div className={`${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center`}>
+            <span className={`${compact ? 'text-sm' : 'text-xl'} font-bold font-mono text-[#d97706]`}>C</span>
           </div>
-          <p className="text-sm text-[#7c7872]">New conversation in {currentProjectCwd?.split(/[/\\]/).pop()}</p>
+          <p className={`${compact ? 'text-xs' : 'text-sm'} text-[#7c7872]`}>New conversation in {currentProjectCwd?.split(/[/\\]/).pop()}</p>
         </div>
       ) : (
-        <ChatMessagesPane sessionId={currentSessionId} />
+        <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} />
       )}
       {approvalConfig ? (
-        <ApprovalPanel config={approvalConfig} />
+        <ApprovalPanel config={approvalConfig} compact={compact} />
       ) : (
-        <ChatComposer onSend={handleSend} onAbort={handleAbort} />
+        <ChatComposer onSend={handleSend} onAbort={handleAbort} minimal={compact} />
       )}
-      <StatusBar />
-      <PlanModal />
-      {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      {!compact && <StatusBar />}
+      {!compact && <PlanModal />}
+      {!compact && helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
     </div>
   )
 }

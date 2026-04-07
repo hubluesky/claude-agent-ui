@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { ChatInterface } from './components/chat/ChatInterface'
+import { ChatSessionProvider } from './providers/ChatSessionProvider'
 import { ToastContainer } from './components/chat/Toast'
 import { useSessionStore } from './stores/sessionStore'
 import { useCommandStore } from './stores/commandStore'
@@ -26,7 +27,9 @@ export function App() {
     <>
       <AppLayout>
         {currentSessionId ? (
-          <ChatInterface />
+          <ChatSessionProvider sessionId={currentSessionId}>
+            <ChatInterface />
+          </ChatSessionProvider>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <div className="w-16 h-16 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center">

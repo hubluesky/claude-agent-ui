@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useMessageStore } from '../../stores/messageStore'
@@ -57,7 +58,10 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const [images, setImages] = useState<AttachedImage[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { lockStatus, sessionStatus, models, accountInfo } = useConnectionStore()
+  const ctx = useChatSession()
+  const { lockStatus, sessionStatus } = ctx
+  const models = useConnectionStore((s) => s.models)
+  const accountInfo = useConnectionStore((s) => s.accountInfo)
   const commands = useCommandStore((s) => s.commands)
   const [fileResults, setFileResults] = useState<FileItem[]>([])
   const [fileSelectedIndex, setFileSelectedIndex] = useState(0)
@@ -84,14 +88,13 @@ export function ChatComposer({ onSend, onAbort }: ChatComposerProps) {
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
   const isLockHolder = lockStatus === 'locked_self'
   const inputDisabled = isLocked
-  const { releaseLock, send } = useWebSocket()
+  const { send } = useWebSocket()
 
   const handleReleaseLock = useCallback(() => {
-    const sid = useSessionStore.getState().currentSessionId
-    if (sid && sid !== '__new__' && isLockHolder) {
-      releaseLock(sid)
+    if (isLockHolder) {
+      ctx.releaseLock()
     }
-  }, [isLockHolder, releaseLock])
+  }, [isLockHolder, ctx])
 
   const handleModeChange = useCallback((newMode: typeof permissionMode) => {
     setPermissionMode(newMode)

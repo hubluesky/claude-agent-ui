@@ -10,6 +10,8 @@ interface SettingsState {
   maxBudgetUsd: number | null
   maxTurns: number | null
   theme: 'dark' | 'light'
+  viewMode: 'single' | 'multi'
+  returnToMulti: boolean
 }
 
 interface SettingsActions {
@@ -21,6 +23,8 @@ interface SettingsActions {
   setMaxBudgetUsd(value: number | null): void
   setMaxTurns(value: number | null): void
   setTheme(theme: 'dark' | 'light'): void
+  setViewMode(mode: SettingsState['viewMode']): void
+  setReturnToMulti(value: boolean): void
   load(): Promise<void>
   save(): Promise<void>
 }
@@ -45,6 +49,7 @@ function saveToLocal(state: SettingsState) {
     maxBudgetUsd: state.maxBudgetUsd,
     maxTurns: state.maxTurns,
     theme: state.theme,
+    viewMode: state.viewMode,
   }))
 }
 
@@ -59,6 +64,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     maxBudgetUsd: (saved as any).maxBudgetUsd ?? null,
     maxTurns: (saved as any).maxTurns ?? null,
     theme: ((saved as any).theme as 'dark' | 'light') ?? 'dark',
+    viewMode: ((saved as any).viewMode as SettingsState['viewMode']) ?? 'single',
+    returnToMulti: false,
 
     setPermissionMode(mode) {
       set({ permissionMode: mode })
@@ -91,6 +98,13 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
       set({ theme })
       document.documentElement.setAttribute('data-theme', theme)
       saveToLocal(get())
+    },
+    setViewMode(mode) {
+      set({ viewMode: mode })
+      saveToLocal(get())
+    },
+    setReturnToMulti(value) {
+      set({ returnToMulti: value })
     },
     async load() {
       try {

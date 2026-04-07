@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
 export function PlanApprovalCard() {
-  const { pendingPlanApproval } = useConnectionStore()
+  const { pendingPlanApproval } = useChatSession()
   const [collapsed, setCollapsed] = useState(false)
 
   // Only show in Footer when pending — resolved state is part of message history

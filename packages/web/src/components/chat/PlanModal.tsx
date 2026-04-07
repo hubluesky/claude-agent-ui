@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useConnectionStore } from '../../stores/connectionStore'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import type { PlanApprovalDecisionType } from '@claude-agent-ui/shared'
 
 export function PlanModal() {
-  const { pendingPlanApproval, planModalOpen } = useConnectionStore()
-  const { respondPlanApproval } = useWebSocket()
+  const ctx = useChatSession()
+  const { pendingPlanApproval, planModalOpen, resolvedPlanApproval, setPlanModalOpen, respondPlanApproval } = ctx
   const [feedback, setFeedback] = useState('')
 
   // Close on ESC
@@ -15,14 +14,12 @@ export function PlanModal() {
     if (!planModalOpen) return
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        useConnectionStore.getState().setPlanModalOpen(false)
+        setPlanModalOpen(false)
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [planModalOpen])
-
-  const { resolvedPlanApproval } = useConnectionStore()
+  }, [planModalOpen, setPlanModalOpen])
 
   // Show from pending or resolved plan
   const plan = pendingPlanApproval ?? resolvedPlanApproval
@@ -54,7 +51,7 @@ export function PlanModal() {
   }
 
   const closeModal = () => {
-    useConnectionStore.getState().setPlanModalOpen(false)
+    setPlanModalOpen(false)
   }
 
   return createPortal(

@@ -1,3 +1,4 @@
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { ModelSelector } from './ModelSelector'
@@ -31,8 +32,8 @@ function ThemeToggle() {
 const EFFORT_DISPLAY: Record<string, string> = { low: 'Lo', medium: 'Med', high: 'Hi' }
 
 export function StatusBar() {
+  const { connectionStatus } = useChatSession()
   const accountInfo = useConnectionStore((s) => s.accountInfo)
-  const connectionStatus = useConnectionStore((s) => s.connectionStatus)
   const effort = useSettingsStore((s) => s.effort)
   const isConnected = connectionStatus === 'connected'
 

@@ -4,22 +4,23 @@ import { useMessageStore } from '../../stores/messageStore'
 import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { PlanApprovalCard } from './PlanApprovalCard'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useChatSession } from '../../providers/ChatSessionContext'
 
 interface ChatMessagesPaneProps {
   sessionId: string
 }
 
 export function ChatMessagesPane({ sessionId }: ChatMessagesPaneProps) {
-  const rawMessages = useMessageStore((s) => s.messages)
+  const ctx = useChatSession()
+  const rawMessages = ctx.messages
   const messages = useMemo(() => rawMessages.filter(isMessageVisible), [rawMessages])
-  const hasMore = useMessageStore((s) => s.hasMore)
-  const isLoadingHistory = useMessageStore((s) => s.isLoadingHistory)
-  const isLoadingMore = useMessageStore((s) => s.isLoadingMore)
+  const hasMore = ctx.hasMore
+  const isLoadingHistory = ctx.isLoadingHistory
+  const isLoadingMore = ctx.isLoadingMore
+  const loadMore = ctx.loadMore
+  const sessionStatus = ctx.sessionStatus
+  const pendingPlanApproval = ctx.pendingPlanApproval
   const loadInitial = useMessageStore((s) => s.loadInitial)
-  const loadMore = useMessageStore((s) => s.loadMore)
-  const sessionStatus = useConnectionStore((s) => s.sessionStatus)
-  const pendingPlanApproval = useConnectionStore((s) => s.pendingPlanApproval)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const isLoadingMoreRef = useRef(false)
   const isAtBottomRef = useRef(true)
