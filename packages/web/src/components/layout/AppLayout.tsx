@@ -37,7 +37,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, [sidebarWidth, setSidebarWidth])
 
   return (
-    <div className="h-dvh flex bg-[#2b2a27]">
+    <div className="h-dvh flex" style={{ background: 'var(--bg-hover)' }}>
       {/* Overlay (mobile: dim background when sidebar open) */}
       {!isEmbed && sidebarOpen && (
         <div
@@ -49,8 +49,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* Sidebar — 桌面和移动端都受 sidebarOpen 控制 */}
       {!isEmbed && sidebarOpen && (
         <div
-          className="shrink-0 border-r border-[#3d3b37] z-40 fixed md:relative h-full"
-          style={{ width: sidebarWidth }}
+          className="shrink-0 border-r z-40 fixed md:relative h-full"
+          style={{ borderColor: 'var(--border)', width: sidebarWidth }}
         >
           <SessionList />
         </div>

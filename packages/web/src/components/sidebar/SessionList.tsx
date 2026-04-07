@@ -17,7 +17,7 @@ export function SessionList() {
   )
 
   return (
-    <div className="h-full flex flex-col bg-[#1c1b18]">
+    <div className="h-full flex flex-col" style={{ background: 'var(--bg-primary)' }}>
       <div className="flex items-center gap-2 px-4 pt-3.5 pb-2.5 border-b border-[#2b2a27]">
         <div className="w-6 h-6 bg-[#d97706] rounded-[5px] flex items-center justify-center">
           <span className="text-[11px] font-bold text-[#1c1b18] font-mono">C</span>

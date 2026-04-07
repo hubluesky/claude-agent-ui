@@ -9,6 +9,7 @@ interface SettingsState {
   sidebarOpen: boolean
   maxBudgetUsd: number | null
   maxTurns: number | null
+  theme: 'dark' | 'light'
 }
 
 interface SettingsActions {
@@ -19,6 +20,7 @@ interface SettingsActions {
   setSidebarOpen(open: boolean): void
   setMaxBudgetUsd(value: number | null): void
   setMaxTurns(value: number | null): void
+  setTheme(theme: 'dark' | 'light'): void
   load(): Promise<void>
   save(): Promise<void>
 }
@@ -42,6 +44,7 @@ function saveToLocal(state: SettingsState) {
     sidebarWidth: state.sidebarWidth,
     maxBudgetUsd: state.maxBudgetUsd,
     maxTurns: state.maxTurns,
+    theme: state.theme,
   }))
 }
 
@@ -55,6 +58,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     sidebarOpen: true,
     maxBudgetUsd: (saved as any).maxBudgetUsd ?? null,
     maxTurns: (saved as any).maxTurns ?? null,
+    theme: ((saved as any).theme as 'dark' | 'light') ?? 'dark',
 
     setPermissionMode(mode) {
       set({ permissionMode: mode })
@@ -81,6 +85,11 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     },
     setMaxTurns(value) {
       set({ maxTurns: value })
+      saveToLocal(get())
+    },
+    setTheme(theme) {
+      set({ theme })
+      document.documentElement.setAttribute('data-theme', theme)
       saveToLocal(get())
     },
     async load() {
