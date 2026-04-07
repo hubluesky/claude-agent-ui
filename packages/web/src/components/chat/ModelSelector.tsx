@@ -3,15 +3,30 @@ import { useConnectionStore } from '../../stores/connectionStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 
+/** Format raw model ID into friendly short name: "claude-opus-4-6" → "Opus 4.6" */
+function formatModelId(id: string | undefined): string | undefined {
+  if (!id) return undefined
+  // claude-opus-4-6 → Opus 4.6, claude-sonnet-4-6 → Sonnet 4.6, claude-haiku-4-5-20251001 → Haiku 4.5
+  const m = id.match(/claude-(\w+)-(\d+)-(\d+)/)
+  if (m) {
+    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1)
+    return `${name} ${m[2]}.${m[3]}`
+  }
+  return id
+}
+
 export function ModelSelector() {
   const [open, setOpen] = useState(false)
   const models = useConnectionStore((s) => s.models)
   const accountInfo = useConnectionStore((s) => s.accountInfo)
-  const currentModel = accountInfo?.model
+  const contextUsage = useConnectionStore((s) => s.contextUsage)
+  const currentModel = accountInfo?.model ?? contextUsage?.model
   const { send } = useWebSocket()
   const sessionId = useSessionStore((s) => s.currentSessionId)
 
-  if (models.length === 0) return null
+  // Always show short model name in status bar (Opus 4.6, Sonnet 4.6, etc.)
+  const hasModels = models.length > 0
+  const displayName = formatModelId(currentModel)
 
   const handleSelect = (model: string) => {
     if (sessionId && sessionId !== '__new__' && model !== currentModel) {
@@ -25,11 +40,11 @@ export function ModelSelector() {
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 hover:text-[#e5e2db] transition-colors cursor-pointer"
+        onClick={() => hasModels && setOpen(!open)}
+        className={`flex items-center gap-1.5 transition-colors ${hasModels ? 'hover:text-[#e5e2db] cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="text-[#a8a29e]">{currentModel ?? 'model'}</span>
-        <span className="text-[8px] text-[#7c7872]">&#9660;</span>
+        <span className="text-[#a8a29e]">{displayName ?? 'Model'}</span>
+        {hasModels && <span className="text-[8px] text-[#7c7872]">&#9660;</span>}
       </button>
 
       {open && (

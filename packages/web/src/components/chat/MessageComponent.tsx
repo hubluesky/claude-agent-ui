@@ -1,4 +1,4 @@
-import { useState, memo } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
 import { ToolIcon, formatToolSummary } from './tool-display'
@@ -105,47 +105,49 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     if (!hasVisibleContent) return null
     const msgUuid = (message as any).uuid as string | undefined
     return (
-      <div className="group/msg relative flex gap-3 items-start">
-        <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
-          <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
-        </div>
-        <div className="flex-1 min-w-0 space-y-2">
-          {contentBlocks.map((block: any, i: number) => {
-            if (block.type === 'text') {
-              const textClass = classifyText(block.text)
-              if (textClass === 'internal-output') return null
-              if (textClass === 'compact-summary') {
+      <div className="flex items-start">
+        <div className="flex-1 min-w-0 flex gap-3 items-start">
+          <div className="w-7 h-7 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold font-mono text-[#d97706]">C</span>
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            {contentBlocks.map((block: any, i: number) => {
+              if (block.type === 'text') {
+                const textClass = classifyText(block.text)
+                if (textClass === 'internal-output') return null
+                if (textClass === 'compact-summary') {
+                  return (
+                    <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+                      <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
+                      <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
+                    </details>
+                  )
+                }
+                return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
+              }
+              if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+                const thinkingText = block.thinking || block.text || ''
+                if (!thinkingText) {
+                  return block.type === 'redacted_thinking' ? (
+                    <div key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
+                      <span className="text-xs text-[#8b5cf680] italic">Thinking (redacted)</span>
+                    </div>
+                  ) : null
+                }
                 return (
-                  <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
-                    <summary className="text-xs text-[#0ea5e9] cursor-pointer">Context summary (compacted)</summary>
-                    <div className="text-xs text-[#a8a29e] mt-2 leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
+                  <details key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
+                    <summary className="text-xs text-[#8b5cf6] cursor-pointer">Thinking...</summary>
+                    <p className="text-xs text-[#a8a29e] mt-1 whitespace-pre-wrap">{thinkingText}</p>
                   </details>
                 )
               }
-              return <div key={i} className="text-sm text-[#e5e2db] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
-            }
-            if (block.type === 'thinking' || block.type === 'redacted_thinking') {
-              const thinkingText = block.thinking || block.text || ''
-              if (!thinkingText) {
-                return block.type === 'redacted_thinking' ? (
-                  <div key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
-                    <span className="text-xs text-[#8b5cf680] italic">Thinking (redacted)</span>
-                  </div>
-                ) : null
-              }
-              return (
-                <details key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
-                  <summary className="text-xs text-[#8b5cf6] cursor-pointer">Thinking...</summary>
-                  <p className="text-xs text-[#a8a29e] mt-1 whitespace-pre-wrap">{thinkingText}</p>
-                </details>
-              )
-            }
-            if (block.type === 'tool_use' || block.type === 'server_tool_use') return <ToolUseBlock key={i} block={block} />
-            if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return <ToolResultBlock key={i} block={block} />
-            return null
-          })}
+              if (block.type === 'tool_use' || block.type === 'server_tool_use') return <ToolUseBlock key={i} block={block} />
+              if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return <ToolResultBlock key={i} block={block} />
+              return null
+            })}
+          </div>
         </div>
-        {msgUuid && <ForkButton messageId={msgUuid} />}
+        {msgUuid && <MessageActions messageId={msgUuid} />}
       </div>
     )
   }
@@ -339,24 +341,121 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
 
 // ---- Stop Task Button ----
 
-function ForkButton({ messageId }: { messageId: string }) {
-  const { forkSession } = useWebSocket()
+// ---- Message Actions (⋯ menu with Fork + Rewind) ----
+
+function MessageActions({ messageId }: { messageId: string }) {
+  const { forkSession, rewindFiles } = useWebSocket()
   const sessionId = useSessionStore((s) => s.currentSessionId)
+  const rewindPreview = useConnectionStore((s) => (s as any).rewindPreview)
+  const [open, setOpen] = useState(false)
+  const [showRewindPreview, setShowRewindPreview] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   const handleFork = () => {
     if (sessionId && sessionId !== '__new__') {
       forkSession(sessionId, messageId)
     }
+    setOpen(false)
   }
 
+  const handleRewindDryRun = () => {
+    if (!sessionId || sessionId === '__new__') return
+    ;(useConnectionStore.getState() as any).setRewindPreview(null)
+    rewindFiles(sessionId, messageId, true)
+    setShowRewindPreview(true)
+    setOpen(false)
+  }
+
+  const handleRewindConfirm = () => {
+    if (!sessionId || sessionId === '__new__') return
+    rewindFiles(sessionId, messageId, false)
+    setShowRewindPreview(false)
+    ;(useConnectionStore.getState() as any).setRewindPreview(null)
+  }
+
+  const handleRewindClose = () => {
+    setShowRewindPreview(false)
+    ;(useConnectionStore.getState() as any).setRewindPreview(null)
+  }
+
+  const preview = showRewindPreview ? rewindPreview : null
+
   return (
-    <button
-      onClick={handleFork}
-      className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 transition-opacity px-2 py-1 text-[10px] text-[#a8a29e] bg-[#242320] border border-[#3d3b37] rounded-md hover:text-[#d97706] hover:border-[#d97706] cursor-pointer"
-      title="Fork — 从这条消息分叉新会话"
-    >
-      ⚲ Fork
-    </button>
+    <>
+      <div ref={ref} className="relative shrink-0 ml-1">
+        <button
+          onClick={() => setOpen(!open)}
+          className="px-1 py-0.5 text-[11px] text-[#5c5952] hover:text-[#a8a29e] cursor-pointer transition-colors"
+          title="操作"
+        >
+          ⋯
+        </button>
+        {open && (
+          <div className="absolute top-full right-0 mt-1 bg-[#242320] border border-[#3d3b37] rounded-md shadow-lg z-10 py-1 min-w-[100px]">
+            <button
+              onClick={handleFork}
+              className="w-full text-left px-3 py-1.5 text-[10px] text-[#a8a29e] hover:text-[#d97706] hover:bg-[#2b2a27] cursor-pointer transition-colors"
+            >
+              Fork
+            </button>
+            <button
+              onClick={handleRewindDryRun}
+              className="w-full text-left px-3 py-1.5 text-[10px] text-[#a8a29e] hover:text-[#60a5fa] hover:bg-[#2b2a27] cursor-pointer transition-colors"
+            >
+              Rewind
+            </button>
+          </div>
+        )}
+      </div>
+      {showRewindPreview && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/30" onClick={handleRewindClose} />
+          <div className="absolute right-0 top-full mt-1 w-72 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 p-3">
+            <p className="text-xs text-[#a8a29e] mb-2 font-medium">Rewind Preview</p>
+            {!preview ? (
+              <p className="text-[10px] text-[#7c7872]">Loading...</p>
+            ) : !preview.filesChanged?.length ? (
+              <p className="text-[10px] text-[#7c7872]">No files to rewind</p>
+            ) : (
+              <>
+                <div className="space-y-1 max-h-40 overflow-y-auto mb-2">
+                  {preview.filesChanged.map((f: string) => (
+                    <div key={f} className="text-[10px] font-mono text-[#a8a29e] truncate">{f}</div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-[#7c7872] mb-2">
+                  <span className="text-[#3fb950]">+{preview.insertions ?? 0}</span>
+                  <span className="text-[#f87171]">-{preview.deletions ?? 0}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRewindConfirm}
+                    className="flex-1 px-2 py-1.5 text-xs text-[#e5e2db] bg-[#60a5fa] rounded hover:bg-[#3b82f6] cursor-pointer"
+                  >
+                    Confirm Rewind
+                  </button>
+                  <button
+                    onClick={handleRewindClose}
+                    className="px-2 py-1.5 text-xs text-[#7c7872] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
   )
 }
 
@@ -564,93 +663,15 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
   }
 
   return (
-    <div className="group/usr relative">
-      {renderContent()}
-      {uuid && <RewindButton messageId={uuid} />}
+    <div className="flex items-start">
+      <div className="flex-1 min-w-0">
+        {renderContent()}
+      </div>
+      {uuid && <MessageActions messageId={uuid} />}
     </div>
   )
 }
 
-// ---- Rewind Button ----
-
-function RewindButton({ messageId }: { messageId: string }) {
-  const { rewindFiles } = useWebSocket()
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const rewindPreview = useConnectionStore((s) => s.rewindPreview)
-  const [showPreview, setShowPreview] = useState(false)
-
-  const handleDryRun = () => {
-    if (!sessionId || sessionId === '__new__') return
-    useConnectionStore.getState().setRewindPreview(null)
-    rewindFiles(sessionId, messageId, true)
-    setShowPreview(true)
-  }
-
-  const handleRewind = () => {
-    if (!sessionId || sessionId === '__new__') return
-    rewindFiles(sessionId, messageId, false)
-    setShowPreview(false)
-    useConnectionStore.getState().setRewindPreview(null)
-  }
-
-  const handleClose = () => {
-    setShowPreview(false)
-    useConnectionStore.getState().setRewindPreview(null)
-  }
-
-  const preview = showPreview ? rewindPreview : null
-
-  return (
-    <>
-      <button
-        onClick={handleDryRun}
-        className="opacity-0 group-hover/usr:opacity-100 transition-opacity px-2 py-0.5 text-[10px] text-[#a8a29e] bg-[#242320] border border-[#3d3b37] rounded hover:text-[#60a5fa] hover:border-[#60a5fa] cursor-pointer absolute top-0 left-0"
-        title="Rewind files to this point"
-      >
-        ⏪ Rewind
-      </button>
-      {showPreview && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/30" onClick={handleClose} />
-          <div className="absolute left-0 top-full mt-1 w-72 bg-[#242320] border border-[#3d3b37] rounded-lg shadow-xl z-50 p-3">
-            <p className="text-xs text-[#a8a29e] mb-2 font-medium">Rewind Preview</p>
-            {!preview ? (
-              <p className="text-[10px] text-[#7c7872]">Loading...</p>
-            ) : !preview.filesChanged?.length ? (
-              <p className="text-[10px] text-[#7c7872]">No files to rewind</p>
-            ) : (
-              <>
-                <div className="space-y-1 max-h-40 overflow-y-auto mb-2">
-                  {preview.filesChanged.map((f: string) => (
-                    <div key={f} className="text-[10px] font-mono text-[#a8a29e] truncate">{f}</div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-[#7c7872] mb-2">
-                  <span className="text-[#3fb950]">+{preview.insertions ?? 0}</span>
-                  <span className="text-[#f87171]">-{preview.deletions ?? 0}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleRewind}
-                    className="flex-1 px-2 py-1.5 text-xs text-[#e5e2db] bg-[#60a5fa] rounded hover:bg-[#3b82f6] cursor-pointer"
-                  >
-                    Confirm Rewind
-                  </button>
-                  <button
-                    onClick={handleClose}
-                    className="px-2 py-1.5 text-xs text-[#7c7872] border border-[#3d3b37] rounded hover:bg-[#1e1d1a] cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </>
-  )
-}
 
 // ---- Tool Use Block ----
 

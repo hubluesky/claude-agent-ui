@@ -54,6 +54,8 @@ interface PendingPlanApproval {
 export class V1QuerySession extends AgentSession {
   private sessionId: string | null = null
   private queryInstance: ReturnType<typeof query> | null = null
+  /** Kept alive after query ends for informational methods (mcpServerStatus, etc.) */
+  private lastQueryInstance: ReturnType<typeof query> | null = null
   private abortController: AbortController | null = null
   private _status: SessionStatus = 'idle'
   private pendingApprovals = new Map<string, PendingApproval>()
@@ -83,6 +85,46 @@ export class V1QuerySession extends AgentSession {
   private setStatus(status: SessionStatus): void {
     this._status = status
     this.emit('state-change', status)
+  }
+
+  /** Start a background resume query to initialize SDK connection (MCP, models, etc.)
+   *  Non-blocking — fires and forgets. Status stays 'idle'. */
+  warmUp(): void {
+    if (this.queryInstance || this.lastQueryInstance) return
+    const resumeId = this.resumeSessionId ?? this.sessionId
+    if (!resumeId) return
+
+    const opts = {
+      cwd: this._projectCwd,
+      resume: resumeId,
+      maxTurns: 1,
+      includePartialMessages: false,
+      allowDangerouslySkipPermissions: true,
+      env: { ...process.env, ...claudeEnv },
+    }
+
+    // Run in background, don't change status
+    const q = query({ prompt: '/help' as any, options: opts as any })
+    this.lastQueryInstance = q
+    ;(async () => {
+      try {
+        for await (const msg of q) {
+          if ((msg as any).type === 'system' && (msg as any).subtype === 'init') {
+            this.sessionId = (msg as any).session_id
+            this.fetchCommands()
+            this.fetchAccountInfo()
+            this.fetchModels()
+            this.fetchContextUsage()
+            // MCP connections take time to establish after init — fetch with retries
+            this.fetchMcpStatus()
+            setTimeout(() => this.fetchMcpStatus(), 3000)
+            setTimeout(() => this.fetchMcpStatus(), 8000)
+          }
+        }
+      } catch {
+        // Non-critical — warmup failure is OK
+      }
+    })()
   }
 
   send(prompt: string, options?: SendOptions): void {
@@ -165,15 +207,17 @@ export class V1QuerySession extends AgentSession {
         promptInput = singleMessage()
       }
       this.queryInstance = query({ prompt: promptInput as any, options: options as any })
+      this.lastQueryInstance = this.queryInstance
 
       for await (const msg of this.queryInstance) {
         // Capture session ID from init message
         if ((msg as any).type === 'system' && (msg as any).subtype === 'init') {
           this.sessionId = (msg as any).session_id
-          // Fetch available slash commands, account info, and models after init
+          // Fetch available slash commands, account info, models, and MCP status after init
           this.fetchCommands()
           this.fetchAccountInfo()
           this.fetchModels()
+          this.fetchMcpStatus()
         }
 
         // Detect synthetic error responses from CLI (e.g. "Not logged in")
@@ -220,8 +264,9 @@ export class V1QuerySession extends AgentSession {
   }
 
   private fetchCommands(): void {
-    if (!this.queryInstance) return
-    this.queryInstance.supportedCommands().then((commands) => {
+    const q = this.queryInstance ?? this.lastQueryInstance
+    if (!q) return
+    q.supportedCommands().then((commands) => {
       this.emit('commands', commands.map((c: any) => ({
         name: c.name,
         description: c.description ?? '',
@@ -237,9 +282,26 @@ export class V1QuerySession extends AgentSession {
   }
 
   private fetchModels(): void {
-    if (!this.queryInstance) return
-    this.queryInstance.supportedModels().then((models) => {
+    const q = this.queryInstance ?? this.lastQueryInstance
+    if (!q) return
+    q.supportedModels().then((models) => {
       this.emit('models', models)
+    }).catch(() => {})
+  }
+
+  private fetchMcpStatus(): void {
+    const q = this.queryInstance ?? this.lastQueryInstance
+    if (!q) return
+    q.mcpServerStatus?.().then((servers: any) => {
+      if (servers) this.emit('mcp-status', servers)
+    }).catch(() => {})
+  }
+
+  private fetchContextUsage(): void {
+    const q = this.queryInstance ?? this.lastQueryInstance
+    if (!q) return
+    q.getContextUsage?.().then((usage: any) => {
+      if (usage) this.emit('context-usage', usage)
     }).catch(() => {})
   }
 
@@ -248,19 +310,23 @@ export class V1QuerySession extends AgentSession {
   }
 
   async getContextUsage(): Promise<any> {
-    return this.queryInstance?.getContextUsage?.()
+    const q = this.queryInstance ?? this.lastQueryInstance
+    return q?.getContextUsage?.()
   }
 
   async getMcpStatus(): Promise<any[]> {
-    return (await this.queryInstance?.mcpServerStatus?.()) ?? []
+    const q = this.queryInstance ?? this.lastQueryInstance
+    return (await q?.mcpServerStatus?.()) ?? []
   }
 
   async toggleMcpServer(serverName: string, enabled: boolean): Promise<void> {
-    await this.queryInstance?.toggleMcpServer?.(serverName, enabled)
+    const q = this.queryInstance ?? this.lastQueryInstance
+    await q?.toggleMcpServer?.(serverName, enabled)
   }
 
   async reconnectMcpServer(serverName: string): Promise<void> {
-    await this.queryInstance?.reconnectMcpServer?.(serverName)
+    const q = this.queryInstance ?? this.lastQueryInstance
+    await q?.reconnectMcpServer?.(serverName)
   }
 
   async rewindFiles(messageId: string, options?: { dryRun?: boolean }): Promise<any> {
@@ -268,8 +334,9 @@ export class V1QuerySession extends AgentSession {
   }
 
   private fetchAccountInfo(): void {
-    if (!this.queryInstance) return
-    this.queryInstance.accountInfo().then((info) => {
+    const q = this.queryInstance ?? this.lastQueryInstance
+    if (!q) return
+    q.accountInfo().then((info) => {
       this.emit('account-info', info)
     }).catch(() => {
       // Non-critical — ignore if account info can't be fetched

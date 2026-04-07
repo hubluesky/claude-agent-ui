@@ -14,12 +14,12 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
   }, [children])
 
   return (
-    <div className="group relative bg-[#1e1d1a] border border-[#3d3b37] rounded-md overflow-hidden my-2">
+    <div className="relative bg-[#1e1d1a] border border-[#3d3b37] rounded-md overflow-hidden my-2">
       <div className="flex items-center justify-between px-3 py-1 bg-[#242320] border-b border-[#3d3b37]">
         <span className="text-[10px] font-mono text-[#7c7872]">{language ?? 'text'}</span>
         <button
           onClick={handleCopy}
-          className="text-[10px] text-[#7c7872] hover:text-[#e5e2db] transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+          className="text-[10px] text-[#7c7872] hover:text-[#e5e2db] transition-colors cursor-pointer"
         >
           {copied ? '✓ Copied' : 'Copy'}
         </button>

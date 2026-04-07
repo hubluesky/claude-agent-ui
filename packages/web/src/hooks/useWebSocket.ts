@@ -339,14 +339,18 @@ function handleServerMessage(msg: S2CMessage) {
       useCommandStore.getState().setCommands(msg.commands)
       break
 
-    case 'account-info':
+    case 'account-info': {
+      const prev = conn.accountInfo
       conn.setAccountInfo({
-        email: msg.email,
-        organization: msg.organization,
-        subscriptionType: msg.subscriptionType,
-        apiProvider: msg.apiProvider,
+        ...prev,
+        ...(msg.email != null && { email: msg.email }),
+        ...(msg.organization != null && { organization: msg.organization }),
+        ...(msg.subscriptionType != null && { subscriptionType: msg.subscriptionType }),
+        ...(msg.apiProvider != null && { apiProvider: msg.apiProvider }),
+        ...(msg.model != null && { model: msg.model }),
       })
       break
+    }
 
     case 'models':
       conn.setModels(msg.models ?? [])

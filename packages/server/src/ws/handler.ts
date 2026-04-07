@@ -166,8 +166,44 @@ export function createWsHandler(deps: HandlerDeps) {
   function handleJoinSession(connectionId: string, sessionId: string, lastSeq?: number) {
     wsHub.joinSession(connectionId, sessionId)
     const lockHolder = lockManager.getHolder(sessionId)
-    const activeSession = sessionManager.getActive(sessionId)
+    let activeSession = sessionManager.getActive(sessionId)
     const isLockHolder = lockHolder === connectionId
+
+    // Warm up session for MCP/model/context data if not already active
+    if (!activeSession && sessionId && sessionId !== '__new__') {
+      sessionManager.resumeSession(sessionId).then((session) => {
+        // Bind info events (models, account-info, mcp-status)
+        session.on('models', (models: any[]) => {
+          wsHub.broadcast(sessionId, {
+            type: 'models',
+            sessionId,
+            models: models.map((m: any) => ({
+              value: m.value, displayName: m.displayName, description: m.description,
+              supportsAutoMode: m.supportsAutoMode, supportedEffortLevels: m.supportedEffortLevels,
+            })),
+          })
+        })
+        session.on('account-info', (info: any) => {
+          wsHub.broadcast(sessionId, {
+            type: 'account-info', sessionId,
+            email: info.email, organization: info.organization,
+            subscriptionType: info.subscriptionType, apiProvider: info.apiProvider,
+          })
+        })
+        session.on('mcp-status', (servers: any[]) => {
+          wsHub.broadcast(sessionId, { type: 'mcp-status', sessionId, servers })
+        })
+        session.on('context-usage', (usage: any) => {
+          wsHub.broadcast(sessionId, {
+            type: 'context-usage', sessionId,
+            categories: usage.categories, totalTokens: usage.totalTokens,
+            maxTokens: usage.maxTokens, percentage: usage.percentage, model: usage.model,
+          })
+        })
+        // Trigger background init
+        if ('warmUp' in session) (session as any).warmUp()
+      }).catch(() => {})
+    }
     wsHub.sendTo(connectionId, {
       type: 'session-state',
       sessionId,
@@ -359,6 +395,24 @@ export function createWsHandler(deps: HandlerDeps) {
           }
         } else if (realSessionId !== newId) {
           sessionManager.registerActive(newId, session)
+          // Migrate pending requests from old session ID to new one
+          for (const [, entry] of pendingRequestMap) {
+            if (entry.sessionId === realSessionId) {
+              entry.sessionId = newId
+            }
+          }
+          // Migrate lock from old session ID to new one
+          lockManager.release(realSessionId)
+          lockManager.acquire(newId, connectionId)
+          // Migrate session subscription to new ID
+          wsHub.joinSession(connectionId, newId)
+          // Broadcast lock status under new session ID
+          wsHub.broadcast(newId, {
+            type: 'lock-status',
+            sessionId: newId,
+            status: 'locked',
+            holderId: connectionId,
+          })
           realSessionId = newId
         }
       }
@@ -806,8 +860,8 @@ export function createWsHandler(deps: HandlerDeps) {
         sessionId,
         servers,
       })
-    } catch {
-      // Non-critical
+    } catch (err) {
+      console.log(`[MCP-DEBUG] getMcpStatus error:`, err)
     }
   }
 

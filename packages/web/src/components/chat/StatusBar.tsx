@@ -28,21 +28,12 @@ function ThemeToggle() {
   )
 }
 
-const MODE_LABELS: Record<string, { label: string; color: string }> = {
-  default: { label: 'Default', color: '#a8a29e' },
-  acceptEdits: { label: 'Accept Edits', color: '#60a5fa' },
-  auto: { label: 'Auto', color: '#d97706' },
-  plan: { label: 'Plan', color: '#a78bfa' },
-  bypassPermissions: { label: 'Bypass', color: '#f87171' },
-  dontAsk: { label: "Don't Ask", color: '#7c7872' },
-}
+const EFFORT_DISPLAY: Record<string, string> = { low: 'Lo', medium: 'Med', high: 'Hi' }
 
 export function StatusBar() {
   const accountInfo = useConnectionStore((s) => s.accountInfo)
   const connectionStatus = useConnectionStore((s) => s.connectionStatus)
-  const permissionMode = useSettingsStore((s) => s.permissionMode)
-
-  const mode = MODE_LABELS[permissionMode] ?? MODE_LABELS.default
+  const effort = useSettingsStore((s) => s.effort)
   const isConnected = connectionStatus === 'connected'
 
   return (
@@ -78,20 +69,20 @@ export function StatusBar() {
         </>
       )}
 
-      {/* Context usage + MCP */}
+      {/* Context usage + MCP + Effort */}
       <ContextUsageIndicator />
       <McpIndicator />
+      {effort !== 'high' && (
+        <span className="text-[10px] text-[#7c7872]" title={`Effort: ${effort}`}>
+          {EFFORT_DISPLAY[effort] ?? effort}
+        </span>
+      )}
 
       {/* Spacer */}
       <span className="flex-1" />
 
       {/* Theme toggle */}
       <ThemeToggle />
-
-      {/* Permission mode */}
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ color: mode.color, background: `${mode.color}1a` }}>
-        {mode.label}
-      </span>
     </div>
   )
 }
