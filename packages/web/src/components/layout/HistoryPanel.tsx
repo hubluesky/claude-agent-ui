@@ -121,7 +121,7 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
                 onClick={() => onSelect(s.sessionId)}
                 className={`w-full text-left px-2.5 py-2 rounded-md transition-colors ${
                   currentSessionId === s.sessionId
-                    ? 'bg-[#d977061a] border-l-2 border-[var(--accent)]'
+                    ? 'bg-[var(--accent-subtle-bg)] border-l-2 border-[var(--accent)]'
                     : 'hover:bg-[var(--bg-hover)]'
                 }`}
               >

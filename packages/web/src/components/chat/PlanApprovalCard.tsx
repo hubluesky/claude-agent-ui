@@ -14,7 +14,7 @@ export function PlanApprovalCard() {
   const fileName = planFilePath.split(/[/\\]/).pop() || 'plan.md'
 
   return (
-    <div className="mx-4 sm:mx-10 mb-4 rounded-lg border bg-[#d977060a] border-[#d9770626]">
+    <div className="mx-4 sm:mx-10 mb-4 rounded-lg border bg-[#d977060a] border-[var(--accent-subtle-border)]">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
         {readonly ? (

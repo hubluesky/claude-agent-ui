@@ -47,7 +47,7 @@ const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: stri
   green:  { border: 'border-[#22c55e30]', hoverBg: 'hover:bg-[#22c55e0f]', numBorder: 'border-[#22c55e50]', numText: 'text-[var(--success)]', activeBg: 'bg-[#22c55e15]', activeBorder: 'border-[#22c55e60]' },
   amber:  { border: 'border-[#d9770630]', hoverBg: 'hover:bg-[#d977060f]', numBorder: 'border-[#d9770650]', numText: 'text-[var(--accent)]',  activeBg: 'bg-[#d9770615]', activeBorder: 'border-[#d9770660]' },
   purple: { border: 'border-[#a855f730]', hoverBg: 'hover:bg-[#a855f70f]', numBorder: 'border-[#a855f750]', numText: 'text-[var(--purple)]',  activeBg: 'bg-[#a855f715]', activeBorder: 'border-[#a855f760]' },
-  gray:   { border: 'border-[var(--border)]',   hoverBg: 'hover:bg-[#3d3b3780]', numBorder: 'border-[var(--border)]',   numText: 'text-[var(--text-muted)]',  activeBg: 'bg-[#3d3b3780]', activeBorder: 'border-[var(--text-dim)]' },
+  gray:   { border: 'border-[var(--border)]',   hoverBg: 'hover:bg-[var(--border-half)]', numBorder: 'border-[var(--border)]',   numText: 'text-[var(--text-muted)]',  activeBg: 'bg-[var(--border-half)]', activeBorder: 'border-[var(--text-dim)]' },
   red:    { border: 'border-[#ef444430]',  hoverBg: 'hover:bg-[#ef44440f]', numBorder: 'border-[#ef444450]', numText: 'text-[#ef4444]',  activeBg: 'bg-[#ef444415]', activeBorder: 'border-[#ef444460]' },
 }
 
@@ -149,7 +149,7 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
 
   return (
     <div className="px-4 py-3 shrink-0">
-      <div className={`rounded-xl border ${canInteract ? 'bg-[var(--bg-input)] border-[#d9770626]' : 'bg-[var(--bg-input)] border-[var(--border)]'}`}>
+      <div className={`rounded-xl border ${canInteract ? 'bg-[var(--bg-input)] border-[var(--accent-subtle-border)]' : 'bg-[var(--bg-input)] border-[var(--border)]'}`}>
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
           {canInteract ? (
@@ -256,7 +256,7 @@ export function ApprovalPanel({ config }: { config: ApprovalPanelConfig }) {
                   if (canClaim) handleClaim()
                   setShowOther(true)
                 }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left border border-dashed border-[var(--border)] hover:bg-[#3d3b3780] transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left border border-dashed border-[var(--border)] hover:bg-[var(--border-half)] transition-colors"
               >
                 <span className="text-xs text-[var(--text-muted)]">其他...</span>
               </button>

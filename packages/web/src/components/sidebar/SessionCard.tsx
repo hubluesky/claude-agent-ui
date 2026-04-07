@@ -47,7 +47,7 @@ export function SessionCard({ session, isSelected, onClick, onRename }: SessionC
       onDoubleClick={handleDoubleClick}
       className={`w-full flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors duration-150 ${
         isSelected
-          ? 'bg-[#d977061a] border border-[#d9770640]'
+          ? 'bg-[var(--accent-subtle-bg)] border border-[#d9770640]'
           : 'bg-[var(--bg-hover)] border border-transparent hover:bg-[var(--border)]'
       }`}
     >

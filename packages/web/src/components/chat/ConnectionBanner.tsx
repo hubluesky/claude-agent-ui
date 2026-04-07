@@ -6,9 +6,9 @@ export function ConnectionBanner() {
   if (connectionStatus === 'connected') return null
 
   const config = {
-    disconnected: { bg: 'bg-[#f871710f]', border: 'border-[#f8717126]', text: 'Disconnected from server', color: 'text-[#f87171]' },
-    connecting: { bg: 'bg-[#eab3080f]', border: 'border-[#eab30826]', text: 'Connecting...', color: 'text-[#eab308]' },
-    reconnecting: { bg: 'bg-[#eab3080f]', border: 'border-[#eab30826]', text: 'Connection lost. Reconnecting...', color: 'text-[#eab308]' },
+    disconnected: { bg: 'bg-[#f871710f]', border: 'border-[var(--error-subtle-border)]', text: 'Disconnected from server', color: 'text-[#f87171]' },
+    connecting: { bg: 'bg-[var(--warning-subtle-bg)]', border: 'border-[var(--warning-subtle-border)]', text: 'Connecting...', color: 'text-[#eab308]' },
+    reconnecting: { bg: 'bg-[var(--warning-subtle-bg)]', border: 'border-[var(--warning-subtle-border)]', text: 'Connection lost. Reconnecting...', color: 'text-[#eab308]' },
   }
 
   const c = config[connectionStatus]

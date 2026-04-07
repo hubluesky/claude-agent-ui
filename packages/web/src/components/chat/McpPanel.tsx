@@ -62,7 +62,7 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
               const needsAuth = srv.status === 'needs-auth'
 
               return (
-                <div key={srv.name} className={`px-4 py-3 ${i > 0 ? 'border-t border-[#3d3b3780]' : ''}`}>
+                <div key={srv.name} className={`px-4 py-3 ${i > 0 ? 'border-t border-[var(--border-half)]' : ''}`}>
                   {/* Name + status */}
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2 min-w-0">

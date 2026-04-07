@@ -41,7 +41,7 @@ export function ToastContainer() {
 function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => void }) {
   const colors = {
     error: 'bg-[#f871710f] border-[#f8717133] text-[#f87171]',
-    warn: 'bg-[#eab3080f] border-[#eab30833] text-[#eab308]',
+    warn: 'bg-[var(--warning-subtle-bg)] border-[#eab30833] text-[#eab308]',
     info: 'bg-[#0ea5e90f] border-[#0ea5e933] text-[#0ea5e9]',
   }
 

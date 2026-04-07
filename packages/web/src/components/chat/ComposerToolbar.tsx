@@ -22,9 +22,9 @@ interface ComposerToolbarProps {
 
 // modeColorClass is module-level so it's not recreated on every render
 const modeColorClass: Record<string, { text: string; hover: string; hoverBg: string }> = {
-  default: { text: 'text-[var(--text-secondary)]', hover: 'hover:text-[var(--text-primary)]', hoverBg: 'hover:bg-[#3d3b3780]' },
+  default: { text: 'text-[var(--text-secondary)]', hover: 'hover:text-[var(--text-primary)]', hoverBg: 'hover:bg-[var(--border-half)]' },
   acceptEdits: { text: 'text-[var(--info)]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
-  auto: { text: 'text-[var(--accent)]', hover: 'hover:text-[var(--warning)]', hoverBg: 'hover:bg-[#d977061a]' },
+  auto: { text: 'text-[var(--accent)]', hover: 'hover:text-[var(--warning)]', hoverBg: 'hover:bg-[var(--accent-subtle-bg)]' },
   plan: { text: 'text-[#a78bfa]', hover: 'hover:text-[#c4b5fd]', hoverBg: 'hover:bg-[#a78bfa1a]' },
   bypassPermissions: { text: 'text-[var(--error)]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
 }
@@ -158,7 +158,7 @@ export function ComposerToolbar({
           <>
             <button
               onClick={onReleaseLock}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[#3d3b3780] transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border-half)] transition-colors"
               title="Release lock"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

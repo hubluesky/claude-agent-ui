@@ -81,7 +81,7 @@ export function ModelSelector() {
                     key={m.value}
                     onClick={() => handleSelect(m.value)}
                     className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
-                      isActive ? 'bg-[#d977061a]' : 'hover:bg-[#3d3b3780]'
+                      isActive ? 'bg-[var(--accent-subtle-bg)]' : 'hover:bg-[var(--border-half)]'
                     }`}
                   >
                     <div className="flex-1 min-w-0">

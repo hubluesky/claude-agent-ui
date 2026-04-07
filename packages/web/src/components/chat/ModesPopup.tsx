@@ -58,7 +58,7 @@ export function ModesPopup({ currentMode, currentEffort, maxBudgetUsd, maxTurns,
                 key={m.mode}
                 onClick={() => { onModeChange(m.mode); onClose() }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-colors ${
-                  isActive ? 'bg-[#d977061a]' : 'hover:bg-[#3d3b3780]'
+                  isActive ? 'bg-[var(--accent-subtle-bg)]' : 'hover:bg-[var(--border-half)]'
                 }`}
               >
                 <ModeIcon type={m.icon} active={isActive} />

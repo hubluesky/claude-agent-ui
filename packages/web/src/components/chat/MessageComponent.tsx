@@ -117,7 +117,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                 if (textClass === 'internal-output') return null
                 if (textClass === 'compact-summary') {
                   return (
-                    <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+                    <details key={i} className="bg-[var(--info-subtle-bg)] border border-[var(--info-subtle-border)] rounded-md px-3 py-2">
                       <summary className="text-xs text-[var(--cyan)] cursor-pointer">Context summary (compacted)</summary>
                       <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
                     </details>
@@ -129,13 +129,13 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                 const thinkingText = block.thinking || block.text || ''
                 if (!thinkingText) {
                   return block.type === 'redacted_thinking' ? (
-                    <div key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
+                    <div key={i} className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2">
                       <span className="text-xs text-[#8b5cf680] italic">Thinking (redacted)</span>
                     </div>
                   ) : null
                 }
                 return (
-                  <details key={i} className="bg-[#8b5cf60f] rounded-md px-3 py-2">
+                  <details key={i} className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2">
                     <summary className="text-xs text-[var(--purple)] cursor-pointer">Thinking...</summary>
                     <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{thinkingText}</p>
                   </details>
@@ -157,7 +157,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const subtype = (message as any).subtype ?? ''
     if (subtype.startsWith('error')) {
       return (
-        <div className="flex items-start gap-2.5 bg-[#f871710a] border border-[#f8717126] rounded-md px-4 py-3">
+        <div className="flex items-start gap-2.5 bg-[var(--error-subtle-bg)] border border-[var(--error-subtle-border)] rounded-md px-4 py-3">
           <div className="w-5 h-5 rounded-full bg-[var(--error)] flex items-center justify-center shrink-0">
             <span className="text-[11px] font-bold text-[var(--bg-primary)]">!</span>
           </div>
@@ -193,7 +193,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     }
     if (blockType === 'thinking') {
       return (
-        <details open className="bg-[#8b5cf60f] rounded-md px-3 py-2 ml-10">
+        <details open className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2 ml-10">
           <summary className="text-xs text-[var(--purple)] cursor-pointer">Thinking...</summary>
           <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{content}</p>
         </details>
@@ -207,7 +207,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const sub = (message as any).subtype
     if (sub === 'api_retry') {
       return (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[#eab3080a] border border-[#eab30826] rounded-md px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--warning-subtle-bg)] border border-[var(--warning-subtle-border)] rounded-md px-3 py-2">
           <svg className="w-3.5 h-3.5 text-[#eab308] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
           </svg>
@@ -217,7 +217,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     }
     if (sub === 'status' && (message as any).status === 'compacting') {
       return (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--info-subtle-bg)] border border-[var(--info-subtle-border)] rounded-md px-3 py-2">
           <svg className="w-3.5 h-3.5 text-[var(--cyan)] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
           </svg>
@@ -234,7 +234,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const content = (message as any).content ?? (message as any).message ?? ''
       if (!content) return null
       return (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10 pl-5 border-l-2 border-[#a855f726]">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10 pl-5 border-l-2 border-[var(--purple-subtle-border)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--purple)]" />
           <span className="truncate">{typeof content === 'string' ? content.slice(0, 120) : JSON.stringify(content).slice(0, 120)}</span>
         </div>
@@ -245,8 +245,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const isError = status === 'error' || status === 'failed'
       return (
         <div className={`flex items-center gap-2 text-xs ml-10 px-3 py-2 rounded-md ${
-          isError ? 'text-[var(--error)] bg-[#f871710a] border border-[#f8717126]'
-            : 'text-[#a3e635] bg-[#a3e6350a] border border-[#a3e63526]'
+          isError ? 'text-[var(--error)] bg-[var(--error-subtle-bg)] border border-[var(--error-subtle-border)]'
+            : 'text-[#a3e635] bg-[var(--success-subtle-bg)] border border-[var(--success-subtle-border)]'
         }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${isError ? 'bg-[var(--error)]' : 'bg-[#a3e635]'}`} />
           {(message as any).agent_name ?? 'subagent'} {status}
@@ -312,7 +312,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const retryAfter = (message as any).retry_after ?? 30
     const wrapCls = isWarning
       ? 'bg-[#f59e0b0a] border border-[#f59e0b26]'
-      : 'bg-[#f871710a] border border-[#f8717126]'
+      : 'bg-[var(--error-subtle-bg)] border border-[var(--error-subtle-border)]'
     const dotCls = isWarning ? 'bg-[var(--warning)]' : 'bg-[var(--error)]'
     const textCls = isWarning ? 'text-[var(--warning)]' : 'text-[var(--error)]'
     return (
@@ -474,7 +474,7 @@ function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string
   }
 
   return (
-    <div className="ml-10 border border-[#a855f726] rounded-md overflow-hidden">
+    <div className="ml-10 border border-[var(--purple-subtle-border)] rounded-md overflow-hidden">
       <div
         className="flex items-center gap-2 text-xs text-[var(--purple)] bg-[#a855f70a] px-3 py-2 cursor-pointer hover:bg-[#a855f712]"
         onClick={handleExpand}
@@ -490,7 +490,7 @@ function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string
         </svg>
       </div>
       {expanded && (
-        <div className="border-t border-[#a855f726] bg-[var(--bg-input)] max-h-60 overflow-y-auto">
+        <div className="border-t border-[var(--purple-subtle-border)] bg-[var(--bg-input)] max-h-60 overflow-y-auto">
           {messages === null ? (
             <div className="px-3 py-2 text-[10px] text-[var(--text-muted)]">Loading messages...</div>
           ) : messages.length === 0 ? (
@@ -546,7 +546,7 @@ function StopTaskButton({ taskId }: { taskId: string }) {
   return (
     <button
       onClick={handleStop}
-      className="px-1.5 py-0.5 text-[10px] text-[var(--error)] bg-[#f871710a] border border-[#f8717126] rounded hover:bg-[#f871711a] transition-colors cursor-pointer"
+      className="px-1.5 py-0.5 text-[10px] text-[var(--error)] bg-[var(--error-subtle-bg)] border border-[var(--error-subtle-border)] rounded hover:bg-[#f871711a] transition-colors cursor-pointer"
       title="Stop this task"
     >
       Stop
@@ -598,7 +598,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
               if (textClass === 'internal-output') return null
               if (textClass === 'compact-summary') {
                 return (
-                  <details key={i} className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+                  <details key={i} className="bg-[var(--info-subtle-bg)] border border-[var(--info-subtle-border)] rounded-md px-3 py-2">
                     <summary className="text-xs text-[var(--cyan)] cursor-pointer">Context summary (compacted)</summary>
                     <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed whitespace-pre-wrap">{block.text}</div>
                   </details>
@@ -635,7 +635,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
     if (rawTextClass === 'internal-output') return null
     if (rawTextClass === 'compact-summary') {
       return (
-        <details className="bg-[#0ea5e90a] border border-[#0ea5e926] rounded-md px-3 py-2">
+        <details className="bg-[var(--info-subtle-bg)] border border-[var(--info-subtle-border)] rounded-md px-3 py-2">
           <summary className="text-xs text-[var(--cyan)] cursor-pointer">Context summary (compacted)</summary>
           <div className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed whitespace-pre-wrap">{rawText}</div>
         </details>
@@ -729,8 +729,8 @@ function ToolResultBlock({ block }: { block: any }) {
 
   return (
     <div className={`border rounded-md overflow-hidden ml-10 ${
-      isDenial ? 'border-[#d9770626] bg-[#d977060a]'
-        : isError ? 'border-[#f8717126] bg-[#f871710a]'
+      isDenial ? 'border-[var(--accent-subtle-border)] bg-[#d977060a]'
+        : isError ? 'border-[var(--error-subtle-border)] bg-[var(--error-subtle-bg)]'
         : 'border-[var(--border)] bg-[var(--bg-secondary)]'
     }`}>
       <div
@@ -766,7 +766,7 @@ function InlineDiff({ filePath, oldStr, newStr }: { filePath?: string; oldStr: s
       {filePath && <div className="text-[10px] text-[var(--text-muted)] mb-1 font-sans">{filePath}</div>}
       <div className="rounded overflow-hidden border border-[var(--border)]">
         {oldLines.map((line, i) => (
-          <div key={`d${i}`} className="flex bg-[#f871710a]">
+          <div key={`d${i}`} className="flex bg-[var(--error-subtle-bg)]">
             <span className="w-8 text-right pr-2 text-[#f8717166] select-none shrink-0 border-r border-[var(--border)]">{i + 1}</span>
             <span className="px-2 text-[#f87171cc] whitespace-pre-wrap break-all">- {line}</span>
           </div>
