@@ -9,11 +9,10 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 function loadIcon(): string {
-  // 尝试加载图标，支持 .ico (Windows) 和 .png (macOS/Linux)
-  const ext = process.platform === 'win32' ? 'ico' : 'png'
+  // systray2 所有平台都支持 base64 PNG，统一用 icon.png
   const paths = [
-    join(__dirname, '..', 'assets', `icon.${ext}`),
-    join(__dirname, '..', 'assets', 'icon.png'), // fallback
+    join(__dirname, '..', 'assets', 'icon.png'),
+    join(__dirname, '..', '..', 'assets', 'icon.png'), // from dist/
   ]
   for (const p of paths) {
     try {
@@ -24,17 +23,19 @@ function loadIcon(): string {
 }
 
 interface TrayCallbacks {
-  onOpenBrowser: () => void
+  onOpenUI: () => void
+  onOpenAdmin: () => void
   onRestart: () => void
   onResetPassword: () => void
   onQuit: () => void
 }
 
 const SEQ_STATUS = 0
-const SEQ_OPEN = 2
-const SEQ_RESTART = 4
-const SEQ_RESET_PASSWORD = 6
-const SEQ_QUIT = 8
+const SEQ_OPEN_UI = 2
+const SEQ_OPEN_ADMIN = 3
+const SEQ_RESTART = 5
+const SEQ_RESET_PASSWORD = 7
+const SEQ_QUIT = 9
 
 export function createTray(port: number, callbacks: TrayCallbacks): InstanceType<typeof SysTray> {
   const systray = new SysTray({
@@ -46,7 +47,8 @@ export function createTray(port: number, callbacks: TrayCallbacks): InstanceType
       items: [
         { title: `● 运行中  :${port}`, tooltip: '', checked: false, enabled: false },
         SysTray.separator,
-        { title: '在浏览器中打开', tooltip: '打开管理面板', checked: false, enabled: true },
+        { title: '打开聊天界面', tooltip: '在浏览器中打开聊天 UI', checked: false, enabled: true },
+        { title: '管理面板', tooltip: '打开服务器管理面板', checked: false, enabled: true },
         SysTray.separator,
         { title: '重启服务器', tooltip: '重启 Fastify', checked: false, enabled: true },
         SysTray.separator,
@@ -61,8 +63,11 @@ export function createTray(port: number, callbacks: TrayCallbacks): InstanceType
 
   systray.onClick((action: { seq_id: number }) => {
     switch (action.seq_id) {
-      case SEQ_OPEN:
-        callbacks.onOpenBrowser()
+      case SEQ_OPEN_UI:
+        callbacks.onOpenUI()
+        break
+      case SEQ_OPEN_ADMIN:
+        callbacks.onOpenAdmin()
         break
       case SEQ_RESTART:
         callbacks.onRestart()

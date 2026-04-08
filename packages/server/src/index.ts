@@ -100,8 +100,11 @@ server.listen({ port: config.port, host: config.host }, (err) => {
   // 创建系统托盘
   try {
     createTray(config.port, {
-      onOpenBrowser: () => {
+      onOpenUI: () => {
         open(`http://localhost:${config.port}`)
+      },
+      onOpenAdmin: () => {
+        open(`http://localhost:${config.port}/admin`)
       },
       onRestart: async () => {
         logCollector.info('server', '用户通过托盘请求重启')
