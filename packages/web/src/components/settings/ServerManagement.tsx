@@ -12,7 +12,7 @@ export function ServerManagement() {
   useEffect(() => {
     fetchStatus()
     fetchConfig()
-    const interval = setInterval(fetchStatus, 5000)
+    const interval = setInterval(() => { fetchStatus(); fetchConfig() }, 5000)
     return () => clearInterval(interval)
   }, [fetchStatus, fetchConfig])
 
