@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { ServerManager } from '../server-manager.js'
 import type { LogCollector } from '../log-collector.js'
+import type { SdkUpdater } from '../sdk-updater.js'
 import type { ServerConfigUpdate } from '@claude-agent-ui/shared'
 import { existsSync } from 'fs'
 import { join, dirname } from 'path'
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'url'
 export function managementRoutes(
   serverManager: ServerManager,
   logCollector: LogCollector,
+  sdkUpdater: SdkUpdater,
 ) {
   return async function (app: FastifyInstance) {
     // GET /api/server/status
@@ -67,6 +69,46 @@ export function managementRoutes(
     // PUT /api/server/config
     app.put<{ Body: ServerConfigUpdate }>('/api/server/config', async (_request) => {
       return { ok: true, message: '配置已更新' }
+    })
+
+    // GET /api/sdk/version
+    app.get('/api/sdk/version', async () => {
+      const current = sdkUpdater.getCurrentVersion()
+      const latest = await sdkUpdater.getLatestVersion()
+      return {
+        current,
+        latest,
+        updateAvailable: latest !== null && latest !== current,
+        lastChecked: new Date().toISOString(),
+      }
+    })
+
+    // POST /api/sdk/update — SSE stream
+    app.post('/api/sdk/update', async (request, reply) => {
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      })
+
+      const status = serverManager.getStatus()
+      const updateFn = status.mode === 'dev'
+        ? sdkUpdater.updateDev.bind(sdkUpdater)
+        : sdkUpdater.updateProd.bind(sdkUpdater)
+
+      try {
+        await updateFn((progress) => {
+          reply.raw.write(`data: ${JSON.stringify(progress)}\n\n`)
+        })
+      } catch {
+        // 错误已在 progress callback 中发送
+      }
+      reply.raw.end()
+    })
+
+    // GET /api/sdk/features
+    app.get('/api/sdk/features', async () => {
+      return sdkUpdater.getFeatures()
     })
   }
 }
