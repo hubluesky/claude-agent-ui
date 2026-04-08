@@ -36,18 +36,20 @@ export function ServerLogs({ fullHeight }: { fullHeight?: boolean } = {}) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [logs.length])
 
   return (
-    <div className={fullHeight ? "h-full flex flex-col" : "flex flex-col min-h-0"} style={fullHeight ? { padding: '12px 16px' } : undefined}>
-      <div className="flex justify-between items-center mb-1.5">
-        <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+    <div
+      className={`rounded-lg border flex flex-col ${fullHeight ? 'h-full' : ''}`}
+      style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', ...(fullHeight ? {} : { maxHeight: '240px' }) }}
+    >
+      {/* 卡片 header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           日志 <span style={{ color: 'var(--accent)' }}>{logs.length}</span>
-        </div>
-        <button onClick={clearLogs} className="text-[10px] text-[var(--text-muted)] cursor-pointer hover:underline transition-colors">清除</button>
+        </span>
+        <button onClick={clearLogs} className="text-[10px] cursor-pointer transition-colors" style={{ color: 'var(--text-muted)' }}>清除</button>
       </div>
-      <div
-        className={`${fullHeight ? 'flex-1' : ''} p-2.5 rounded-lg border font-mono text-[10px] leading-[1.7] overflow-y-auto`}
-        style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'var(--border)', ...(fullHeight ? {} : { maxHeight: '240px', minHeight: '120px' }) }}
-      >
-        {logs.length === 0 && <div className="text-[var(--text-muted)] py-2 text-center">暂无日志</div>}
+      {/* 日志内容 */}
+      <div className="flex-1 overflow-y-auto p-2 font-mono text-[10px] leading-[1.7] min-h-0" style={{ background: 'rgba(0,0,0,0.15)' }}>
+        {logs.length === 0 && <div className="py-3 text-center" style={{ color: 'var(--text-muted)' }}>暂无日志</div>}
         {logs.map((entry, i) => (
           <div key={i} className="hover:bg-white/[0.02] px-1 rounded">
             <span className="opacity-30 select-none">{new Date(entry.timestamp).toLocaleTimeString()}</span>{' '}
