@@ -60,15 +60,18 @@ export function SdkUpdateDialog({ onClose }: { onClose: () => void }) {
           </>
         )}
         {/* 完成 */}
-        {isDone && progress.result && (
+        {isDone && (
           <>
             <div className="text-center mb-4">
-              <div className="text-lg font-semibold">更新成功</div>
-              <div className="text-[var(--text-muted)] mt-1 font-mono text-sm">
-                <span className="line-through opacity-40">{progress.result.previousVersion}</span>
-                <span className="mx-2">→</span>
-                <span style={{ color: 'var(--success)' }}>{progress.result.newVersion}</span>
-              </div>
+              <div className="text-lg font-semibold" style={{ color: 'var(--success)' }}>更新完成</div>
+              <div className="text-[var(--text-muted)] mt-1 text-sm">{progress.message}</div>
+              {progress.result && (
+                <div className="mt-1 font-mono text-sm">
+                  <span className="line-through opacity-40">{progress.result.previousVersion}</span>
+                  <span className="mx-2">→</span>
+                  <span style={{ color: 'var(--success)' }}>{progress.result.newVersion}</span>
+                </div>
+              )}
             </div>
             {sdkFeatures.filter(f => f.uiSupported).length > 0 && (
               <div className="mb-3">
