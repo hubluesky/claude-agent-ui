@@ -3,8 +3,6 @@ import { useServerStore } from '../../stores/serverStore'
 import { ServerStatusCard } from './ServerStatusCard'
 import { SdkSection } from './SdkSection'
 import { ConnectionsList } from './ConnectionsList'
-import { ServerConfig } from './ServerConfig'
-import { ServerLogs } from './ServerLogs'
 
 export function ServerManagement() {
   const fetchStatus = useServerStore((s) => s.fetchStatus)
@@ -18,18 +16,11 @@ export function ServerManagement() {
   }, [fetchStatus, fetchConfig])
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-6 space-y-4">
-      {/* 状态概览 */}
+    <div className="p-5 space-y-3">
       <ServerStatusCard />
-      {/* SDK + 配置 并排 */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-4">
+      <div className="grid grid-cols-[1fr_260px] gap-3">
         <SdkSection />
-        <ServerConfig />
-      </div>
-      {/* 连接 + 日志 并排 */}
-      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
         <ConnectionsList />
-        <ServerLogs />
       </div>
     </div>
   )

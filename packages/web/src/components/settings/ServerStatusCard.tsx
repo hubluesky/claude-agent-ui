@@ -12,44 +12,28 @@ export function ServerStatusCard() {
   const status = useServerStore((s) => s.status)
   const restart = useServerStore((s) => s.restart)
 
-  if (!status) return <div className="text-[var(--text-muted)] text-xs">加载中...</div>
+  if (!status) return null
 
   const running = status.status === 'running'
 
   return (
-    <div
-      className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border"
-      style={{
-        background: running ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
-        borderColor: running ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-      }}
-    >
-      <div className="flex items-center gap-4 text-xs">
-        {/* 状态指示 */}
+    <div className="rounded-lg border px-4 py-3 flex items-center justify-between" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+      <div className="flex items-center gap-3 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full" style={{ background: running ? 'var(--success)' : 'var(--error)' }} />
+          <span className="w-2 h-2 rounded-full" style={{ background: running ? 'var(--success)' : 'var(--error)', boxShadow: running ? '0 0 6px rgba(34,197,94,0.4)' : 'none' }} />
           <span className="font-semibold" style={{ color: running ? 'var(--success)' : 'var(--error)' }}>
             {running ? '运行中' : '已停止'}
           </span>
         </div>
-        {/* 信息标签 */}
-        <div className="flex items-center gap-3 text-[var(--text-muted)]">
-          <span className="font-mono">:{status.port}</span>
-          <span className="w-px h-3 bg-[var(--border)]" />
-          <span>{formatUptime(status.uptime)}</span>
-          <span className="w-px h-3 bg-[var(--border)]" />
-          <span>PID {status.pid}</span>
-          <span className="w-px h-3 bg-[var(--border)]" />
-          <span>{status.mode === 'dev' ? '开发' : '生产'}</span>
-          <span className="w-px h-3 bg-[var(--border)]" />
-          <span>{status.connections.length} 连接</span>
-        </div>
+        <span className="text-[var(--text-muted)]">端口 <b className="text-[var(--text-primary)]">{status.port}</b></span>
+        <span className="text-[var(--text-muted)]">上线 <b className="text-[var(--text-primary)]">{formatUptime(status.uptime)}</b></span>
+        <span className="text-[var(--text-muted)]">PID <b className="text-[var(--text-primary)]">{status.pid}</b></span>
+        <span className="text-[var(--text-muted)]">模式 <b className="text-[var(--text-primary)]">{status.mode === 'dev' ? '开发' : '生产'}</b></span>
+        <span className="text-[var(--text-muted)]">连接 <b className="text-[var(--text-primary)]">{status.connections.length}</b></span>
       </div>
-      <button
-        onClick={restart}
+      <button onClick={restart}
         className="px-3 py-1 text-[11px] rounded border cursor-pointer transition-colors hover:opacity-80"
-        style={{ background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.2)', color: '#60a5fa' }}
-      >
+        style={{ background: 'rgba(59,130,246,0.08)', borderColor: 'rgba(59,130,246,0.2)', color: '#60a5fa' }}>
         重启
       </button>
     </div>

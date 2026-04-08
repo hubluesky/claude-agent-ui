@@ -15,45 +15,40 @@ export function SdkSection() {
 
   const handleViewLastResult = () => {
     if (!lastUpdateResult) return
-    // 恢复上次的 progress 到 store，然后打开 dialog
     setSdkUpdateProgress(lastUpdateResult.progress)
     fetchSdkFeatures()
     setShowLastResult(true)
   }
 
   return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--accent)' }}>Agent SDK</div>
-      <div className="p-3 rounded-lg border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-        <div className="flex justify-between items-center">
+    <div className="rounded-lg border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+      <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Agent SDK</span>
+      </div>
+      <div className="px-3 py-3">
+        <div className="flex items-center justify-between">
           <div>
-            <span className="font-mono text-sm">@anthropic-ai/claude-agent-sdk</span>
-            <span className="ml-2 font-semibold">{sdkVersion?.current ?? '...'}</span>
+            <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>claude-agent-sdk</span>
+            <span className="ml-2 text-sm font-bold">{sdkVersion?.current ?? '...'}</span>
           </div>
           <div className="flex items-center gap-2">
             {sdkVersion?.updateAvailable && (
               <>
-                <span className="px-2 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.25)', color: '#eab308' }}>
-                  {sdkVersion.latest} 可用
+                <span className="px-2 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)', color: '#eab308' }}>
+                  {sdkVersion.latest}
                 </span>
-                <button onClick={() => setShowUpdate(true)} className="px-3 py-1 text-xs rounded-md border cursor-pointer" style={{ background: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.3)', color: 'var(--accent)' }}>
+                <button onClick={() => setShowUpdate(true)} className="px-2.5 py-1 text-[11px] rounded border cursor-pointer transition-colors" style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.3)', color: 'var(--accent)' }}>
                   更新
                 </button>
               </>
             )}
           </div>
         </div>
-        <div className="mt-1 text-[10px] text-[var(--text-muted)]">
-          上次检查: {sdkVersion?.lastChecked ? new Date(sdkVersion.lastChecked).toLocaleTimeString() : '未检查'}
-          {' · '}
-          <button onClick={fetchSdkVersion} className="underline cursor-pointer">立即检查</button>
+        <div className="mt-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          {sdkVersion?.lastChecked ? new Date(sdkVersion.lastChecked).toLocaleTimeString() : ''} ·{' '}
+          <button onClick={fetchSdkVersion} className="underline cursor-pointer">检查更新</button>
           {lastUpdateResult && (
-            <>
-              {' · '}
-              <button onClick={handleViewLastResult} className="underline cursor-pointer">
-                查看上次更新摘要
-              </button>
-            </>
+            <> · <button onClick={handleViewLastResult} className="underline cursor-pointer">更新历史</button></>
           )}
         </div>
       </div>

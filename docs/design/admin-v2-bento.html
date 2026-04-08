@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin V2 — Bento Grid</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #09090b; color: #e4e4e7; min-height: 100vh; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; }
+  .topbar h1 { font-size: 15px; font-weight: 600; color: #a1a1aa; }
+  .topbar h1 span { color: #f59e0b; }
+  .topbar-actions { display: flex; gap: 6px; }
+  .btn-ghost { padding: 6px 12px; font-size: 11px; border-radius: 8px; border: none; background: rgba(255,255,255,0.04); color: #71717a; cursor: pointer; transition: all 0.15s; }
+  .btn-ghost:hover { background: rgba(255,255,255,0.08); color: #a1a1aa; }
+
+  .bento { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: auto auto 1fr; gap: 12px; padding: 0 24px 24px; max-width: 1100px; margin: 0 auto; }
+
+  .tile { background: #18181b; border-radius: 14px; border: 1px solid #27272a; padding: 16px; transition: border-color 0.2s; }
+  .tile:hover { border-color: #3f3f46; }
+
+  /* 状态 tile — 跨4列 */
+  .tile-status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 14px 20px; }
+  .status-pill { display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(34,197,94,0.08); border-radius: 20px; border: 1px solid rgba(34,197,94,0.15); }
+  .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .status-pill span { font-size: 12px; font-weight: 600; color: #22c55e; }
+  .status-tags { display: flex; align-items: center; gap: 0; flex: 1; }
+  .tag { padding: 6px 12px; font-size: 11px; color: #52525b; }
+  .tag .v { color: #a1a1aa; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .tag + .tag { border-left: 1px solid #27272a; }
+  .btn-blue { padding: 7px 16px; font-size: 11px; border-radius: 8px; border: 1px solid rgba(59,130,246,0.25); background: rgba(59,130,246,0.08); color: #60a5fa; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+  .btn-blue:hover { background: rgba(59,130,246,0.15); }
+
+  /* SDK tile — 跨2列 */
+  .tile-sdk { grid-column: span 2; }
+  .tile-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #52525b; margin-bottom: 10px; }
+  .sdk-main { display: flex; align-items: center; justify-content: space-between; }
+  .sdk-pkg { font-family: 'SF Mono', monospace; font-size: 12px; color: #71717a; }
+  .sdk-ver { font-size: 18px; font-weight: 700; color: #e4e4e7; margin-left: 10px; }
+  .sdk-btns { display: flex; gap: 6px; align-items: center; }
+  .badge-amber { display: inline-flex; align-items: center; padding: 4px 10px; font-size: 10px; border-radius: 6px; background: rgba(245,158,11,0.1); color: #f59e0b; border: 1px solid rgba(245,158,11,0.2); font-weight: 500; }
+  .btn-amber { padding: 6px 14px; font-size: 11px; border-radius: 8px; border: 1px solid rgba(245,158,11,0.3); background: rgba(245,158,11,0.08); color: #f59e0b; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+  .btn-amber:hover { background: rgba(245,158,11,0.18); }
+  .sdk-footer { font-size: 10px; color: #3f3f46; margin-top: 8px; }
+  .sdk-footer a { color: #52525b; cursor: pointer; }
+  .sdk-footer a:hover { color: #71717a; text-decoration: underline; }
+
+  /* 配置 tile — 跨2列 */
+  .tile-config { grid-column: span 2; }
+  .cfg-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; }
+  .cfg-row + .cfg-row { border-top: 1px solid #1e1e22; }
+  .cfg-key { font-size: 12px; color: #71717a; }
+  .cfg-input { width: 60px; padding: 4px 8px; font-size: 12px; font-family: monospace; text-align: right; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #e4e4e7; outline: none; transition: border-color 0.15s; }
+  .cfg-input:focus { border-color: #f59e0b; }
+  .switch { width: 34px; height: 18px; border-radius: 9px; background: #27272a; position: relative; cursor: pointer; }
+  .switch::after { content: ''; width: 14px; height: 14px; border-radius: 50%; background: #52525b; position: absolute; top: 2px; left: 2px; transition: all 0.2s; }
+  .switch.on { background: #f59e0b; }
+  .switch.on::after { background: white; transform: translateX(16px); }
+  .seg { display: flex; border: 1px solid #27272a; border-radius: 6px; overflow: hidden; }
+  .seg-btn { padding: 4px 12px; font-size: 10px; border: none; background: transparent; color: #52525b; cursor: pointer; }
+  .seg-btn.active { background: rgba(245,158,11,0.12); color: #f59e0b; }
+
+  /* 连接 tile — 1列 */
+  .tile-conn { grid-column: span 1; }
+  .conn-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 11px; }
+  .conn-row + .conn-row { border-top: 1px solid #1e1e22; }
+  .mono { font-family: monospace; color: #52525b; }
+  .lock-icon { color: #f59e0b; }
+
+  /* 日志 tile — 3列 */
+  .tile-logs { grid-column: span 3; display: flex; flex-direction: column; }
+  .log-scroll { flex: 1; min-height: 160px; max-height: 300px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 11px; line-height: 1.8; padding: 10px; background: #09090b; border-radius: 8px; margin-top: 8px; }
+  .log-entry { padding: 1px 4px; border-radius: 3px; }
+  .log-entry:hover { background: rgba(255,255,255,0.02); }
+  .lt { opacity: 0.2; }
+  .li { color: #22c55e; }
+  .lc-srv { color: #22c55e; }
+  .lc-conn { color: #3b82f6; }
+  .lc-sess { color: #a855f7; }
+  .lm { color: #a1a1aa; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1><span>●</span> Claude Agent UI</h1>
+  <div class="topbar-actions">
+    <button class="btn-ghost">修改密码</button>
+    <button class="btn-ghost" style="color:#f87171">登出</button>
+  </div>
+</div>
+
+<div class="bento">
+  <!-- 状态 -->
+  <div class="tile tile-status">
+    <div class="status-pill"><div class="dot"></div><span>运行中</span></div>
+    <div class="status-tags">
+      <div class="tag">端口 <span class="v">4000</span></div>
+      <div class="tag">上线 <span class="v">2h 31m</span></div>
+      <div class="tag">PID <span class="v">37444</span></div>
+      <div class="tag">模式 <span class="v">生产</span></div>
+      <div class="tag">连接 <span class="v">2</span></div>
+    </div>
+    <button class="btn-blue">重启服务器</button>
+  </div>
+
+  <!-- SDK -->
+  <div class="tile tile-sdk">
+    <div class="tile-label">Agent SDK</div>
+    <div class="sdk-main">
+      <div><span class="sdk-pkg">claude-agent-sdk</span><span class="sdk-ver">0.2.94</span></div>
+      <div class="sdk-btns">
+        <span class="badge-amber">0.2.96 可用</span>
+        <button class="btn-amber">更新</button>
+      </div>
+    </div>
+    <div class="sdk-footer">上次检查 17:07 · <a>立即检查</a> · <a>更新历史</a></div>
+  </div>
+
+  <!-- 配置 -->
+  <div class="tile tile-config">
+    <div class="tile-label">配置</div>
+    <div class="cfg-row">
+      <span class="cfg-key">端口</span>
+      <input class="cfg-input" type="number" value="4000">
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-key">开机自启</span>
+      <div class="switch"></div>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-key">运行模式</span>
+      <div class="seg">
+        <button class="seg-btn active">生产</button>
+        <button class="seg-btn">开发</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 连接 -->
+  <div class="tile tile-conn">
+    <div class="tile-label">连接 <span style="color:#f59e0b">2</span></div>
+    <div class="conn-row">
+      <span class="mono">c5e07f41</span>
+      <span><span class="lock-icon">&#x1F512;</span> <span class="mono">2ff9dc</span></span>
+    </div>
+    <div class="conn-row">
+      <span class="mono">2cc44f46</span>
+      <span style="color:#3f3f46;font-size:10px">空闲</span>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="tile tile-logs">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="tile-label" style="margin:0">日志 <span style="color:#f59e0b">4</span></div>
+      <span style="font-size:10px;color:#3f3f46;cursor:pointer">清除</span>
+    </div>
+    <div class="log-scroll">
+      <div class="log-entry"><span class="lt">17:07:46</span> <span class="li">INFO</span>  <span class="lc-srv">[server]</span> <span class="lm">服务器已启动，端口 4000</span></div>
+      <div class="log-entry"><span class="lt">17:07:46</span> <span class="li">INFO</span>  <span class="lc-srv">[server]</span> <span class="lm">系统托盘已创建</span></div>
+      <div class="log-entry"><span class="lt">17:07:48</span> <span class="li">INFO</span>  <span class="lc-conn">[conn]</span> <span class="lm">客户端已连接 c5e07f41</span></div>
+      <div class="log-entry"><span class="lt">17:07:52</span> <span class="li">INFO</span>  <span class="lc-sess">[session]</span> <span class="lm">会话 2ff9dcc9 已创建</span></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

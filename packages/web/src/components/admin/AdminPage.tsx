@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAdminStore } from '../../stores/adminStore'
 import { ServerManagement } from '../settings/ServerManagement'
+import { ServerLogs } from '../settings/ServerLogs'
+import { ServerConfig } from '../settings/ServerConfig'
 
 export function AdminPage() {
   const status = useAdminStore((s) => s.status)
@@ -36,8 +38,7 @@ function SetupForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     clearError()
-    if (password.length < 4) return
-    if (password !== confirm) return
+    if (password.length < 4 || password !== confirm) return
     await setup(password)
   }
 
@@ -45,23 +46,18 @@ function SetupForm() {
 
   return (
     <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-primary)' }}>
-      <form onSubmit={handleSubmit} className="w-[360px] p-6 rounded-lg border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-        <div className="text-center mb-6">
-          <div className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>设置管理密码</div>
-          <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>首次使用，请设置管理面板密码</div>
+      <form onSubmit={handleSubmit} className="w-[340px] p-6 rounded-lg border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+        <div className="text-center mb-5">
+          <div className="w-8 h-8 rounded-lg mx-auto mb-3" style={{ background: 'var(--accent)' }} />
+          <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>设置管理密码</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>首次使用，请设置密码</div>
         </div>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>密码（至少 4 位）</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="输入密码" />
-          </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>确认密码</label>
-            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="再次输入密码" />
-            {confirm && password !== confirm && <div className="text-xs mt-1" style={{ color: 'var(--error)' }}>密码不一致</div>}
-          </div>
+        <div className="space-y-3">
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="密码（至少 4 位）" />
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="确认密码" />
+          {confirm && password !== confirm && <div className="text-xs" style={{ color: 'var(--error)' }}>密码不一致</div>}
           {error && <div className="text-xs p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }}>{error}</div>}
-          <button type="submit" disabled={!valid || loading} className="w-full py-2 rounded-md text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)', color: 'var(--accent)' }}>
+          <button type="submit" disabled={!valid || loading} className="w-full py-2 rounded-md text-sm font-semibold cursor-pointer disabled:opacity-50" style={{ background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)', color: 'var(--accent)' }}>
             {loading ? '设置中...' : '确认设置'}
           </button>
         </div>
@@ -86,17 +82,16 @@ function LoginForm() {
 
   return (
     <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-primary)' }}>
-      <form onSubmit={handleSubmit} className="w-[360px] p-6 rounded-lg border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-        <div className="text-center mb-6">
-          <div className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>管理面板</div>
-          <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Claude Agent UI</div>
+      <form onSubmit={handleSubmit} className="w-[340px] p-6 rounded-lg border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+        <div className="text-center mb-5">
+          <div className="w-8 h-8 rounded-lg mx-auto mb-3" style={{ background: 'var(--accent)' }} />
+          <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>管理面板</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Claude Agent UI</div>
         </div>
-        <div className="space-y-4">
-          <div>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="输入管理密码" onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(e) }} />
-          </div>
+        <div className="space-y-3">
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="输入管理密码" />
           {error && <div className="text-xs p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }}>{error}</div>}
-          <button type="submit" disabled={!password || loading} className="w-full py-2 rounded-md text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)', color: 'var(--accent)' }}>
+          <button type="submit" disabled={!password || loading} className="w-full py-2 rounded-md text-sm font-semibold cursor-pointer disabled:opacity-50" style={{ background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)', color: 'var(--accent)' }}>
             {loading ? '登录中...' : '登录'}
           </button>
         </div>
@@ -105,30 +100,90 @@ function LoginForm() {
   )
 }
 
+type NavTab = 'overview' | 'logs' | 'settings'
+
 function AdminDashboard() {
   const logout = useAdminStore((s) => s.logout)
+  const [tab, setTab] = useState<NavTab>('overview')
   const [showChangePassword, setShowChangePassword] = useState(false)
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-      {/* 顶部栏 */}
-      <div className="flex items-center justify-between px-4 py-2 border-b" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-        <span className="font-semibold">服务器管理</span>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowChangePassword(true)} className="px-3 py-1 text-xs rounded-md border cursor-pointer" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-            修改密码
-          </button>
-          <button onClick={logout} className="px-3 py-1 text-xs rounded-md border cursor-pointer" style={{ background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.2)', color: 'var(--error)' }}>
+    <div className="h-screen flex" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      {/* 左侧导航 */}
+      <div className="w-[140px] flex flex-col border-r shrink-0" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="w-5 h-5 rounded" style={{ background: 'var(--accent)' }} />
+          <span className="text-xs font-semibold">Agent UI</span>
+        </div>
+        <nav className="flex-1 py-2">
+          <NavItem icon="grid" label="概览" active={tab === 'overview'} onClick={() => setTab('overview')} />
+          <NavItem icon="log" label="日志" active={tab === 'logs'} onClick={() => setTab('logs')} />
+          <NavItem icon="gear" label="设置" active={tab === 'settings'} onClick={() => setTab('settings')} />
+        </nav>
+        <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+          <button onClick={logout} className="w-full py-1.5 text-[11px] rounded border cursor-pointer transition-colors" style={{ borderColor: 'rgba(239,68,68,0.2)', color: 'var(--error)', background: 'rgba(239,68,68,0.04)' }}>
             登出
           </button>
         </div>
       </div>
-      {/* 管理面板内容 */}
-      <div className="flex-1 overflow-auto">
-        <ServerManagement />
+
+      {/* 右侧内容 */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b" style={{ borderColor: 'var(--border)' }}>
+          <span className="text-sm font-semibold">
+            {tab === 'overview' ? '服务器概览' : tab === 'logs' ? '实时日志' : '服务器设置'}
+          </span>
+          <button onClick={() => setShowChangePassword(true)} className="text-[11px] cursor-pointer" style={{ color: 'var(--text-muted)' }}>修改密码</button>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {tab === 'overview' && <ServerManagement />}
+          {tab === 'logs' && <LogsPage />}
+          {tab === 'settings' && <SettingsPage />}
+        </div>
       </div>
-      {/* 修改密码对话框 */}
+
       {showChangePassword && <ChangePasswordDialog onClose={() => setShowChangePassword(false)} />}
+    </div>
+  )
+}
+
+function NavItem({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 w-full px-4 py-2 text-xs cursor-pointer transition-colors border-l-2"
+      style={{
+        background: active ? 'rgba(245,158,11,0.04)' : 'transparent',
+        borderLeftColor: active ? 'var(--accent)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--text-muted)',
+      }}
+    >
+      <NavIcon type={icon} />
+      {label}
+    </button>
+  )
+}
+
+function NavIcon({ type }: { type: string }) {
+  const cls = "w-3.5 h-3.5"
+  if (type === 'grid') return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  if (type === 'log') return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+  if (type === 'gear') return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  return null
+}
+
+function LogsPage() {
+  return (
+    <div className="p-5">
+      <ServerLogs fullHeight />
+    </div>
+  )
+}
+
+function SettingsPage() {
+  return (
+    <div className="p-5 max-w-lg">
+      <ServerConfig />
     </div>
   )
 }
@@ -142,51 +197,38 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const error = useAdminStore((s) => s.error)
   const loading = useAdminStore((s) => s.loading)
   const clearError = useAdminStore((s) => s.clearError)
-
   const valid = oldPassword && newPassword.length >= 4 && newPassword === confirm
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     clearError()
     if (!valid) return
-    const ok = await changePassword(oldPassword, newPassword)
-    if (ok) setSuccess(true)
+    if (await changePassword(oldPassword, newPassword)) setSuccess(true)
   }
 
-  if (success) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-        <div className="w-[360px] p-6 rounded-lg border text-center" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
-          <div className="text-lg font-semibold mb-2" style={{ color: 'var(--success)' }}>密码已修改</div>
-          <button onClick={onClose} className="px-4 py-1.5 rounded-md border text-sm cursor-pointer mt-2" style={{ background: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.3)', color: 'var(--accent)' }}>确定</button>
-        </div>
+  if (success) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="w-[320px] p-5 rounded-lg border text-center" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+        <div className="text-sm font-semibold mb-3" style={{ color: 'var(--success)' }}>密码已修改</div>
+        <button onClick={onClose} className="px-4 py-1.5 rounded text-xs cursor-pointer" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--accent)' }}>确定</button>
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <form onSubmit={handleSubmit} className="w-[360px] p-6 rounded-lg border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
-        <div className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>修改密码</div>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>旧密码</label>
-            <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
-          </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>新密码（至少 4 位）</label>
-            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
-          </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>确认新密码</label>
-            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm outline-none" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
-            {confirm && newPassword !== confirm && <div className="text-xs mt-1" style={{ color: 'var(--error)' }}>密码不一致</div>}
-          </div>
-          {error && <div className="text-xs p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }}>{error}</div>}
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-md border text-sm cursor-pointer" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>取消</button>
-            <button type="submit" disabled={!valid || loading} className="px-4 py-1.5 rounded-md border text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'rgba(245,158,11,0.2)', borderColor: 'rgba(245,158,11,0.4)', color: 'var(--accent)' }}>
-              {loading ? '修改中...' : '确认修改'}
+      <form onSubmit={handleSubmit} className="w-[320px] p-5 rounded-lg border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+        <div className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>修改密码</div>
+        <div className="space-y-2.5">
+          <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} autoFocus className="w-full px-3 py-1.5 rounded border text-xs outline-none" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="旧密码" />
+          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-1.5 rounded border text-xs outline-none" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="新密码（至少 4 位）" />
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="w-full px-3 py-1.5 rounded border text-xs outline-none" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} placeholder="确认新密码" />
+          {confirm && newPassword !== confirm && <div className="text-[10px]" style={{ color: 'var(--error)' }}>密码不一致</div>}
+          {error && <div className="text-[10px] p-1.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }}>{error}</div>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 rounded border text-xs cursor-pointer" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>取消</button>
+            <button type="submit" disabled={!valid || loading} className="px-3 py-1.5 rounded border text-xs font-semibold cursor-pointer disabled:opacity-50" style={{ background: 'rgba(245,158,11,0.2)', borderColor: 'rgba(245,158,11,0.4)', color: 'var(--accent)' }}>
+              {loading ? '...' : '确认'}
             </button>
           </div>
         </div>
