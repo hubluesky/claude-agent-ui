@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useEmbedStore } from '../../stores/embedStore'
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)
 const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl'
@@ -18,6 +19,7 @@ export function ViewModeToggle() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.code === 'Backquote') {
         e.preventDefault()
+        if (useEmbedStore.getState().isEmbed) return
         const { viewMode: current, setViewMode: set } = useSettingsStore.getState()
         set(current === 'single' ? 'multi' : 'single')
       }

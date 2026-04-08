@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { ChatInterface } from './components/chat/ChatInterface'
 import { MultiPanelGrid } from './components/chat/MultiPanelGrid'
@@ -8,8 +8,6 @@ import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCommandStore } from './stores/commandStore'
 import { useEmbedStore } from './stores/embedStore'
-import { useMultiPanelStore } from './stores/multiPanelStore'
-import { useMessageStore } from './stores/messageStore'
 
 export function App() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
@@ -25,46 +23,13 @@ export function App() {
   useEffect(() => {
     if (isEmbed && embedCwd) {
       useSessionStore.getState().selectProject(embedCwd)
+      useSettingsStore.getState().setViewMode('single')
     }
   }, [isEmbed, embedCwd])
 
-  // Auto-add visited sessions to Multi panel list
-  useEffect(() => {
-    if (!currentSessionId || currentSessionId === '__new__') return
-    const { currentProjectCwd, sessions, projects } = useSessionStore.getState()
-    if (!currentProjectCwd) return
-    const sessionList = sessions.get(currentProjectCwd) ?? []
-    const session = sessionList.find((s) => s.sessionId === currentSessionId)
-    const project = projects.find((p) => p.cwd === currentProjectCwd)
-    const projectName = project?.name ?? currentProjectCwd.split(/[/\\]/).pop() ?? ''
-    useMultiPanelStore.getState().addPanel(currentSessionId, {
-      sessionId: currentSessionId,
-      title: session?.title ?? '',
-      projectCwd: currentProjectCwd,
-      projectName,
-    })
-  }, [currentSessionId])
-
-  // When switching TO single mode, force reload messages for the current session.
-  // Multi-mode panels may have corrupted the global messageStore.
-  const prevViewMode = useRef(viewMode)
-  useEffect(() => {
-    if (prevViewMode.current !== 'single' && viewMode === 'single') {
-      // Ensure currentSessionId is one of the multi panels
-      const { panelSessionIds, panelSummaries } = useMultiPanelStore.getState()
-      const sid = currentSessionId
-      if (sid && sid !== '__new__' && !panelSessionIds.includes(sid) && panelSessionIds.length > 0) {
-        const first = panelSessionIds[0]
-        const summary = panelSummaries.get(first)
-        if (summary) {
-          useSessionStore.getState().selectSession(first, summary.projectCwd)
-        }
-      }
-      // Invalidate global messageStore so loadInitial re-fetches
-      useMessageStore.setState({ currentLoadedSessionId: null })
-    }
-    prevViewMode.current = viewMode
-  }, [viewMode, currentSessionId])
+  // Note: When switching TO single mode, ChatMessagesPane's effect handles
+  // reloading messages via loadInitial (triggered by viewMode dep change).
+  // No extra invalidation needed here — doing so causes a race condition.
 
   const isSingle = viewMode === 'single'
   const isMulti = viewMode === 'multi'
