@@ -80,3 +80,26 @@ export interface LogEntry {
   category: 'server' | 'connection' | 'session' | 'sdk'
   message: string
 }
+
+/** GET /api/admin/status 响应 */
+export interface AdminStatus {
+  hasPassword: boolean
+  isLoggedIn: boolean
+  isLocalhost: boolean
+}
+
+/** POST /api/admin/setup 请求 */
+export interface AdminSetupRequest {
+  password: string
+}
+
+/** POST /api/admin/login 请求 */
+export interface AdminLoginRequest {
+  password: string
+}
+
+/** POST /api/admin/change-password 请求 */
+export interface AdminChangePasswordRequest {
+  oldPassword: string
+  newPassword: string
+}

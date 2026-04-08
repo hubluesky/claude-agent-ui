@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import fastifyWebsocket from '@fastify/websocket'
 import fastifyCors from '@fastify/cors'
+import fastifyCookie from '@fastify/cookie'
 import fastifyStatic from '@fastify/static'
 import { loadConfig } from './config.js'
 import { createDb } from './db/index.js'
@@ -19,12 +20,15 @@ import { ServerManager } from './server-manager.js'
 import { SdkUpdater } from './sdk-updater.js'
 import { createTray } from './tray.js'
 import { managementRoutes } from './routes/management.js'
+import { AuthManager } from './auth.js'
+import { adminRoutes } from './routes/admin.js'
 
 const config = loadConfig()
 const server = Fastify({ logger: true })
 
 // Plugins
 await server.register(fastifyCors, { origin: config.corsOrigin })
+await server.register(fastifyCookie)
 await server.register(fastifyWebsocket)
 
 if (config.staticDir) {
@@ -48,6 +52,9 @@ const logCollector = new LogCollector()
 const serverManager = new ServerManager(config, wsHub, lockManager)
 const sdkUpdater = new SdkUpdater(logCollector)
 
+// Auth
+const authManager = db ? new AuthManager(db) : null
+
 // Session manager
 const sessionManager = new SessionManager()
 
@@ -59,7 +66,10 @@ await server.register(fileRoutes)
 if (db) {
   await server.register(settingsRoutes(db))
 }
-await server.register(managementRoutes(serverManager, logCollector, sdkUpdater))
+await server.register(managementRoutes(serverManager, logCollector, sdkUpdater, authManager))
+if (authManager) {
+  await server.register(adminRoutes(authManager))
+}
 
 // WebSocket
 const handleWs = createWsHandler({ wsHub, lockManager, sessionManager })
@@ -98,6 +108,13 @@ server.listen({ port: config.port, host: config.host }, (err) => {
         await server.close()
         server.listen({ port: config.port, host: config.host })
         logCollector.info('server', '服务器已重启')
+      },
+      onResetPassword: () => {
+        if (authManager) {
+          authManager.resetPassword()
+          logCollector.info('server', '管理密码已通过托盘重置')
+        }
+        open(`http://localhost:${config.port}/admin`)
       },
       onQuit: async () => {
         logCollector.info('server', '用户通过托盘退出')

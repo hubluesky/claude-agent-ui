@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { ServerManager } from '../server-manager.js'
 import type { LogCollector } from '../log-collector.js'
 import type { SdkUpdater } from '../sdk-updater.js'
+import type { AuthManager } from '../auth.js'
 import type { ServerConfigUpdate } from '@claude-agent-ui/shared'
 import { existsSync } from 'fs'
 import { join, dirname } from 'path'
@@ -11,8 +12,20 @@ export function managementRoutes(
   serverManager: ServerManager,
   logCollector: LogCollector,
   sdkUpdater: SdkUpdater,
+  authManager: AuthManager | null,
 ) {
   return async function (app: FastifyInstance) {
+    // 认证中间件：如果 AuthManager 存在且已设密码，则需要 JWT
+    if (authManager) {
+      app.addHook('preHandler', async (request, reply) => {
+        // 未设密码时不强制认证
+        if (!authManager.hasPassword()) return
+        const token = authManager.getTokenFromRequest(request)
+        if (!token || !authManager.verifyToken(token)) {
+          reply.status(401).send({ error: '未登录' })
+        }
+      })
+    }
     // GET /api/server/status
     app.get('/api/server/status', async () => {
       return serverManager.getStatus()

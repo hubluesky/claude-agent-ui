@@ -23,13 +23,15 @@ function loadIcon(): string {
 interface TrayCallbacks {
   onOpenBrowser: () => void
   onRestart: () => void
+  onResetPassword: () => void
   onQuit: () => void
 }
 
 const SEQ_STATUS = 0
 const SEQ_OPEN = 2
 const SEQ_RESTART = 4
-const SEQ_QUIT = 6
+const SEQ_RESET_PASSWORD = 6
+const SEQ_QUIT = 8
 
 export function createTray(port: number, callbacks: TrayCallbacks): SysTray {
   const systray = new SysTray({
@@ -45,6 +47,8 @@ export function createTray(port: number, callbacks: TrayCallbacks): SysTray {
         SysTray.separator,
         { title: '重启服务器', tooltip: '重启 Fastify', checked: false, enabled: true },
         SysTray.separator,
+        { title: '重置管理密码', tooltip: '清除管理面板密码', checked: false, enabled: true },
+        SysTray.separator,
         { title: '退出', tooltip: '停止服务器并退出', checked: false, enabled: true },
       ],
     },
@@ -59,6 +63,9 @@ export function createTray(port: number, callbacks: TrayCallbacks): SysTray {
         break
       case SEQ_RESTART:
         callbacks.onRestart()
+        break
+      case SEQ_RESET_PASSWORD:
+        callbacks.onResetPassword()
         break
       case SEQ_QUIT:
         callbacks.onQuit()
