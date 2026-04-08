@@ -105,15 +105,21 @@ export function managementRoutes(
         }
       }
 
-      if (body.mode !== undefined) {
-        logCollector.info('server', `运行模式已设置为 ${body.mode}（重启后生效）`)
+      if (body.mode !== undefined || body.port !== undefined) {
+        const { savePersistedConfig } = await import('../config.js')
+        const updates: Record<string, unknown> = {}
+        if (body.mode !== undefined) {
+          updates.mode = body.mode
+          logCollector.info('server', `运行模式已设置为 ${body.mode}（重启后生效）`)
+        }
+        if (body.port !== undefined) {
+          updates.port = body.port
+          logCollector.info('server', `端口已设置为 ${body.port}（重启后生效）`)
+        }
+        savePersistedConfig(updates)
       }
 
-      if (body.port !== undefined) {
-        logCollector.info('server', `端口已设置为 ${body.port}（重启后生效）`)
-      }
-
-      return { ok: true, message: '配置已更新' }
+      return { ok: true, message: '配置已更新（部分设置需重启生效）' }
     })
 
     // GET /api/sdk/version

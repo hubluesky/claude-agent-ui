@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAdminStore } from '../../stores/adminStore'
 import { ServerManagement } from '../settings/ServerManagement'
-import { ServerLogs } from '../settings/ServerLogs'
 import { ServerConfig } from '../settings/ServerConfig'
 
 export function AdminPage() {
@@ -100,7 +99,7 @@ function LoginForm() {
   )
 }
 
-type NavTab = 'overview' | 'logs' | 'settings'
+type NavTab = 'overview' | 'settings'
 
 function AdminDashboard() {
   const logout = useAdminStore((s) => s.logout)
@@ -116,7 +115,6 @@ function AdminDashboard() {
         </div>
         <nav className="flex-1 py-2">
           <NavItem icon="grid" label="概览" active={tab === 'overview'} onClick={() => setTab('overview')} />
-          <NavItem icon="log" label="日志" active={tab === 'logs'} onClick={() => setTab('logs')} />
           <NavItem icon="gear" label="设置" active={tab === 'settings'} onClick={() => setTab('settings')} />
         </nav>
         <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
@@ -130,12 +128,11 @@ function AdminDashboard() {
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex items-center justify-between px-5 py-2.5 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="text-sm font-semibold">
-            {tab === 'overview' ? '服务器概览' : tab === 'logs' ? '实时日志' : '服务器设置'}
+            {tab === 'overview' ? '服务器概览' : '服务器设置'}
           </span>
         </div>
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto min-h-0">
           {tab === 'overview' && <ServerManagement />}
-          {tab === 'logs' && <LogsPage />}
           {tab === 'settings' && <SettingsPage />}
         </div>
       </div>
@@ -167,10 +164,6 @@ function NavIcon({ type }: { type: string }) {
   if (type === 'log') return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
   if (type === 'gear') return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
   return null
-}
-
-function LogsPage() {
-  return <ServerLogs fullHeight />
 }
 
 function SettingsPage() {
