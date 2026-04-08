@@ -1,0 +1,120 @@
+<h2>服务器 GUI 方案（结合 Tauri 2.0 桌面端计划）</h2>
+<p class="subtitle">项目 P2 已规划 Tauri 2.0 桌面端。服务器管理 GUI 应与之融合，而非独立存在。</p>
+
+<div class="section" style="margin-bottom: 1.5rem; padding: 1rem 1.5rem; background: rgba(99,102,241,0.08); border-radius: 12px; border: 1px solid rgba(99,102,241,0.2);">
+  <h3>📋 项目现状</h3>
+  <p style="margin: 0.5rem 0;">P2 规划了 <strong>Tauri 2.0</strong> 作为桌面端壳，内嵌 Web UI。架构设计中 Tauri 通过 WebSocket 连接到独立的 Server 进程。</p>
+  <p style="margin: 0.5rem 0;">当前结构：<code>desktop/src-tauri/</code>（规划中）包装 <code>packages/web</code>，Server 是独立进程。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Tauri 桌面端 + 内嵌服务器（推荐）</h3>
+      <p><strong>方案：</strong>提前启动 Tauri 2.0 桌面端开发，但不仅是包装 Web UI——让 Tauri 直接管理 Server 进程的生命周期（sidecar），并增加系统托盘 + 服务器管理面板。</p>
+
+      <div style="margin: 1rem 0; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; font-family: monospace; font-size: 0.85rem; line-height: 1.6;">
+        <div>┌─────────────────────────────────┐</div>
+        <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Tauri 2.0 App&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+        <div>│&nbsp;&nbsp;┌──────────┐&nbsp;┌────────────┐&nbsp;│</div>
+        <div>│&nbsp;&nbsp;│ WebView  │&nbsp;│ Sidecar    │&nbsp;│</div>
+        <div>│&nbsp;&nbsp;│ (Web UI) │&nbsp;│ (Node.js   │&nbsp;│</div>
+        <div>│&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;│  Server)   │&nbsp;│</div>
+        <div>│&nbsp;&nbsp;└─────┬────┘&nbsp;└──────┬─────┘&nbsp;│</div>
+        <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── WS/REST ──┘&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+        <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+        <div>│&nbsp;&nbsp;[系统托盘] [服务器管理面板]&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+        <div>└─────────────────────────────────┘</div>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li><strong>与 P2 计划完全一致</strong> — 不是新增一个独立工具，而是提前落地桌面端</li>
+            <li>Tauri sidecar 机制成熟 — 自动管理 Node.js 子进程生命周期</li>
+            <li>系统托盘原生支持 — 最小化到托盘，不占任务栏，不会被误杀</li>
+            <li>安装包小（~10-20MB） — 用系统 WebView，不带 Chromium</li>
+            <li>服务器管理功能自然集成为 Web UI 的新页面/面板</li>
+            <li>一石二鸟：同时完成「服务器 GUI」和「桌面端」两个目标</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>需引入 Rust 工具链（Tauri 要求）</li>
+            <li>Sidecar 打包需把 Node.js server 编译为可执行文件（pkg/sea）</li>
+            <li>开发周期较长 — 相当于同时做桌面端 + 服务器管理</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Electron 服务器管理器（独立于 Tauri 计划）</h3>
+      <p><strong>方案：</strong>用 Electron 做一个轻量的服务器管理 GUI（托盘 + 管理窗口），与 P2 的 Tauri 桌面端分开。Electron 纯粹管理服务器，Tauri 后续做客户端。</p>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>不引入 Rust，纯 Node.js/TypeScript 实现</li>
+            <li>开发速度快 — 只做服务器管理，不碰客户端</li>
+            <li>与 Tauri 桌面端互不干扰</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li><strong>架构割裂</strong> — 项目会有两套桌面技术（Electron 管理器 + Tauri 客户端）</li>
+            <li>安装包大（~100MB+ 带 Chromium）</li>
+            <li>后续 Tauri 桌面端上线后，Electron 管理器可能变成冗余</li>
+            <li>开源用户需要同时理解两套桌面方案</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Web UI 扩展 + Windows 服务注册（最小方案）</h3>
+      <p><strong>方案：</strong>不做独立 GUI。在现有 Web UI 中增加「服务器管理」页面，同时用脚本把 Server 注册为 Windows 服务（node-windows）或开机启动项，防止被误杀。</p>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>零新依赖，复用现有 Web UI</li>
+            <li>开发量最小 — 只是加几个管理页面 + 脚本</li>
+            <li>不影响后续 Tauri 计划</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>没有系统托盘，仍是"无头"进程</li>
+            <li>Windows 服务模式对普通用户不友好</li>
+            <li>作为开源项目，用户体验不够直观</li>
+            <li>治标不治本 — 任务管理器里还是 node.exe</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 2rem; padding: 1.5rem; background: rgba(99,102,241,0.06); border-radius: 12px; border: 1px solid rgba(99,102,241,0.15);">
+  <h3>💡 推荐：方案 A — Tauri 桌面端 + 内嵌服务器</h3>
+  <p>核心理由：项目 P2 已经规划了 Tauri 2.0 桌面端，你的需求（系统托盘 + 服务器管理 + SDK 更新）恰好是桌面端的自然延伸。与其做一个临时方案后续再废弃，不如直接推进 Tauri 桌面端，同时把服务器管理作为其核心功能之一。</p>
+  <p style="margin-top: 0.8rem;"><strong>实施策略：</strong>可以分两步走——</p>
+  <ul>
+    <li><strong>第一步</strong>：Tauri 壳 + sidecar 管理 Node 服务器 + 系统托盘（解决核心痛点）</li>
+    <li><strong>第二步</strong>：服务器管理面板（状态监控、日志、配置、SDK 更新）</li>
+  </ul>
+</div>

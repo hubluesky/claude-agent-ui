@@ -39,7 +39,12 @@ export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPane
   // Compact panels (Multi mode) load independently; skip global store load.
   const viewMode = useSettingsStore((s) => s.viewMode)
   useEffect(() => {
-    if (!compact) loadInitial(sessionId)
+    if (compact) return
+    // Force re-fetch by clearing currentLoadedSessionId synchronously
+    // before calling loadInitial. This avoids a race condition where a
+    // separate effect clears it AFTER loadInitial already started fetching.
+    useMessageStore.setState({ currentLoadedSessionId: null })
+    loadInitial(sessionId)
   }, [sessionId, loadInitial, compact, viewMode])
 
   // Scroll to bottom when Footer content changes (PlanApprovalCard, ThinkingIndicator)

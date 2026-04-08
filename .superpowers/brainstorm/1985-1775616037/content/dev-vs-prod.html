@@ -1,0 +1,124 @@
+<h2>开发模式 vs 生产模式 — 技术方案对比</h2>
+<p class="subtitle">同一个 Tauri App，两种完全不同的运行方式</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">🛠️ 开发模式 (pnpm dev)</div>
+    <div class="mockup-body" style="font-size: 0.82rem; line-height: 1.7;">
+      <div style="margin-bottom: 1rem;">
+        <span class="label">WebView 来源</span>
+        <div><code>http://localhost:5173</code></div>
+        <div style="opacity:0.6">Vite dev server，支持 HMR 热更新</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">Server 进程</span>
+        <div>外部进程 — <code>tsx watch src/index.ts</code></div>
+        <div style="opacity:0.6">由 Turborepo 启动，与 Tauri 无关</div>
+        <div style="opacity:0.6">代码改了自动重启</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">端口</span>
+        <div>固定：Server 4000 / Vite 5173</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">Tauri 角色</span>
+        <div>仅提供窗口 + 系统托盘</div>
+        <div style="opacity:0.6">不管理 Server 生命周期</div>
+        <div style="opacity:0.6">关闭 Tauri 窗口不影响 Server</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">SDK 更新</span>
+        <div><code>pnpm update @anthropic-ai/claude-agent-sdk</code></div>
+        <div style="opacity:0.6">直接用包管理器，和普通开发一样</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">Rust 代码热更新</span>
+        <div><code>cargo watch</code> via <code>tauri dev</code></div>
+        <div style="opacity:0.6">修改 Rust 代码自动重编译</div>
+      </div>
+      <div>
+        <span class="label">启动命令</span>
+        <div><code>pnpm dev</code> — 并行启动三个进程</div>
+        <div style="opacity:0.6; font-size:0.78rem;">turbo: server(tsx) + web(vite) + desktop(tauri dev)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">📦 生产模式 (安装包)</div>
+    <div class="mockup-body" style="font-size: 0.82rem; line-height: 1.7;">
+      <div style="margin-bottom: 1rem;">
+        <span class="label">WebView 来源</span>
+        <div>内嵌静态文件 <code>dist/web/</code></div>
+        <div style="opacity:0.6">Vite build 产物，打包进 Tauri bundle</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">Server 进程</span>
+        <div>Sidecar — Node.js SEA 单文件可执行</div>
+        <div style="opacity:0.6">Tauri Rust 主进程管理启停</div>
+        <div style="opacity:0.6">App 启动时自动拉起，退出时自动关闭</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">端口</span>
+        <div>动态分配：Server 找空闲端口</div>
+        <div style="opacity:0.6">Rust 侧检测端口后注入 WebView</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">Tauri 角色</span>
+        <div>完整管理者 — 窗口 + 托盘 + sidecar</div>
+        <div style="opacity:0.6">关闭窗口 → 最小化到托盘（Server 继续）</div>
+        <div style="opacity:0.6">退出 App → 停止 Server sidecar</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">SDK 更新</span>
+        <div>GUI 内触发：下载新 sidecar 二进制 → 替换 → 重启</div>
+        <div style="opacity:0.6">或：整体 App 更新（auto-updater）</div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <span class="label">Rust 代码</span>
+        <div>编译为原生二进制，随安装包分发</div>
+      </div>
+      <div>
+        <span class="label">构建命令</span>
+        <div><code>pnpm build && pnpm tauri build</code></div>
+        <div style="opacity:0.6; font-size:0.78rem;">产出 .msi / .dmg / .AppImage 安装包</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top: 2rem;">关键技术细节</h3>
+
+<div class="section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+  <div style="padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+    <span class="label">Node.js SEA (Single Executable Application)</span>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Node.js 22+ 原生支持将脚本打包为单文件可执行。不需要用户安装 Node.js。</p>
+    <code style="font-size: 0.78rem; display: block; margin-top: 0.5rem;">node --experimental-sea-config sea-config.json</code>
+    <p style="font-size: 0.78rem; opacity: 0.6; margin-top: 0.3rem;">产出 server.exe (~50-80MB)，含 Node.js 运行时 + server 代码 + node_modules</p>
+  </div>
+  <div style="padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+    <span class="label">Tauri Sidecar 机制</span>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">在 tauri.conf.json 中声明 sidecar 二进制。Tauri 自动处理路径、平台后缀、权限。</p>
+    <code style="font-size: 0.78rem; display: block; margin-top: 0.5rem;">"bundle": { "externalBin": ["binaries/server"] }</code>
+    <p style="font-size: 0.78rem; opacity: 0.6; margin-top: 0.3rem;">Rust 侧通过 Command::new_sidecar("server") 启停</p>
+  </div>
+  <div style="padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+    <span class="label">端口协商</span>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">生产模式下端口动态分配的流程：</p>
+    <ol style="font-size: 0.78rem; margin-top: 0.3rem; padding-left: 1.2rem;">
+      <li>Rust 找一个空闲端口</li>
+      <li>通过 CLI 参数传给 sidecar: <code>--port 54321</code></li>
+      <li>Server 启动后 stdout 输出就绪信号</li>
+      <li>Rust 读到信号后，WebView 加载 <code>http://localhost:54321</code></li>
+    </ol>
+  </div>
+  <div style="padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+    <span class="label">tauri.conf.json 开发配置</span>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Tauri 原生支持 dev/build 分离配置：</p>
+    <code style="font-size: 0.78rem; display: block; margin-top: 0.5rem; white-space: pre; line-height: 1.5;">"build": {
+  "devUrl": "http://localhost:5173",
+  "frontendDist": "../web/dist"
+}</code>
+    <p style="font-size: 0.78rem; opacity: 0.6; margin-top: 0.3rem;">dev 时用 devUrl，build 时用 frontendDist</p>
+  </div>
+</div>

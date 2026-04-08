@@ -94,6 +94,9 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
   // Assistant message
   if (message.type === 'assistant') {
     const contentBlocks = (message as any).message?.content ?? []
+    // DIAGNOSTIC: log what we're about to render
+    console.log('[DIAG:render:assistant] blocks:', contentBlocks.length,
+      contentBlocks.map((b: any, i: number) => ({ i, type: b.type, textLen: (b.text ?? '').length, thinkingLen: (b.thinking ?? '').length })))
     // Skip rendering if no blocks produce visible content
     const hasVisibleContent = contentBlocks.some((block: any) => {
       if (block.type === 'text') return !!block.text
@@ -182,6 +185,10 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
   if ((message as any).type === '_streaming_block') {
     const blockType = (message as any)._blockType
     const content = (message as any)._content ?? ''
+    // DIAGNOSTIC: log streaming block render
+    if (content.length % 200 === 0 || content.length < 5) {
+      console.log('[DIAG:render:streaming]', blockType, 'contentLen:', content.length)
+    }
     if (blockType === 'text') {
       return (
         <div className="flex gap-3 items-start">

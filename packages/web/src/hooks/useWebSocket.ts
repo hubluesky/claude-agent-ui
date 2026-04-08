@@ -14,6 +14,7 @@ let ws: WebSocket | null = null
 let reconnectTimer = 0
 let reconnectAttempt = 0
 let initCount = 0 // track how many components have mounted
+let reconnectingBannerTimer = 0  // delay showing "reconnecting" banner
 
 let heartbeatTimer = 0  // timeout: no ping received for 60s → reconnect
 const HEARTBEAT_TIMEOUT = 60_000
@@ -34,16 +35,25 @@ function clearHeartbeatTimer() {
   }
 }
 
-// ── Page visibility: fast reconnect on foreground ─────────────
+// ── Page visibility: pause heartbeat in background, fast reconnect on foreground ──
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      // Page came back to foreground — check if WebSocket is still alive
+    if (document.visibilityState === 'hidden') {
+      // Tab went to background — pause heartbeat timer.
+      // Browsers throttle timers in background tabs, which can cause the
+      // heartbeat timeout to fire even though the server is still pinging.
+      // This would needlessly close a healthy connection.
+      clearHeartbeatTimer()
+    } else if (document.visibilityState === 'visible') {
+      // Tab came back to foreground
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         // Connection is dead, reconnect immediately (skip backoff delay)
         if (reconnectTimer) clearTimeout(reconnectTimer)
         reconnectAttempt = 0
         connect()
+      } else {
+        // Connection is still open — restart heartbeat monitoring
+        resetHeartbeatTimer()
       }
     }
   })
@@ -60,6 +70,11 @@ function connect() {
   ws = socket
 
   socket.onopen = () => {
+    // Cancel pending banner timer — reconnected before user noticed
+    if (reconnectingBannerTimer) {
+      clearTimeout(reconnectingBannerTimer)
+      reconnectingBannerTimer = 0
+    }
     useConnectionStore.getState().setConnectionStatus('connected')
     reconnectAttempt = 0
 
@@ -85,7 +100,16 @@ function connect() {
   socket.onclose = () => {
     ws = null
     clearHeartbeatTimer()
-    useConnectionStore.getState().setConnectionStatus('reconnecting')
+    // Delay showing "reconnecting" banner by 1.5s — if we reconnect quickly
+    // (proxy hiccup, brief network blip), the user never sees the flash.
+    if (reconnectingBannerTimer) clearTimeout(reconnectingBannerTimer)
+    reconnectingBannerTimer = window.setTimeout(() => {
+      reconnectingBannerTimer = 0
+      // Only show banner if still not connected
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        useConnectionStore.getState().setConnectionStatus('reconnecting')
+      }
+    }, 1500)
     scheduleReconnect()
   }
 }
@@ -98,6 +122,8 @@ function scheduleReconnect() {
 
 function disconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
+  if (reconnectingBannerTimer) clearTimeout(reconnectingBannerTimer)
+  reconnectingBannerTimer = 0
   ws?.close()
   ws = null
 }
@@ -163,6 +189,8 @@ function handleServerMessage(msg: S2CMessage) {
       // Plan mode transitions are handled by plan-approval/plan-approval-resolved flow.
 
       if (msg.message.type === 'stream_event') {
+        const evt = (msg.message as any).event
+        console.log('[DIAG:stream_event]', evt?.type, evt?.index, evt?.delta?.type, evt?.content_block?.type)
         msgs.appendStreamDelta(msg.message)
       } else if (msg.message.type === 'user') {
         // Try to replace an optimistic message; if none matches, append (observer path)
@@ -172,6 +200,11 @@ function handleServerMessage(msg: S2CMessage) {
         flushStreamingDelta()
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
+
+        // DIAGNOSTIC: log streaming blocks state before collection
+        const streamingBlocks = current.filter((m: any) => m.type === '_streaming_block')
+        console.log('[DIAG:assistant] streamingBlocks count:', streamingBlocks.length,
+          'details:', streamingBlocks.map((m: any) => ({ idx: m._index, type: m._blockType, contentLen: (m._content ?? '').length, contentPreview: (m._content ?? '').slice(0, 50) })))
 
         // Collect ALL streamed content by block index before removing streaming blocks.
         // The SDK may yield assistant messages with empty text/thinking fields —
@@ -226,6 +259,14 @@ function handleServerMessage(msg: S2CMessage) {
             finalMsg.message.content = [...streamedThinking, ...contentBlocks]
           }
         }
+
+        // DIAGNOSTIC: log final state before setting
+        const finalContentBlocks: any[] = (msg.message as any).message?.content ?? []
+        console.log('[DIAG:assistant] FINAL contentBlocks:', finalContentBlocks.map((b: any, i: number) => ({
+          i, type: b.type, textLen: (b.text ?? '').length, thinkingLen: (b.thinking ?? '').length,
+          textPreview: (b.text ?? '').slice(0, 80),
+        })))
+        console.log('[DIAG:assistant] cleaned msgs count:', cleaned.length, 'total will be:', cleaned.length + 1)
 
         useMessageStore.setState({ messages: [...cleaned, msg.message] })
       } else {

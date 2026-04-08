@@ -32,26 +32,23 @@ export function MultiPanelGrid() {
 
   // Grid cols based on panel count only (AddPanelSlot is a floating overlay)
   const cols = getGridCols(panelIds.length)
+  const rows = Math.ceil(panelIds.length / cols)
 
   return (
     <div className="flex-1 flex flex-col min-h-0 relative">
-      {panelIds.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center">
-          <AddPanelSlot
-            existingPanelIds={panelIds}
-            onAddSession={handleAddSession}
-          />
-        </div>
-      ) : (
-        <>
-          <div
-            className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-y-auto"
-            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
-          >
-            {panelIds.map((sid) => {
-              const summary = summaries.get(sid)
-              return (
-                <ChatSessionProvider key={sid} sessionId={sid} independent>
+      {panelIds.length > 0 && (
+        <div
+          className="flex-1 grid gap-px bg-[var(--border)] min-h-0 overflow-hidden"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateRows: `repeat(${rows}, 1fr)`,
+          }}
+        >
+          {panelIds.map((sid) => {
+            const summary = summaries.get(sid)
+            return (
+              <div key={sid} className="flex flex-col min-h-0 min-w-0 overflow-hidden bg-[var(--bg-primary)]">
+                <ChatSessionProvider sessionId={sid} independent>
                   <ChatInterface
                     compact
                     panelTitle={summary?.title}
@@ -60,17 +57,16 @@ export function MultiPanelGrid() {
                     onClosePanel={() => removePanel(sid)}
                   />
                 </ChatSessionProvider>
-              )
-            })}
-          </div>
-          {/* Floating add button */}
-          <AddPanelSlot
-            existingPanelIds={panelIds}
-            onAddSession={handleAddSession}
-            floating
-          />
-        </>
+              </div>
+            )
+          })}
+        </div>
       )}
+      {/* Floating add button — always visible */}
+      <AddPanelSlot
+        existingPanelIds={panelIds}
+        onAddSession={handleAddSession}
+      />
     </div>
   )
 }

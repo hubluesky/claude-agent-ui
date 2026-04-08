@@ -58,12 +58,17 @@ function _flushStreamingDelta() {
   _pendingDeltaText = ''
   const { messages } = _storeGet()
   const updated = [...messages]
+  let found = false
   for (let i = updated.length - 1; i >= 0; i--) {
     if ((updated[i] as any).type === '_streaming_block') {
       const prev = updated[i] as any
       updated[i] = { ...prev, _content: prev._content + text }
+      found = true
       break
     }
+  }
+  if (!found) {
+    console.warn('[DIAG:flush] pendingDelta had text but no _streaming_block found! textLen:', text.length)
   }
   _storeSet({ messages: updated })
 }
@@ -201,7 +206,10 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
 
   appendStreamDelta(msg: AgentMessage) {
     const event = (msg as any).event
-    if (!event) return
+    if (!event) {
+      console.warn('[DIAG:appendStreamDelta] NO event field on msg! keys:', Object.keys(msg as any), 'type:', (msg as any).type)
+      return
+    }
 
     if (event.type === 'content_block_start') {
       // Flush any pending delta text before creating a new block

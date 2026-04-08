@@ -1,0 +1,112 @@
+<h2>GUI 统一管理中心 — 重新设计</h2>
+<p class="subtitle">Tauri App 是唯一入口，所有操作都在 GUI 内完成</p>
+
+<div class="mockup" style="margin-bottom: 2rem;">
+  <div class="mockup-header">新的启动流程</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 0.82rem; line-height: 1.8;">
+    <div>用户双击打开 Tauri App</div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;↓</div>
+    <div>┌─────────────────────────────────────────────┐</div>
+    <div>│&nbsp;&nbsp;Tauri 主窗口&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;┌─ 服务器状态栏 ────────────────────────┐&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;│&nbsp;&nbsp;● 运行中&nbsp;&nbsp;端口 4000&nbsp;&nbsp;模式: 开发&nbsp;&nbsp;2 连接&nbsp;&nbsp;│&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;└─────────────────────────────────────┘&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;[聊天 UI - 和现在的 Web UI 一样]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+    <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+    <div>└─────────────────────────────────────────────┘</div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;↓ 最小化</div>
+    <div>系统托盘图标 → 右键菜单操作</div>
+  </div>
+</div>
+
+<h3>两种运行模式，GUI 统一管理</h3>
+
+<div class="split" style="margin-top: 1rem;">
+  <div class="mockup">
+    <div class="mockup-header">🛠️ 开发模式</div>
+    <div class="mockup-body" style="font-size: 0.82rem; line-height: 1.8;">
+      <p><strong>谁用：</strong>开发者（你）修改代码时</p>
+      <p><strong>GUI 能做什么：</strong></p>
+      <ul style="padding-left: 1.2rem;">
+        <li>一键启动 Server（<code>tsx watch</code>，代码改了自动重启）</li>
+        <li>一键启动 Vite dev server（HMR 热更新）</li>
+        <li>启停控制 — 随时停止/重启</li>
+        <li>实时日志查看</li>
+        <li>SDK 更新（内部执行 <code>pnpm update</code>）</li>
+        <li>配置修改（端口、环境变量等）</li>
+      </ul>
+      <p style="opacity: 0.6; margin-top: 0.8rem;">WebView 指向 localhost:5173 享受 HMR</p>
+      <p style="opacity: 0.6;">或者打开外部浏览器访问</p>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">📦 生产模式</div>
+    <div class="mockup-body" style="font-size: 0.82rem; line-height: 1.8;">
+      <p><strong>谁用：</strong>普通用户安装后使用</p>
+      <p><strong>GUI 能做什么：</strong></p>
+      <ul style="padding-left: 1.2rem;">
+        <li>自动启动 Server（sidecar 二进制）</li>
+        <li>启停控制 — 随时停止/重启</li>
+        <li>实时日志查看</li>
+        <li>SDK 更新（下载新版 sidecar 替换）</li>
+        <li>配置修改（端口、环境变量等）</li>
+        <li>开机自启设置</li>
+        <li>App 整体更新检查</li>
+      </ul>
+      <p style="opacity: 0.6; margin-top: 0.8rem;">WebView 加载内嵌静态文件</p>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top: 2rem;">管理面板 Mockup</h3>
+
+<div class="mockup" style="margin-top: 1rem;">
+  <div class="mockup-header">⚙️ 服务器管理面板（侧边栏或独立页面）</div>
+  <div class="mockup-body" style="font-size: 0.82rem; line-height: 1.6; font-family: monospace;">
+    <div style="padding: 0.8rem; background: rgba(34,197,94,0.1); border-radius: 8px; border: 1px solid rgba(34,197,94,0.2); margin-bottom: 1rem;">
+      <div><strong>● Server</strong>&nbsp;&nbsp;&nbsp;<span style="opacity:0.6">运行中 · 端口 4000 · 上线 2h 31m</span></div>
+      <div style="margin-top: 0.3rem; opacity: 0.6;">模式: 开发 (tsx watch) · PID: 12345</div>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+      <div style="padding: 0.4rem 1rem; background: rgba(239,68,68,0.15); border-radius: 6px; border: 1px solid rgba(239,68,68,0.3); cursor: pointer;">⏹ 停止</div>
+      <div style="padding: 0.4rem 1rem; background: rgba(59,130,246,0.15); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); cursor: pointer;">🔄 重启</div>
+      <div style="padding: 0.4rem 1rem; background: rgba(168,85,247,0.15); border-radius: 6px; border: 1px solid rgba(168,85,247,0.3); cursor: pointer;">📋 日志</div>
+    </div>
+
+    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem; margin-bottom: 1rem;">
+      <div><strong>SDK 版本</strong></div>
+      <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.3rem;">
+        <span>@anthropic-ai/claude-agent-sdk <strong>v0.2.94</strong></span>
+        <span style="padding: 0.2rem 0.6rem; background: rgba(234,179,8,0.15); border-radius: 4px; border: 1px solid rgba(234,179,8,0.3); font-size: 0.75rem;">有新版本 v0.3.1</span>
+        <span style="padding: 0.2rem 0.6rem; background: rgba(34,197,94,0.15); border-radius: 4px; border: 1px solid rgba(34,197,94,0.3); cursor: pointer;">更新</span>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem; margin-bottom: 1rem;">
+      <div><strong>活跃连接</strong></div>
+      <div style="margin-top: 0.3rem; opacity: 0.7;">
+        <div>🖥️ Desktop (当前) — 已连接 2h31m — 🔒 持有锁</div>
+        <div>🌐 Chrome — 已连接 1h05m — 只读</div>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+      <div><strong>配置</strong></div>
+      <div style="margin-top: 0.5rem; display: grid; grid-template-columns: 120px 1fr; gap: 0.3rem 1rem; opacity: 0.8;">
+        <span>端口</span><span>4000</span>
+        <span>数据库路径</span><span>~/.claude-agent-ui/settings.db</span>
+        <span>开机自启</span><span>☐ 关闭</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 2rem; padding: 1.5rem; background: rgba(99,102,241,0.06); border-radius: 12px; border: 1px solid rgba(99,102,241,0.15);">
+  <h3>💡 核心思路</h3>
+  <p>Tauri Rust 主进程统一管理所有子进程。不管是 <code>tsx watch</code>（开发）还是 sidecar exe（生产），对 GUI 来说都是"一个被管理的 Server 进程"。UI 层通过 Tauri Commands（Rust ↔ WebView 的 IPC）操作一切，用户永远不需要打开终端。</p>
+  <p style="margin-top: 0.8rem;"><strong>开发者工作流变成：</strong>双击打开 App → 选开发模式 → GUI 自动拉起 tsx watch + vite → 写代码 → 热更新即时生效</p>
+</div>

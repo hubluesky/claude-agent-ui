@@ -400,9 +400,56 @@ packages/
     └── build-release.sh     # 新增：组装分发目录脚本
 ```
 
+## 管理面板认证
+
+### 认证流程
+
+```
+用户访问 /admin
+  ↓
+检查 SQLite 是否已有管理密码
+  ├── 无密码（首次）
+  │   ├── 来自 localhost → 显示「设置密码」表单
+  │   └── 来自外部 IP → 拒绝（403：请从本机设置密码）
+  └── 有密码
+      └── 显示登录表单 → 验证密码 → 签发 JWT cookie → 进入管理面板
+```
+
+### 密码存储
+
+- 密码使用 bcrypt 哈希后存入 SQLite（settings 表或新建 admin 表）
+- 只存密码，无用户名（单用户管理员模式）
+
+### 会话管理
+
+- 登录成功后签发 httpOnly JWT cookie（有效期 7 天）
+- 管理 API（`/api/server/*`, `/api/sdk/*`）和 `/admin` 页面均需 JWT 验证
+- 聊天相关 API（`/api/sessions/*`, `/ws`）不需要认证
+
+### 修改密码
+
+- 管理面板「配置」区域 →「修改密码」→ 输入旧密码 + 新密码
+
+### 忘记密码
+
+- 托盘菜单增加「重置管理密码」→ 打开浏览器 `/admin/reset`
+- `/admin/reset` 和 `POST /api/admin/reset-password` 仅允许 localhost 访问
+- 重置后回到首次设置流程
+
+### 认证 API
+
+```
+POST /api/admin/setup          # 首次设置密码（仅 localhost，仅无密码时可用）
+POST /api/admin/login          # 登录（返回 JWT cookie）
+POST /api/admin/logout         # 登出（清除 cookie）
+POST /api/admin/change-password  # 修改密码（需 JWT + 旧密码）
+POST /api/admin/reset-password   # 重置密码（仅 localhost）
+GET  /api/admin/status         # 检查认证状态（是否已设密码、是否已登录）
+```
+
 ## 新增 Server API
 
-管理面板需要以下 REST 端点：
+管理面板需要以下 REST 端点（均需 JWT 认证）：
 
 ```
 GET  /api/server/status      # 服务器状态（uptime, pid, mode, port, connections）

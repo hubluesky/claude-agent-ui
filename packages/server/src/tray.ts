@@ -1,4 +1,7 @@
-import SysTray from 'systray2'
+import SysTrayModule from 'systray2'
+
+// systray2 是 CJS 模块，ESM interop 可能把 default 包一层
+const SysTray = (SysTrayModule as any).default ?? SysTrayModule
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -33,7 +36,7 @@ const SEQ_RESTART = 4
 const SEQ_RESET_PASSWORD = 6
 const SEQ_QUIT = 8
 
-export function createTray(port: number, callbacks: TrayCallbacks): SysTray {
+export function createTray(port: number, callbacks: TrayCallbacks): InstanceType<typeof SysTray> {
   const systray = new SysTray({
     menu: {
       icon: loadIcon(),
@@ -56,7 +59,7 @@ export function createTray(port: number, callbacks: TrayCallbacks): SysTray {
     copyDir: true,
   })
 
-  systray.onClick((action) => {
+  systray.onClick((action: { seq_id: number }) => {
     switch (action.seq_id) {
       case SEQ_OPEN:
         callbacks.onOpenBrowser()
@@ -76,7 +79,7 @@ export function createTray(port: number, callbacks: TrayCallbacks): SysTray {
   return systray
 }
 
-export function updateTrayStatus(systray: SysTray, status: 'running' | 'stopped', port: number): void {
+export function updateTrayStatus(systray: InstanceType<typeof SysTray>, status: 'running' | 'stopped', port: number): void {
   const title = status === 'running' ? `● 运行中  :${port}` : '○ 已停止'
   systray.sendAction({
     type: 'update-item',
