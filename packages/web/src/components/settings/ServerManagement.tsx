@@ -18,19 +18,19 @@ export function ServerManagement() {
   }, [fetchStatus, fetchConfig])
 
   return (
-    <div className="space-y-5 p-4 max-w-4xl">
-      {/* 顶部：状态卡片 + SDK 并排 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <ServerStatusCard />
+    <div className="mx-auto w-full max-w-3xl px-6 py-6 space-y-4">
+      {/* 状态概览 */}
+      <ServerStatusCard />
+      {/* SDK + 配置 并排 */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-4">
         <SdkSection />
-      </div>
-      {/* 中间：连接 + 配置 并排 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <ConnectionsList />
         <ServerConfig />
       </div>
-      {/* 底部：日志全宽 */}
-      <ServerLogs />
+      {/* 连接 + 日志 并排 */}
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
+        <ConnectionsList />
+        <ServerLogs />
+      </div>
     </div>
   )
 }

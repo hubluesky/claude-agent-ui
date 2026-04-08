@@ -36,19 +36,24 @@ export function ServerLogs() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [logs.length])
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-2">
-        <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>实时日志</div>
-        <button onClick={clearLogs} className="text-[10px] text-[var(--text-muted)] cursor-pointer hover:underline">清除</button>
+    <div className="flex flex-col min-h-0">
+      <div className="flex justify-between items-center mb-1.5">
+        <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          日志 <span style={{ color: 'var(--accent)' }}>{logs.length}</span>
+        </div>
+        <button onClick={clearLogs} className="text-[10px] text-[var(--text-muted)] cursor-pointer hover:underline transition-colors">清除</button>
       </div>
-      <div className="p-3 rounded-lg border font-mono text-[11px] leading-relaxed overflow-y-auto" style={{ background: '#111', borderColor: 'var(--border)', maxHeight: '200px' }}>
-        {logs.length === 0 && <div className="text-[var(--text-muted)]">暂无日志</div>}
+      <div
+        className="flex-1 p-2.5 rounded-lg border font-mono text-[10px] leading-[1.7] overflow-y-auto"
+        style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'var(--border)', maxHeight: '240px', minHeight: '120px' }}
+      >
+        {logs.length === 0 && <div className="text-[var(--text-muted)] py-2 text-center">暂无日志</div>}
         {logs.map((entry, i) => (
-          <div key={i}>
-            <span className="opacity-40">{new Date(entry.timestamp).toLocaleTimeString()}</span>{' '}
-            <span style={{ color: LEVEL_COLORS[entry.level] ?? '#fff' }}>{entry.level.toUpperCase()}</span>{' '}
-            <span style={{ color: CATEGORY_COLORS[entry.category] ?? '#fff' }}>[{entry.category}]</span>{' '}
-            {entry.message}
+          <div key={i} className="hover:bg-white/[0.02] px-1 rounded">
+            <span className="opacity-30 select-none">{new Date(entry.timestamp).toLocaleTimeString()}</span>{' '}
+            <span style={{ color: LEVEL_COLORS[entry.level] ?? '#888' }}>{entry.level.toUpperCase().padEnd(5)}</span>{' '}
+            <span style={{ color: CATEGORY_COLORS[entry.category] ?? '#888' }}>[{entry.category}]</span>{' '}
+            <span style={{ color: 'var(--text-primary)' }}>{entry.message}</span>
           </div>
         ))}
         <div ref={bottomRef} />
