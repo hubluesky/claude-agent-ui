@@ -40,10 +40,19 @@ export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPane
   const viewMode = useSettingsStore((s) => s.viewMode)
   useEffect(() => {
     if (compact) return
-    // Force re-fetch by clearing currentLoadedSessionId synchronously
-    // before calling loadInitial. This avoids a race condition where a
-    // separate effect clears it AFTER loadInitial already started fetching.
-    useMessageStore.setState({ currentLoadedSessionId: null })
+    // __new__ session has no persisted messages — only optimistic messages in the store.
+    // Skip API load; messages will arrive via WebSocket once the session is created.
+    if (sessionId === '__new__') return
+    // If the WS handler already set currentLoadedSessionId to this session
+    // (e.g. new session created via send-message), skip the force re-fetch
+    // to avoid clearing live/optimistic messages and showing a loading flash.
+    const current = useMessageStore.getState().currentLoadedSessionId
+    if (current !== sessionId) {
+      // Force re-fetch by clearing currentLoadedSessionId synchronously
+      // before calling loadInitial. This avoids a race condition where a
+      // separate effect clears it AFTER loadInitial already started fetching.
+      useMessageStore.setState({ currentLoadedSessionId: null })
+    }
     loadInitial(sessionId)
   }, [sessionId, loadInitial, compact, viewMode])
 

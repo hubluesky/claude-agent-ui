@@ -390,7 +390,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
       : 'border-[var(--border)]'
 
   return (
-    <div className="px-4 py-3 shrink-0">
+    <div className="px-4 py-3 shrink-0" data-composer-wrapper="">
       <div className={`relative rounded-xl border ${borderClass} bg-[var(--bg-input)]`}>
         {/* Image preview bar */}
         {!minimal && <ImagePreviewBar images={images} onRemove={removeImage} />}

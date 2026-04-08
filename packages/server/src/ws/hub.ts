@@ -9,6 +9,8 @@ export interface ClientInfo {
   joinedAt: number
   alive: boolean            // heartbeat: set false before ping, true on pong
   lastPongAt: number        // timestamp of last pong received
+  userAgent: string | null
+  ip: string | null
 }
 
 const MAX_BUFFER_SIZE = 500
@@ -42,7 +44,7 @@ export class WSHub {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private onDeadConnection: ((connectionId: string) => void) | null = null
 
-  register(ws: WebSocket): string {
+  register(ws: WebSocket, meta?: { userAgent?: string; ip?: string }): string {
     const connectionId = randomUUID()
     this.clients.set(connectionId, {
       ws,
@@ -51,6 +53,8 @@ export class WSHub {
       joinedAt: Date.now(),
       alive: true,
       lastPongAt: Date.now(),
+      userAgent: meta?.userAgent ?? null,
+      ip: meta?.ip ?? null,
     })
     return connectionId
   }
@@ -157,13 +161,15 @@ export class WSHub {
     return subs ? [...subs] : []
   }
 
-  getAllConnections(): Array<{ connectionId: string; sessionId: string | null; connectedAt: Date }> {
-    const result: Array<{ connectionId: string; sessionId: string | null; connectedAt: Date }> = []
+  getAllConnections(): Array<{ connectionId: string; sessionId: string | null; connectedAt: Date; userAgent: string | null; ip: string | null }> {
+    const result: Array<{ connectionId: string; sessionId: string | null; connectedAt: Date; userAgent: string | null; ip: string | null }> = []
     for (const [connectionId, client] of this.clients) {
       result.push({
         connectionId,
         sessionId: client.sessionId ?? null,
         connectedAt: new Date(client.joinedAt),
+        userAgent: client.userAgent,
+        ip: client.ip,
       })
     }
     return result

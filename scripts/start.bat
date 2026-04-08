@@ -14,10 +14,10 @@ cd /d "%~dp0\.."
 
 if exist "packages\server\node_modules\.bin\tsx.CMD" (
     echo Starting Claude Agent UI server...
-    call packages\server\node_modules\.bin\tsx.CMD packages\server\src\index.ts --mode=prod
+    call packages\server\node_modules\.bin\tsx.CMD packages\server\src\index.ts --mode=auto
 ) else if exist "node_modules\.bin\tsx.CMD" (
     echo Starting Claude Agent UI server...
-    call node_modules\.bin\tsx.CMD packages\server\src\index.ts --mode=prod
+    call node_modules\.bin\tsx.CMD packages\server\src\index.ts --mode=auto
 ) else (
     echo [ERROR] tsx not found. Run: pnpm install
     pause

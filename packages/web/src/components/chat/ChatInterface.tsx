@@ -37,6 +37,7 @@ export function ChatInterface({
   const { helpOpen, setHelpOpen, searchOpen, setSearchOpen } = useKeyboardShortcuts()
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
+  const hasMessages = useMessageStore((s) => s.messages.length > 0)
   const isNewSession = ctx.sessionId === '__new__'
 
   useEffect(() => {
@@ -139,7 +140,7 @@ export function ChatInterface({
       )}
       <ConnectionBanner />
       {!compact && searchOpen && <SearchBar onClose={() => setSearchOpen(false)} />}
-      {isNewSession ? (
+      {isNewSession && !hasMessages ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <div className={`${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center`}>
             <span className={`${compact ? 'text-sm' : 'text-xl'} font-bold font-mono text-[#d97706]`}>C</span>

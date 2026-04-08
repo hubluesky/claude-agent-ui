@@ -11,6 +11,10 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
   const [isCollapsed, setIsCollapsed] = useState(true)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [fullHeight, setFullHeight] = useState(0)
+  // Only enable transition after user has interacted (clicked expand/collapse),
+  // NOT on initial render. This prevents max-height transitions from firing
+  // when items scroll into viewport, which causes flicker on mobile.
+  const [hasInteracted, setHasInteracted] = useState(false)
   const codeRef = useRef<HTMLElement>(null)
   const preRef = useRef<HTMLPreElement>(null)
 
@@ -48,7 +52,9 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
           style={isOverflowing ? {
             maxHeight: isCollapsed ? COLLAPSED_MAX_HEIGHT : fullHeight,
             overflow: isCollapsed ? 'hidden' : undefined,
-            transition: 'max-height 0.2s ease-out',
+            // Only animate after user clicks expand/collapse.
+            // On initial render (scroll into viewport), skip transition to avoid mobile flicker.
+            transition: hasInteracted ? 'max-height 0.2s ease-out' : undefined,
           } : undefined}
         >
           <code
@@ -65,7 +71,7 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
       </div>
       {isOverflowing && (
         <button
-          onClick={() => setIsCollapsed(c => !c)}
+          onClick={() => { setHasInteracted(true); setIsCollapsed(c => !c) }}
           className="w-full px-3 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--bg-secondary)] border-t border-[var(--border)] transition-colors cursor-pointer text-center"
         >
           {isCollapsed ? '▼ Show more' : '▲ Show less'}

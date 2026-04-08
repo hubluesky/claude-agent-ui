@@ -19,6 +19,11 @@ let reconnectingBannerTimer = 0  // delay showing "reconnecting" banner
 let heartbeatTimer = 0  // timeout: no ping received for 60s → reconnect
 const HEARTBEAT_TIMEOUT = 60_000
 
+// ── Stream content accumulator ─────────────────────────────────
+// Accumulates streaming content independently of _streaming_block store entries.
+// Survives across multiple partial assistant messages (includePartialMessages: true).
+const _streamContentAccumulator = new Map<number, { blockType: string; content: string }>()
+
 function resetHeartbeatTimer() {
   if (heartbeatTimer) clearTimeout(heartbeatTimer)
   heartbeatTimer = window.setTimeout(() => {
@@ -190,7 +195,26 @@ function handleServerMessage(msg: S2CMessage) {
 
       if (msg.message.type === 'stream_event') {
         const evt = (msg.message as any).event
-        console.log('[DIAG:stream_event]', evt?.type, evt?.index, evt?.delta?.type, evt?.content_block?.type)
+
+        // Accumulate content in module-level map (survives across partial assistant messages)
+        if (evt?.type === 'content_block_start') {
+          // Index 0 = new response starting → clear stale entries from previous response
+          if (evt.index === 0) {
+            _streamContentAccumulator.clear()
+          }
+          _streamContentAccumulator.set(evt.index, {
+            blockType: evt.content_block?.type ?? 'text',
+            content: '',
+          })
+        } else if (evt?.type === 'content_block_delta') {
+          const acc = _streamContentAccumulator.get(evt.index)
+          if (acc) {
+            const delta = evt.delta
+            acc.content += delta?.type === 'text_delta' ? (delta.text ?? '')
+              : delta?.type === 'thinking_delta' ? (delta.thinking ?? '') : ''
+          }
+        }
+
         msgs.appendStreamDelta(msg.message)
       } else if (msg.message.type === 'user') {
         // Try to replace an optimistic message; if none matches, append (observer path)
@@ -201,21 +225,13 @@ function handleServerMessage(msg: S2CMessage) {
         const current = useMessageStore.getState().messages
         const apiId = (msg.message as any).message?.id
 
-        // DIAGNOSTIC: log streaming blocks state before collection
-        const streamingBlocks = current.filter((m: any) => m.type === '_streaming_block')
-        console.log('[DIAG:assistant] streamingBlocks count:', streamingBlocks.length,
-          'details:', streamingBlocks.map((m: any) => ({ idx: m._index, type: m._blockType, contentLen: (m._content ?? '').length, contentPreview: (m._content ?? '').slice(0, 50) })))
-
-        // Collect ALL streamed content by block index before removing streaming blocks.
-        // The SDK may yield assistant messages with empty text/thinking fields —
-        // actual content only appeared during streaming via content_block_delta events.
+        // Build streamed content map from the module-level accumulator.
+        // The accumulator survives across multiple partial assistant messages
+        // (SDK sends partials via includePartialMessages: true).
         const streamedByIndex = new Map<number, { blockType: string; content: string }>()
-        for (const m of current) {
-          if ((m as any).type === '_streaming_block' && (m as any)._content) {
-            streamedByIndex.set((m as any)._index, {
-              blockType: (m as any)._blockType,
-              content: (m as any)._content,
-            })
+        for (const [idx, acc] of _streamContentAccumulator) {
+          if (acc.content) {
+            streamedByIndex.set(idx, { blockType: acc.blockType, content: acc.content })
           }
         }
 
@@ -226,47 +242,83 @@ function handleServerMessage(msg: S2CMessage) {
           return true
         })
 
-        // Patch empty content blocks in the final message with streamed content
+        // Patch content blocks from accumulated stream content.
+        // SDK partial messages may have mismatched indices or missing blocks entirely
+        // (e.g., stream has [thinking:0, text:1, tool_use:3] but partial message only
+        // has [thinking, tool_use] — the text block is completely absent).
         const finalMsg = msg.message as any
         const contentBlocks: any[] = finalMsg.message?.content ?? []
 
-        if (streamedByIndex.size > 0 && contentBlocks.length > 0) {
-          for (let i = 0; i < contentBlocks.length; i++) {
-            const block = contentBlocks[i]
-            const streamed = streamedByIndex.get(i)
-            if (!streamed) continue
-            // Fill empty text blocks from stream
-            if (block.type === 'text' && !block.text && streamed.blockType === 'text') {
-              block.text = streamed.content
+        if (streamedByIndex.size > 0) {
+          // Track which accumulator indices have been consumed
+          const usedIndices = new Set<number>()
+
+          // Step 1: Patch existing empty blocks by matching TYPE, using accumulator index tracking
+          for (const block of contentBlocks) {
+            if (block.type === 'text' && !block.text) {
+              for (const [idx, s] of streamedByIndex) {
+                if (s.blockType === 'text' && s.content && !usedIndices.has(idx)) {
+                  block.text = s.content
+                  usedIndices.add(idx)
+                  break
+                }
+              }
+            } else if (block.type === 'thinking' && !block.thinking) {
+              for (const [idx, s] of streamedByIndex) {
+                if (s.blockType === 'thinking' && s.content && !usedIndices.has(idx)) {
+                  block.thinking = s.content
+                  usedIndices.add(idx)
+                  break
+                }
+              }
             }
-            // Fill empty thinking blocks from stream
-            if (block.type === 'thinking' && !block.thinking && streamed.blockType === 'thinking') {
-              block.thinking = streamed.content
+          }
+
+          // Step 2: Insert accumulated text/thinking blocks that are MISSING from the message.
+          // Use flags to insert at most one of each type (prevents duplicates).
+          const hasText = contentBlocks.some((b: any) => b.type === 'text' && b.text)
+          const hasThinking = contentBlocks.some((b: any) => b.type === 'thinking' && b.thinking)
+          let insertedThinking: any = null
+          let insertedText: any = null
+
+          if (!hasThinking || !hasText) {
+            for (const [idx, s] of streamedByIndex) {
+              if (usedIndices.has(idx)) continue
+              if (!insertedThinking && s.blockType === 'thinking' && s.content && !hasThinking) {
+                insertedThinking = { type: 'thinking', thinking: s.content }
+              } else if (!insertedText && s.blockType === 'text' && s.content && !hasText) {
+                insertedText = { type: 'text', text: s.content }
+              }
+              if ((insertedThinking || hasThinking) && (insertedText || hasText)) break
             }
+          }
+
+          if ((insertedThinking || insertedText) && finalMsg.message) {
+            const inserts: any[] = []
+            if (insertedThinking) inserts.push(insertedThinking)
+            if (insertedText) inserts.push(insertedText)
+            // Insert before tool_use blocks
+            const toolIdx = contentBlocks.findIndex((b: any) => b.type === 'tool_use' || b.type === 'server_tool_use')
+            if (toolIdx >= 0) {
+              contentBlocks.splice(toolIdx, 0, ...inserts)
+            } else {
+              contentBlocks.push(...inserts)
+            }
+            // contentBlocks is a reference to finalMsg.message.content — splice mutated in place
           }
         }
 
-        // If no thinking blocks exist at all in final message, prepend from stream
-        const hasThinking = contentBlocks.some((b: any) => b.type === 'thinking' && b.thinking)
-        if (!hasThinking) {
-          const streamedThinking: any[] = []
-          for (const [, s] of streamedByIndex) {
-            if (s.blockType === 'thinking' && s.content) {
-              streamedThinking.push({ type: 'thinking', thinking: s.content })
-            }
-          }
-          if (streamedThinking.length > 0 && finalMsg.message?.content) {
-            finalMsg.message.content = [...streamedThinking, ...contentBlocks]
-          }
-        }
+        // Check if the final message has actual content after patching
+        const hasRealContent = contentBlocks.some((b: any) =>
+          (b.type === 'text' && b.text) ||
+          (b.type === 'thinking' && b.thinking) ||
+          b.type === 'tool_use' || b.type === 'server_tool_use'
+        )
 
-        // DIAGNOSTIC: log final state before setting
-        const finalContentBlocks: any[] = (msg.message as any).message?.content ?? []
-        console.log('[DIAG:assistant] FINAL contentBlocks:', finalContentBlocks.map((b: any, i: number) => ({
-          i, type: b.type, textLen: (b.text ?? '').length, thinkingLen: (b.thinking ?? '').length,
-          textPreview: (b.text ?? '').slice(0, 80),
-        })))
-        console.log('[DIAG:assistant] cleaned msgs count:', cleaned.length, 'total will be:', cleaned.length + 1)
+        if (!hasRealContent && streamedByIndex.size > 0) {
+          // Empty partial message — keep streaming blocks visible, skip this update
+          return
+        }
 
         useMessageStore.setState({ messages: [...cleaned, msg.message] })
       } else {

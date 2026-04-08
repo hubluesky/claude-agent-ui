@@ -121,3 +121,35 @@ html, body, #root {
   0%, 100% { box-shadow: 0 0 0 1px #d97706; }
   50% { box-shadow: 0 0 8px 1px rgba(217, 119, 6, 0.4); }
 }
+
+/* Isolate the composer glow animation so it doesn't trigger full-page repaints */
+[data-composer-wrapper] {
+  contain: layout style paint;
+}
+
+/* ---- Mobile scroll flicker prevention ---- */
+
+/* Virtuoso scroll container: GPU-accelerated compositing layer */
+[data-virtuoso-scroller] {
+  -webkit-overflow-scrolling: touch;
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Each Virtuoso list item: paint containment to isolate repaints */
+[data-virtuoso-scroller] [data-item-index] {
+  contain: layout style paint;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Continuous animations: use transform/opacity only (compositor-friendly).
+   Ensure spinning SVGs don't cause main-thread repaints. */
+.animate-spin,
+.animate-bounce,
+.animate-pulse {
+  will-change: transform, opacity;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}

@@ -55,8 +55,10 @@ function findStaticDir(): string | null {
 export function loadConfig(): AppConfig {
   const persisted = loadPersistedConfig()
   const modeArg = process.argv.find(a => a.startsWith('--mode='))
-  // 优先级：CLI 参数 > 持久化配置 > 默认 prod
-  const mode = (modeArg ? modeArg.split('=')[1] : persisted.mode ?? 'prod') as 'dev' | 'prod'
+  const modeValue = modeArg ? modeArg.split('=')[1] : null
+  // --mode=auto 或无参数：从持久化配置读取，默认 prod
+  // --mode=dev/prod：强制指定（CLI 覆盖）
+  const mode = (modeValue && modeValue !== 'auto' ? modeValue : persisted.mode ?? 'prod') as 'dev' | 'prod'
   const port = parseInt(process.env.PORT ?? String(persisted.port ?? 4000))
 
   return {

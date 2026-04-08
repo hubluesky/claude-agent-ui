@@ -15,10 +15,10 @@ cd "$DIR"
 # 优先用 tsx 运行源码
 if [ -x "node_modules/.bin/tsx" ]; then
     echo "启动 Claude Agent UI 服务器..."
-    exec node_modules/.bin/tsx packages/server/src/index.ts --mode=prod
+    exec node_modules/.bin/tsx packages/server/src/index.ts --mode=auto
 elif [ -f "packages/server/dist/index.js" ]; then
     echo "启动 Claude Agent UI 服务器..."
-    exec node packages/server/dist/index.js --mode=prod
+    exec node packages/server/dist/index.js --mode=auto
 else
     echo "未找到服务器文件，请先运行: pnpm install && pnpm build"
     exit 1
