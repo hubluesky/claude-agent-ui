@@ -18,10 +18,8 @@ export function ServerManagement() {
   return (
     <div className="p-5 space-y-3">
       <ServerStatusCard />
-      <div className="grid grid-cols-[1fr_260px] gap-3">
-        <SdkSection />
-        <ConnectionsList />
-      </div>
+      <SdkSection />
+      <ConnectionsList />
     </div>
   )
 }

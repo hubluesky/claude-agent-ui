@@ -105,7 +105,6 @@ type NavTab = 'overview' | 'logs' | 'settings'
 function AdminDashboard() {
   const logout = useAdminStore((s) => s.logout)
   const [tab, setTab] = useState<NavTab>('overview')
-  const [showChangePassword, setShowChangePassword] = useState(false)
 
   return (
     <div className="h-screen flex" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
@@ -133,7 +132,6 @@ function AdminDashboard() {
           <span className="text-sm font-semibold">
             {tab === 'overview' ? '服务器概览' : tab === 'logs' ? '实时日志' : '服务器设置'}
           </span>
-          <button onClick={() => setShowChangePassword(true)} className="text-[11px] cursor-pointer" style={{ color: 'var(--text-muted)' }}>修改密码</button>
         </div>
         <div className="flex-1 overflow-auto">
           {tab === 'overview' && <ServerManagement />}
@@ -142,7 +140,6 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {showChangePassword && <ChangePasswordDialog onClose={() => setShowChangePassword(false)} />}
     </div>
   )
 }
@@ -173,17 +170,48 @@ function NavIcon({ type }: { type: string }) {
 }
 
 function LogsPage() {
-  return (
-    <div className="p-5">
-      <ServerLogs fullHeight />
-    </div>
-  )
+  return <ServerLogs fullHeight />
 }
 
 function SettingsPage() {
+  const [showChangePassword, setShowChangePassword] = useState(false)
+
   return (
-    <div className="p-5 max-w-lg">
+    <div className="p-5 max-w-lg space-y-3">
       <ServerConfig />
+      {/* 修改密码卡片 */}
+      <div className="rounded-lg border p-4" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>安全</div>
+        <div className="flex items-center justify-between text-xs">
+          <span style={{ color: 'var(--text-muted)' }}>管理密码</span>
+          <button
+            onClick={() => setShowChangePassword(true)}
+            className="px-3 py-1 rounded border text-[10px] cursor-pointer transition-colors"
+            style={{ background: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.3)', color: 'var(--accent)' }}
+          >
+            修改密码
+          </button>
+        </div>
+      </div>
+      {/* 关于信息卡片 */}
+      <div className="rounded-lg border p-4" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>关于</div>
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span style={{ color: 'var(--text-muted)' }}>应用名称</span>
+            <span style={{ color: 'var(--text-primary)' }}>Claude Agent UI</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span style={{ color: 'var(--text-muted)' }}>版本</span>
+            <span className="font-mono" style={{ color: 'var(--text-primary)' }}>0.0.1</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span style={{ color: 'var(--text-muted)' }}>技术栈</span>
+            <span style={{ color: 'var(--text-primary)' }}>Fastify + React + Claude SDK</span>
+          </div>
+        </div>
+      </div>
+      {showChangePassword && <ChangePasswordDialog onClose={() => setShowChangePassword(false)} />}
     </div>
   )
 }

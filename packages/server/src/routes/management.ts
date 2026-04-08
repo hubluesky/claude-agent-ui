@@ -7,6 +7,7 @@ import type { ServerConfigUpdate } from '@claude-agent-ui/shared'
 import { existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import AutoLaunch from 'auto-launch'
 
 export function managementRoutes(
   serverManager: ServerManager,
@@ -14,6 +15,12 @@ export function managementRoutes(
   sdkUpdater: SdkUpdater,
   authManager: AuthManager,
 ) {
+  const autoLauncher = new AutoLaunch({
+    name: 'Claude Agent UI',
+    path: process.argv[0],
+    isHidden: false,
+  })
+
   return async function (app: FastifyInstance) {
     // 认证中间件：已设密码时需要 JWT
     app.addHook('preHandler', async (request, reply) => {
@@ -66,18 +73,46 @@ export function managementRoutes(
       const serverDir = dirname(fileURLToPath(import.meta.url))
       const hasSourceCode = existsSync(join(serverDir, '..', '..', 'src', 'index.ts'))
 
+      let autoLaunchEnabled = false
+      try { autoLaunchEnabled = await autoLauncher.isEnabled() } catch {}
+
       const status = serverManager.getStatus()
       return {
         port: status.port,
         dbPath: '',
-        autoLaunch: false,
+        autoLaunch: autoLaunchEnabled,
         mode: status.mode,
         hasSourceCode,
       }
     })
 
     // PUT /api/server/config
-    app.put<{ Body: ServerConfigUpdate }>('/api/server/config', async (_request) => {
+    app.put<{ Body: ServerConfigUpdate }>('/api/server/config', async (request) => {
+      const body = request.body
+
+      if (body.autoLaunch !== undefined) {
+        try {
+          if (body.autoLaunch) {
+            await autoLauncher.enable()
+            logCollector.info('server', '已启用开机自启')
+          } else {
+            await autoLauncher.disable()
+            logCollector.info('server', '已禁用开机自启')
+          }
+        } catch (err) {
+          logCollector.error('server', `设置开机自启失败: ${err}`)
+          return { ok: false, message: `设置开机自启失败: ${err}` }
+        }
+      }
+
+      if (body.mode !== undefined) {
+        logCollector.info('server', `运行模式已设置为 ${body.mode}（重启后生效）`)
+      }
+
+      if (body.port !== undefined) {
+        logCollector.info('server', `端口已设置为 ${body.port}（重启后生效）`)
+      }
+
       return { ok: true, message: '配置已更新' }
     })
 

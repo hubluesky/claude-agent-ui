@@ -36,7 +36,7 @@ export function ServerLogs({ fullHeight }: { fullHeight?: boolean } = {}) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [logs.length])
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className={fullHeight ? "h-full flex flex-col" : "flex flex-col min-h-0"} style={fullHeight ? { padding: '12px 16px' } : undefined}>
       <div className="flex justify-between items-center mb-1.5">
         <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           日志 <span style={{ color: 'var(--accent)' }}>{logs.length}</span>
@@ -44,8 +44,8 @@ export function ServerLogs({ fullHeight }: { fullHeight?: boolean } = {}) {
         <button onClick={clearLogs} className="text-[10px] text-[var(--text-muted)] cursor-pointer hover:underline transition-colors">清除</button>
       </div>
       <div
-        className="flex-1 p-2.5 rounded-lg border font-mono text-[10px] leading-[1.7] overflow-y-auto"
-        style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'var(--border)', maxHeight: fullHeight ? 'none' : '240px', minHeight: fullHeight ? '400px' : '120px' }}
+        className={`${fullHeight ? 'flex-1' : ''} p-2.5 rounded-lg border font-mono text-[10px] leading-[1.7] overflow-y-auto`}
+        style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'var(--border)', ...(fullHeight ? {} : { maxHeight: '240px', minHeight: '120px' }) }}
       >
         {logs.length === 0 && <div className="text-[var(--text-muted)] py-2 text-center">暂无日志</div>}
         {logs.map((entry, i) => (

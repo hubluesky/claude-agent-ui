@@ -23,9 +23,10 @@ export function ServerConfig() {
   const displayPort = portValue !== '' ? portValue : String(config.port)
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-lg border p-4" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-        <div className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>网络</div>
+    <div className="rounded-lg border p-4" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+      <div className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>服务器配置</div>
+      <div className="space-y-3">
+        {/* 监听端口 */}
         <div className="flex items-center justify-between text-xs">
           <span style={{ color: 'var(--text-muted)' }}>监听端口</span>
           <div className="flex items-center gap-2">
@@ -37,33 +38,32 @@ export function ServerConfig() {
             {portDirty && <span className="text-[9px]" style={{ color: 'var(--accent)' }}>重启生效</span>}
           </div>
         </div>
-      </div>
-      <div className="rounded-lg border p-4" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-        <div className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>启动</div>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <span style={{ color: 'var(--text-muted)' }}>开机自启</span>
-            <button onClick={() => updateConfig({ autoLaunch: !config.autoLaunch })}
-              className="relative w-8 h-[18px] rounded-full cursor-pointer transition-colors"
-              style={{ background: config.autoLaunch ? 'var(--accent)' : 'rgba(255,255,255,0.1)' }}>
-              <span className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform" style={{ left: config.autoLaunch ? '15px' : '2px' }} />
-            </button>
-          </div>
-          {config.hasSourceCode && (
-            <div className="flex items-center justify-between text-xs">
-              <span style={{ color: 'var(--text-muted)' }}>运行模式</span>
-              <div className="flex">
-                {(['prod', 'dev'] as const).map((mode) => (
-                  <button key={mode} onClick={() => updateConfig({ mode })}
-                    className="px-3 py-1 text-[10px] border cursor-pointer transition-colors first:rounded-l last:rounded-r"
-                    style={{ background: config.mode === mode ? 'rgba(245,158,11,0.15)' : 'transparent', borderColor: config.mode === mode ? 'rgba(245,158,11,0.3)' : 'var(--border)', color: config.mode === mode ? 'var(--accent)' : 'var(--text-muted)' }}>
-                    {mode === 'dev' ? '开发' : '生产'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* 分隔线 */}
+        <div className="border-t" style={{ borderColor: 'var(--border)' }} />
+        {/* 开机自启 */}
+        <div className="flex items-center justify-between text-xs">
+          <span style={{ color: 'var(--text-muted)' }}>开机自启</span>
+          <button onClick={() => updateConfig({ autoLaunch: !config.autoLaunch })}
+            className="relative w-8 h-[18px] rounded-full cursor-pointer transition-colors"
+            style={{ background: config.autoLaunch ? 'var(--accent)' : 'rgba(255,255,255,0.1)' }}>
+            <span className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform" style={{ left: config.autoLaunch ? '15px' : '2px' }} />
+          </button>
         </div>
+        {/* 运行模式 */}
+        {config.hasSourceCode && (
+          <div className="flex items-center justify-between text-xs">
+            <span style={{ color: 'var(--text-muted)' }}>运行模式</span>
+            <div className="flex">
+              {(['prod', 'dev'] as const).map((mode) => (
+                <button key={mode} onClick={() => updateConfig({ mode })}
+                  className="px-3 py-1 text-[10px] border cursor-pointer transition-colors first:rounded-l last:rounded-r"
+                  style={{ background: config.mode === mode ? 'rgba(245,158,11,0.15)' : 'transparent', borderColor: config.mode === mode ? 'rgba(245,158,11,0.3)' : 'var(--border)', color: config.mode === mode ? 'var(--accent)' : 'var(--text-muted)' }}>
+                  {mode === 'dev' ? '开发' : '生产'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

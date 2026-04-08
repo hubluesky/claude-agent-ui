@@ -25,8 +25,14 @@ export class SdkUpdater {
 
   getCurrentVersion(): string {
     try {
-      // 在 node_modules 中找 SDK 的 package.json
+      // 策略 1：搜索常见 node_modules 路径（包含 pnpm 嵌套路径）
+      const serverDir = dirname(fileURLToPath(import.meta.url))
+      const projectRoot = join(serverDir, '..', '..', '..')  // monorepo 根目录
+      const serverPkgDir = join(serverDir, '..')              // packages/server/dist -> packages/server
       const candidates = [
+        // pnpm workspace: node_modules/.pnpm 下的嵌套路径不可靠，优先找 hoisted
+        join(projectRoot, 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'package.json'),
+        join(serverPkgDir, 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'package.json'),
         join(process.cwd(), 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'package.json'),
         join(process.cwd(), '..', 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'package.json'),
       ]
@@ -36,6 +42,23 @@ export class SdkUpdater {
           return pkg.version
         }
       }
+
+      // 策略 3（后备）：从 packages/server/package.json 的 dependencies 中读版本号
+      const serverPkgJsonCandidates = [
+        join(serverPkgDir, 'package.json'),
+        join(projectRoot, 'packages', 'server', 'package.json'),
+      ]
+      for (const p of serverPkgJsonCandidates) {
+        if (existsSync(p)) {
+          const pkg = JSON.parse(readFileSync(p, 'utf-8'))
+          const depVersion = pkg.dependencies?.['@anthropic-ai/claude-agent-sdk']
+          if (depVersion) {
+            // 去掉 ^, ~, >= 等前缀，返回纯版本号
+            return depVersion.replace(/^[\^~>=<]+/, '')
+          }
+        }
+      }
+
       return 'unknown'
     } catch {
       return 'unknown'
