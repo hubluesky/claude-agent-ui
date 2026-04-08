@@ -3,3 +3,6 @@ dist/
 .turbo/
 *.db
 .env
+/.superpowers
+/Python/
+*.tgz
