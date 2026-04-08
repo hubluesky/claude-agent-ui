@@ -8,6 +8,7 @@ import { existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import AutoLaunch from 'auto-launch'
+import { loadConfig, savePersistedConfig } from '../config.js'
 
 export function managementRoutes(
   serverManager: ServerManager,
@@ -70,7 +71,6 @@ export function managementRoutes(
 
     // GET /api/server/config
     app.get('/api/server/config', async () => {
-      const { loadConfig } = await import('../config.js')
       const freshConfig = loadConfig() // 从持久化文件 + CLI 参数重新加载
       const serverDir = dirname(fileURLToPath(import.meta.url))
       const hasSourceCode = existsSync(join(serverDir, '..', '..', 'src', 'index.ts'))
@@ -107,8 +107,7 @@ export function managementRoutes(
       }
 
       if (body.mode !== undefined || body.port !== undefined) {
-        const { savePersistedConfig } = await import('../config.js')
-        const updates: Record<string, unknown> = {}
+        const updates: { mode?: 'dev' | 'prod'; port?: number } = {}
         if (body.mode !== undefined) {
           updates.mode = body.mode
           logCollector.info('server', `运行模式已设置为 ${body.mode}（重启后生效）`)
@@ -117,7 +116,11 @@ export function managementRoutes(
           updates.port = body.port
           logCollector.info('server', `端口已设置为 ${body.port}（重启后生效）`)
         }
-        savePersistedConfig(updates)
+        try {
+          savePersistedConfig(updates)
+        } catch (err) {
+          logCollector.error('server', `保存配置失败: ${err}`)
+        }
       }
 
       return { ok: true, message: '配置已更新（部分设置需重启生效）' }
