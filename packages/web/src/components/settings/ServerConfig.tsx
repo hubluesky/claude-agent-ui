@@ -13,8 +13,11 @@ export function ServerConfig() {
   if (!config) return null
 
   const handlePortBlur = () => {
-    const num = parseInt(portValue || String(config.port))
-    if (!isNaN(num) && num >= 1 && num <= 65535 && num !== config.port) {
+    const raw = parseInt(portValue || String(config.port))
+    if (isNaN(raw)) { setPortValue(''); return }
+    const num = Math.max(1, Math.min(65535, raw))
+    setPortValue(String(num))
+    if (num !== config.port) {
       updateConfig({ port: num })
     }
   }
