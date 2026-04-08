@@ -70,18 +70,19 @@ export function managementRoutes(
 
     // GET /api/server/config
     app.get('/api/server/config', async () => {
+      const { loadConfig } = await import('../config.js')
+      const freshConfig = loadConfig() // 从持久化文件 + CLI 参数重新加载
       const serverDir = dirname(fileURLToPath(import.meta.url))
       const hasSourceCode = existsSync(join(serverDir, '..', '..', 'src', 'index.ts'))
 
       let autoLaunchEnabled = false
       try { autoLaunchEnabled = await autoLauncher.isEnabled() } catch {}
 
-      const status = serverManager.getStatus()
       return {
-        port: status.port,
+        port: freshConfig.port,
         dbPath: '',
         autoLaunch: autoLaunchEnabled,
-        mode: status.mode,
+        mode: freshConfig.mode,
         hasSourceCode,
       }
     })

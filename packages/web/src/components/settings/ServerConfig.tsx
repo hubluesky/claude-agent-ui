@@ -55,7 +55,7 @@ export function ServerConfig() {
             <span style={{ color: 'var(--text-muted)' }}>运行模式</span>
             <div className="flex">
               {(['prod', 'dev'] as const).map((mode) => (
-                <button key={mode} onClick={() => updateConfig({ mode })}
+                <button key={mode} onClick={() => { if (mode !== config.mode) updateConfig({ mode }) }}
                   className="px-3 py-1 text-[10px] border cursor-pointer transition-colors first:rounded-l last:rounded-r"
                   style={{ background: config.mode === mode ? 'rgba(245,158,11,0.15)' : 'transparent', borderColor: config.mode === mode ? 'rgba(245,158,11,0.3)' : 'var(--border)', color: config.mode === mode ? 'var(--accent)' : 'var(--text-muted)' }}>
                   {mode === 'dev' ? '开发' : '生产'}
