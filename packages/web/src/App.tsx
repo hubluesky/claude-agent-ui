@@ -4,12 +4,14 @@ import { ChatInterface } from './components/chat/ChatInterface'
 import { MultiPanelGrid } from './components/chat/MultiPanelGrid'
 import { ChatSessionProvider } from './providers/ChatSessionProvider'
 import { ToastContainer } from './components/chat/Toast'
+import { AdminPage } from './components/admin/AdminPage'
 import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCommandStore } from './stores/commandStore'
 import { useEmbedStore } from './stores/embedStore'
 
 export function App() {
+  if (window.location.pathname === '/admin') return <AdminPage />
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
   const viewMode = useSettingsStore((s) => s.viewMode)
   const isEmbed = useEmbedStore((s) => s.isEmbed)
