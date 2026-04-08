@@ -14,7 +14,7 @@ export interface ClientInfo {
 const MAX_BUFFER_SIZE = 500
 const BUFFER_TTL_MS = 30 * 60 * 1000  // 30 minutes
 const HEARTBEAT_INTERVAL_MS = 30_000   // 30 seconds
-const HEARTBEAT_TIMEOUT_MS = 60_000    // 60 seconds — terminate if no pong
+const HEARTBEAT_TIMEOUT_MS = 120_000   // 120 seconds — tolerant of background tab throttling
 
 interface BufferedMessage {
   seq: number
@@ -155,6 +155,18 @@ export class WSHub {
   getSessionClients(sessionId: string): string[] {
     const subs = this.sessionSubscribers.get(sessionId)
     return subs ? [...subs] : []
+  }
+
+  getAllConnections(): Array<{ connectionId: string; sessionId: string | null; connectedAt: Date }> {
+    const result: Array<{ connectionId: string; sessionId: string | null; connectedAt: Date }> = []
+    for (const [connectionId, client] of this.clients) {
+      result.push({
+        connectionId,
+        sessionId: client.sessionId ?? null,
+        connectedAt: new Date(client.joinedAt),
+      })
+    }
+    return result
   }
 
   getSessionIdForConnection(connectionId: string): string | null {
