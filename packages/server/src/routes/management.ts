@@ -60,6 +60,16 @@ export function managementRoutes(
     // POST /api/server/restart
     app.post('/api/server/restart', async () => {
       logCollector.info('server', '服务器正在重启...')
+      // 延迟重启，先返回响应
+      setTimeout(() => {
+        const { spawn } = require('child_process')
+        spawn(process.argv[0], process.argv.slice(1), {
+          detached: true,
+          stdio: 'ignore',
+          cwd: process.cwd(),
+        }).unref()
+        process.exit(0)
+      }, 500)
       return { ok: true, message: '正在重启' }
     })
 

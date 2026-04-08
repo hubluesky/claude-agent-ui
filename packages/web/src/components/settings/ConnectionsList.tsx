@@ -16,11 +16,15 @@ export function ConnectionsList() {
           <div className="px-3 py-3 text-center" style={{ color: 'var(--text-muted)' }}>无连接</div>
         ) : connections.map((conn, i) => (
           <div key={conn.connectionId} className="flex items-center justify-between px-3 py-1.5" style={{ borderBottom: i < connections.length - 1 ? '1px solid var(--border)' : 'none' }}>
-            <span className="font-mono" style={{ color: 'var(--text-muted)' }}>{conn.connectionId.slice(0, 8)}</span>
-            <div className="flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-              {conn.hasLock && <span style={{ color: 'var(--accent)' }}>&#9679;</span>}
-              <span className="text-[10px]">{conn.sessionId ? conn.sessionId.slice(0, 8) : '空闲'}</span>
+            <div className="flex items-center gap-2">
+              <span style={{ color: 'var(--text-muted)' }}>客户端 {i + 1}</span>
+              {conn.hasLock && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--accent)' }}>锁定中</span>
+              )}
             </div>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {conn.sessionId ? '会话中' : '空闲'}
+            </span>
           </div>
         ))}
       </div>

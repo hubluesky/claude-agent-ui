@@ -104,11 +104,18 @@ server.listen({ port: config.port, host: config.host }, (err) => {
       onOpenAdmin: () => {
         open(`http://localhost:${config.port}/admin`)
       },
-      onRestart: async () => {
-        logCollector.info('server', '用户通过托盘请求重启')
-        await server.close()
-        server.listen({ port: config.port, host: config.host })
-        logCollector.info('server', '服务器已重启')
+      onRestart: () => {
+        logCollector.info('server', '服务器正在重启...')
+        // 重启整个进程（Fastify close 后无法重新 listen）
+        setTimeout(() => {
+          const { spawn } = require('child_process')
+          spawn(process.argv[0], process.argv.slice(1), {
+            detached: true,
+            stdio: 'ignore',
+            cwd: process.cwd(),
+          }).unref()
+          process.exit(0)
+        }, 500)
       },
       onResetPassword: () => {
         if (authManager) {
