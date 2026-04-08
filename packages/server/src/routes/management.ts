@@ -12,20 +12,17 @@ export function managementRoutes(
   serverManager: ServerManager,
   logCollector: LogCollector,
   sdkUpdater: SdkUpdater,
-  authManager: AuthManager | null,
+  authManager: AuthManager,
 ) {
   return async function (app: FastifyInstance) {
-    // 认证中间件：如果 AuthManager 存在且已设密码，则需要 JWT
-    if (authManager) {
-      app.addHook('preHandler', async (request, reply) => {
-        // 未设密码时不强制认证
-        if (!authManager.hasPassword()) return
-        const token = authManager.getTokenFromRequest(request)
-        if (!token || !authManager.verifyToken(token)) {
-          reply.status(401).send({ error: '未登录' })
-        }
-      })
-    }
+    // 认证中间件：已设密码时需要 JWT
+    app.addHook('preHandler', async (request, reply) => {
+      if (!authManager.hasPassword()) return
+      const token = authManager.getTokenFromRequest(request)
+      if (!token || !authManager.verifyToken(token)) {
+        reply.status(401).send({ error: '未登录' })
+      }
+    })
     // GET /api/server/status
     app.get('/api/server/status', async () => {
       return serverManager.getStatus()

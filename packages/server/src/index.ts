@@ -52,8 +52,8 @@ const logCollector = new LogCollector()
 const serverManager = new ServerManager(config, wsHub, lockManager)
 const sdkUpdater = new SdkUpdater(logCollector)
 
-// Auth
-const authManager = db ? new AuthManager(db) : null
+// Auth（使用 JSON 文件存储，不依赖 SQLite）
+const authManager = new AuthManager()
 
 // Session manager
 const sessionManager = new SessionManager()
@@ -67,9 +67,7 @@ if (db) {
   await server.register(settingsRoutes(db))
 }
 await server.register(managementRoutes(serverManager, logCollector, sdkUpdater, authManager))
-if (authManager) {
-  await server.register(adminRoutes(authManager))
-}
+await server.register(adminRoutes(authManager))
 
 // WebSocket
 const handleWs = createWsHandler({ wsHub, lockManager, sessionManager })
