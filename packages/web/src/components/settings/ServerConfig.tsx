@@ -1,9 +1,28 @@
+import { useState } from 'react'
 import { useServerStore } from '../../stores/serverStore'
 
 export function ServerConfig() {
   const config = useServerStore((s) => s.config)
   const updateConfig = useServerStore((s) => s.updateConfig)
+  const [portValue, setPortValue] = useState<string>('')
+  const [portDirty, setPortDirty] = useState(false)
+
   if (!config) return null
+
+  const handlePortChange = (val: string) => {
+    setPortValue(val)
+    setPortDirty(val !== '' && parseInt(val) !== config.port)
+  }
+
+  const handlePortBlur = () => {
+    const num = parseInt(portValue)
+    if (!isNaN(num) && num >= 1 && num <= 65535 && num !== config.port) {
+      updateConfig({ port: num })
+      setPortDirty(true)
+    }
+  }
+
+  const displayPort = portValue !== '' ? portValue : String(config.port)
 
   return (
     <div>
@@ -11,7 +30,22 @@ export function ServerConfig() {
       <div className="p-3 rounded-lg border space-y-3 text-xs" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between">
           <span className="text-[var(--text-muted)]">端口</span>
-          <span className="font-mono">{config.port}</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              value={displayPort}
+              onChange={(e) => handlePortChange(e.target.value)}
+              onBlur={handlePortBlur}
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePortBlur() }}
+              className="w-20 px-2 py-0.5 rounded border text-right font-mono text-xs"
+              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+            {portDirty && (
+              <span className="text-[10px]" style={{ color: 'var(--accent)' }}>需重启生效</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[var(--text-muted)]">开机自启</span>

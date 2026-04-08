@@ -99,15 +99,15 @@ export function managementRoutes(
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
       })
+      // 发送初始注释防止代理缓冲
+      reply.raw.write(': ok\n\n')
 
       const status = serverManager.getStatus()
-      const updateFn = status.mode === 'dev'
-        ? sdkUpdater.updateDev.bind(sdkUpdater)
-        : sdkUpdater.updateProd.bind(sdkUpdater)
 
       try {
-        await updateFn((progress) => {
+        await sdkUpdater.update(status.mode, (progress) => {
           reply.raw.write(`data: ${JSON.stringify(progress)}\n\n`)
         })
       } catch {

@@ -1,6 +1,7 @@
 import { spawn, execSync } from 'child_process'
 import { existsSync, readFileSync, mkdirSync, renameSync, rmSync, createWriteStream } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { pipeline } from 'stream/promises'
 import type { SdkUpdateProgress, SdkFeatureStatus } from '@claude-agent-ui/shared'
 import { SDK_FEATURES } from '@claude-agent-ui/shared'
@@ -10,6 +11,17 @@ type ProgressCallback = (progress: SdkUpdateProgress) => void
 
 export class SdkUpdater {
   constructor(private logCollector: LogCollector) {}
+
+  /** 检测是否有项目源码（即可以用 pnpm update 的环境） */
+  hasSourceCode(): boolean {
+    const serverDir = dirname(fileURLToPath(import.meta.url))
+    // 从 dist/ 或 src/ 向上找 packages/server/src/index.ts
+    const candidates = [
+      join(serverDir, '..', 'src', 'index.ts'),    // 从 dist/ 运行
+      join(serverDir, 'index.ts'),                   // 从 src/ 运行（dev）
+    ]
+    return candidates.some(p => existsSync(p))
+  }
 
   getCurrentVersion(): string {
     try {
@@ -108,7 +120,10 @@ export class SdkUpdater {
       await pipeline(tarRes.body as any, fileStream)
 
       mkdirSync(sdkDir, { recursive: true })
-      execSync(`tar -xzf "${tmpTar}" --strip-components=1 -C "${sdkDir}"`, { stdio: 'pipe' })
+      // Windows 自带 tar 需要用正斜杠路径
+      const sdkDirPosix = sdkDir.replace(/\\/g, '/')
+      const tmpTarPosix = tmpTar.replace(/\\/g, '/')
+      execSync(`tar -xzf "${tmpTarPosix}" --strip-components=1 -C "${sdkDirPosix}"`, { stdio: 'pipe' })
       rmSync(tmpTar, { force: true })
 
       onProgress({ step: 'verifying', message: '验证安装...' })
@@ -142,5 +157,19 @@ export class SdkUpdater {
       })
       throw err
     }
+  }
+
+  /**
+   * 自动选择更新策略：
+   * - 如果检测到有项目源码，无论什么 mode 都用 pnpm update（更可靠）
+   * - 否则走 prod 的 tarball 解压方式
+   */
+  async update(mode: 'dev' | 'prod', onProgress: ProgressCallback): Promise<void> {
+    if (this.hasSourceCode()) {
+      this.logCollector.info('sdk', '检测到项目源码，使用 pnpm update 更新')
+      return this.updateDev(onProgress)
+    }
+    this.logCollector.info('sdk', `无源码环境 (mode=${mode})，使用 tarball 直接替换`)
+    return this.updateProd(onProgress)
   }
 }

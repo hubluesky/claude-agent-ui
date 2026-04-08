@@ -5,9 +5,21 @@ import { SdkUpdateDialog } from './SdkUpdateDialog'
 export function SdkSection() {
   const sdkVersion = useServerStore((s) => s.sdkVersion)
   const fetchSdkVersion = useServerStore((s) => s.fetchSdkVersion)
+  const lastUpdateResult = useServerStore((s) => s.lastUpdateResult)
+  const setSdkUpdateProgress = useServerStore((s) => s.setSdkUpdateProgress)
+  const fetchSdkFeatures = useServerStore((s) => s.fetchSdkFeatures)
   const [showUpdate, setShowUpdate] = useState(false)
+  const [showLastResult, setShowLastResult] = useState(false)
 
   useEffect(() => { fetchSdkVersion() }, [fetchSdkVersion])
+
+  const handleViewLastResult = () => {
+    if (!lastUpdateResult) return
+    // 恢复上次的 progress 到 store，然后打开 dialog
+    setSdkUpdateProgress(lastUpdateResult.progress)
+    fetchSdkFeatures()
+    setShowLastResult(true)
+  }
 
   return (
     <div>
@@ -35,9 +47,18 @@ export function SdkSection() {
           上次检查: {sdkVersion?.lastChecked ? new Date(sdkVersion.lastChecked).toLocaleTimeString() : '未检查'}
           {' · '}
           <button onClick={fetchSdkVersion} className="underline cursor-pointer">立即检查</button>
+          {lastUpdateResult && (
+            <>
+              {' · '}
+              <button onClick={handleViewLastResult} className="underline cursor-pointer">
+                查看上次更新摘要
+              </button>
+            </>
+          )}
         </div>
       </div>
       {showUpdate && <SdkUpdateDialog onClose={() => setShowUpdate(false)} />}
+      {showLastResult && <SdkUpdateDialog onClose={() => { setSdkUpdateProgress(null); setShowLastResult(false) }} />}
     </div>
   )
 }

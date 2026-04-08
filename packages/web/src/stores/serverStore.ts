@@ -8,6 +8,12 @@ import type {
   SdkUpdateProgress,
 } from '@claude-agent-ui/shared'
 
+/** 持久化到 localStorage 的上次更新结果 */
+interface LastSdkUpdateResult {
+  timestamp: string
+  progress: SdkUpdateProgress
+}
+
 interface ServerState {
   status: ServerStatus | null
   sdkVersion: SdkVersionInfo | null
@@ -15,6 +21,7 @@ interface ServerState {
   config: ServerConfig | null
   logs: LogEntry[]
   sdkUpdateProgress: SdkUpdateProgress | null
+  lastUpdateResult: LastSdkUpdateResult | null
 
   fetchStatus: () => Promise<void>
   fetchSdkVersion: () => Promise<void>
@@ -29,6 +36,22 @@ interface ServerState {
 }
 
 const API_BASE = '/api'
+const LAST_UPDATE_KEY = 'claude-agent-ui:lastSdkUpdate'
+
+function loadLastUpdateResult(): LastSdkUpdateResult | null {
+  try {
+    const raw = localStorage.getItem(LAST_UPDATE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function saveLastUpdateResult(result: LastSdkUpdateResult) {
+  try {
+    localStorage.setItem(LAST_UPDATE_KEY, JSON.stringify(result))
+  } catch { /* ignore */ }
+}
 
 export const useServerStore = create<ServerState>((set, get) => ({
   status: null,
@@ -37,6 +60,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
   config: null,
   logs: [],
   sdkUpdateProgress: null,
+  lastUpdateResult: loadLastUpdateResult(),
 
   fetchStatus: async () => {
     try {
@@ -102,12 +126,24 @@ export const useServerStore = create<ServerState>((set, get) => ({
             try {
               const progress = JSON.parse(line.slice(6)) as SdkUpdateProgress
               set({ sdkUpdateProgress: progress })
+              // 更新完成或失败时持久化结果
+              if (progress.step === 'done' || progress.step === 'failed') {
+                const result: LastSdkUpdateResult = {
+                  timestamp: new Date().toISOString(),
+                  progress,
+                }
+                saveLastUpdateResult(result)
+                set({ lastUpdateResult: result })
+              }
             } catch { /* ignore */ }
           }
         }
       }
     }).catch(() => {
-      set({ sdkUpdateProgress: { step: 'failed', message: '连接失败', error: '网络错误' } })
+      const failProgress: SdkUpdateProgress = { step: 'failed', message: '连接失败', error: '网络错误' }
+      const result: LastSdkUpdateResult = { timestamp: new Date().toISOString(), progress: failProgress }
+      saveLastUpdateResult(result)
+      set({ sdkUpdateProgress: failProgress, lastUpdateResult: result })
     })
   },
 
