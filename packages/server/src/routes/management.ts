@@ -84,7 +84,7 @@ export function managementRoutes(
     })
 
     // POST /api/sdk/update — SSE stream
-    app.post('/api/sdk/update', async (request, reply) => {
+    app.post('/api/sdk/update', async (_request, reply) => {
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',

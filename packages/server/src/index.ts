@@ -13,6 +13,12 @@ import { sessionRoutes } from './routes/sessions.js'
 import { settingsRoutes } from './routes/settings.js'
 import { commandRoutes } from './routes/commands.js'
 import { fileRoutes } from './routes/files.js'
+import open from 'open'
+import { LogCollector } from './log-collector.js'
+import { ServerManager } from './server-manager.js'
+import { SdkUpdater } from './sdk-updater.js'
+import { createTray } from './tray.js'
+import { managementRoutes } from './routes/management.js'
 
 const config = loadConfig()
 const server = Fastify({ logger: true })
@@ -38,6 +44,9 @@ const wsHub = new WSHub()
 const lockManager = new LockManager((sessionId) => {
   wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
 })
+const logCollector = new LogCollector()
+const serverManager = new ServerManager(config, wsHub, lockManager)
+const sdkUpdater = new SdkUpdater(logCollector)
 
 // Session manager
 const sessionManager = new SessionManager()
@@ -50,6 +59,7 @@ await server.register(fileRoutes)
 if (db) {
   await server.register(settingsRoutes(db))
 }
+await server.register(managementRoutes(serverManager, logCollector, sdkUpdater))
 
 // WebSocket
 const handleWs = createWsHandler({ wsHub, lockManager, sessionManager })
@@ -74,4 +84,29 @@ if (config.staticDir) {
 server.listen({ port: config.port, host: config.host }, (err) => {
   if (err) { server.log.error(err); process.exit(1) }
   server.log.info(`Server running on ${config.host}:${config.port}`)
+
+  logCollector.info('server', `服务器已启动，端口 ${config.port}`)
+
+  // 创建系统托盘
+  try {
+    createTray(config.port, {
+      onOpenBrowser: () => {
+        open(`http://localhost:${config.port}`)
+      },
+      onRestart: async () => {
+        logCollector.info('server', '用户通过托盘请求重启')
+        await server.close()
+        server.listen({ port: config.port, host: config.host })
+        logCollector.info('server', '服务器已重启')
+      },
+      onQuit: async () => {
+        logCollector.info('server', '用户通过托盘退出')
+        await server.close()
+        process.exit(0)
+      },
+    })
+    logCollector.info('server', '系统托盘已创建')
+  } catch (err) {
+    server.log.warn(`系统托盘创建失败（可能无桌面环境）: ${err}`)
+  }
 })
