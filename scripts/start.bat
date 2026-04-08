@@ -1,20 +1,31 @@
 @echo off
-:: Claude Agent UI — Windows 启动脚本（双击即可启动）
+chcp 65001 >nul 2>nul
+title Claude Agent UI
+
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
-    echo Node.js 未安装，请安装 Node.js 22+ 后重试
-    echo 下载地址: https://nodejs.org/
+    echo [ERROR] Node.js not found. Please install Node.js 22+
+    echo Download: https://nodejs.org/
     pause
     exit /b 1
 )
 
-cd /d "%~dp0"
-if exist "server\dist\index.js" (
-    node server\dist\index.js --mode=prod
-) else if exist "packages\server\dist\index.js" (
-    node packages\server\dist\index.js --mode=prod
+cd /d "%~dp0\.."
+
+if exist "packages\server\node_modules\.bin\tsx.CMD" (
+    echo Starting Claude Agent UI server...
+    call packages\server\node_modules\.bin\tsx.CMD packages\server\src\index.ts --mode=prod
+) else if exist "node_modules\.bin\tsx.CMD" (
+    echo Starting Claude Agent UI server...
+    call node_modules\.bin\tsx.CMD packages\server\src\index.ts --mode=prod
 ) else (
-    echo 未找到服务器文件，请先运行 pnpm build
+    echo [ERROR] tsx not found. Run: pnpm install
     pause
     exit /b 1
+)
+
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo Server failed to start
+    pause
 )
