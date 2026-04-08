@@ -9,19 +9,20 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 function loadIcon(): string {
-  // systray2 所有平台都支持 base64 PNG，统一用 icon.png
+  // Windows 需要 .ico 格式，macOS/Linux 用 .png
+  const ext = process.platform === 'win32' ? 'ico' : 'png'
   const paths = [
-    join(__dirname, '..', 'assets', 'icon.png'),
-    join(__dirname, '..', '..', 'assets', 'icon.png'), // from dist/
+    join(__dirname, '..', 'assets', `icon.${ext}`),
+    join(__dirname, '..', '..', 'assets', `icon.${ext}`), // from dist/
+    join(__dirname, '..', 'assets', 'icon.png'),           // fallback to png
+    join(__dirname, '..', '..', 'assets', 'icon.png'),
   ]
   for (const p of paths) {
     try {
       const b64 = readFileSync(p).toString('base64')
-      console.log(`[tray] icon loaded from ${p} (${b64.length} chars)`)
       return b64
     } catch { /* continue */ }
   }
-  console.log(`[tray] icon not found, tried: ${paths.join(', ')}`)
   return ''
 }
 
