@@ -16,9 +16,12 @@ function loadIcon(): string {
   ]
   for (const p of paths) {
     try {
-      return readFileSync(p).toString('base64')
+      const b64 = readFileSync(p).toString('base64')
+      console.log(`[tray] icon loaded from ${p} (${b64.length} chars)`)
+      return b64
     } catch { /* continue */ }
   }
+  console.log(`[tray] icon not found, tried: ${paths.join(', ')}`)
   return ''
 }
 
