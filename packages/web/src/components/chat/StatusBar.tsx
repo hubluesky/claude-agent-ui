@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react'
 import { useChatSession } from '../../providers/ChatSessionContext'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useServerStore } from '../../stores/serverStore'
 import { ModelSelector } from './ModelSelector'
 import { ContextUsageIndicator } from './ContextPanel'
 import { McpIndicator } from './McpPanel'
-import { ServerManagement } from '../settings/ServerManagement'
 
 function ThemeToggle() {
   const theme = useSettingsStore((s) => s.theme)
@@ -29,38 +26,6 @@ function ThemeToggle() {
         </svg>
       )}
     </button>
-  )
-}
-
-function ServerIndicator() {
-  const status = useServerStore((s) => s.status)
-  const fetchStatus = useServerStore((s) => s.fetchStatus)
-  const [showPanel, setShowPanel] = useState(false)
-
-  useEffect(() => { fetchStatus() }, [fetchStatus])
-
-  return (
-    <>
-      <span className="w-px h-3 bg-[var(--border)]" />
-      <button onClick={() => setShowPanel(!showPanel)} className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer" title="服务器管理">
-        <span className="w-1.5 h-1.5 rounded-full" style={{ background: status?.status === 'running' ? 'var(--success)' : 'var(--text-muted)' }} />
-        <span>Server</span>
-        {status && <span>:{status.port}</span>}
-        {status && <span>· {status.connections.length}</span>}
-        <span className="ml-0.5">⚙</span>
-      </button>
-      {showPanel && (
-        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.3)' }} onClick={(e) => { if (e.target === e.currentTarget) setShowPanel(false) }}>
-          <div className="w-[600px] h-full overflow-auto" style={{ background: 'var(--bg-primary)', borderLeft: '1px solid var(--border)' }}>
-            <div className="flex justify-between items-center p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-              <span className="font-semibold">服务器管理</span>
-              <button onClick={() => setShowPanel(false)} className="text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-primary)]">✕</button>
-            </div>
-            <ServerManagement />
-          </div>
-        </div>
-      )}
-    </>
   )
 }
 
@@ -113,8 +78,6 @@ export function StatusBar() {
           {EFFORT_DISPLAY[effort] ?? effort}
         </span>
       )}
-
-      <ServerIndicator />
 
       {/* Spacer */}
       <span className="flex-1" />
