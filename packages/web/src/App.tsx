@@ -9,6 +9,7 @@ import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCommandStore } from './stores/commandStore'
 import { useEmbedStore } from './stores/embedStore'
+import { wsManager } from './lib/WebSocketManager'
 
 export function App() {
   if (window.location.pathname === '/admin') return <AdminPage />
@@ -16,6 +17,11 @@ export function App() {
   const viewMode = useSettingsStore((s) => s.viewMode)
   const isEmbed = useEmbedStore((s) => s.isEmbed)
   const embedCwd = useEmbedStore((s) => s.embedCwd)
+
+  useEffect(() => {
+    wsManager.connect()
+    return () => wsManager.disconnect()
+  }, [])
 
   useEffect(() => {
     useEmbedStore.getState().initFromUrl()
