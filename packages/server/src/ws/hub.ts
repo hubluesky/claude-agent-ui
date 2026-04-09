@@ -114,6 +114,81 @@ export class WSHub {
     this.sessionSubscribers.get(sessionId)!.add(connectionId)
   }
 
+  subscribeWithSync(
+    connectionId: string,
+    sessionId: string,
+    lastSeq: number = 0,
+  ): { replayed: number; hasGap: boolean; gapRange?: [number, number] } {
+    // 先执行普通订阅
+    this.subscribeSession(connectionId, sessionId)
+
+    const buf = this.sessionBuffers.get(sessionId)
+    if (!buf || buf.messages.length === 0) {
+      return { replayed: 0, hasGap: lastSeq > 0 }
+    }
+
+    // 清理过期消息
+    const now = Date.now()
+    buf.messages = buf.messages.filter(m => now - m.timestamp < BUFFER_TTL_MS)
+
+    if (buf.messages.length === 0) {
+      return { replayed: 0, hasGap: lastSeq > 0 }
+    }
+
+    const minBufferedSeq = buf.messages[0].seq
+    const hasGap = lastSeq > 0 && minBufferedSeq > lastSeq + 1
+
+    // Replay missed messages
+    const missed = buf.messages.filter(m => m.seq > lastSeq)
+    for (const entry of missed) {
+      this.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
+    }
+
+    return {
+      replayed: missed.length,
+      hasGap,
+      gapRange: hasGap ? [lastSeq + 1, minBufferedSeq - 1] : undefined,
+    }
+  }
+
+  joinWithSync(
+    connectionId: string,
+    sessionId: string,
+    lastSeq: number = 0,
+  ): { alreadyInSession: boolean; replayed: number; hasGap: boolean; gapRange?: [number, number] } {
+    // 先执行普通加入，保留 alreadyInSession 标志供 handler 判断是否跳过 snapshot + replay
+    const alreadyInSession = this.joinSession(connectionId, sessionId)
+
+    const buf = this.sessionBuffers.get(sessionId)
+    if (!buf || buf.messages.length === 0) {
+      return { alreadyInSession, replayed: 0, hasGap: lastSeq > 0 }
+    }
+
+    // 清理过期消息
+    const now = Date.now()
+    buf.messages = buf.messages.filter(m => now - m.timestamp < BUFFER_TTL_MS)
+
+    if (buf.messages.length === 0) {
+      return { alreadyInSession, replayed: 0, hasGap: lastSeq > 0 }
+    }
+
+    const minBufferedSeq = buf.messages[0].seq
+    const hasGap = lastSeq > 0 && minBufferedSeq > lastSeq + 1
+
+    // Replay missed messages
+    const missed = buf.messages.filter(m => m.seq > lastSeq)
+    for (const entry of missed) {
+      this.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
+    }
+
+    return {
+      alreadyInSession,
+      replayed: missed.length,
+      hasGap,
+      gapRange: hasGap ? [lastSeq + 1, minBufferedSeq - 1] : undefined,
+    }
+  }
+
   /** Unsubscribe from one session (Multi mode). Does NOT affect the primary sessionId. */
   unsubscribeSession(connectionId: string, sessionId: string): void {
     const subs = this.sessionSubscribers.get(sessionId)

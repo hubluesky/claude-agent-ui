@@ -171,7 +171,8 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleJoinSession(connectionId: string, sessionId: string, lastSeq?: number) {
-    const alreadyInSession = wsHub.joinSession(connectionId, sessionId)
+    const syncResult = wsHub.joinWithSync(connectionId, sessionId, lastSeq ?? 0)
+    const alreadyInSession = syncResult.alreadyInSession
     const lockHolder = lockManager.getHolder(sessionId)
     let activeSession = sessionManager.getActive(sessionId)
     const isLockHolder = lockHolder === connectionId
@@ -226,7 +227,8 @@ export function createWsHandler(deps: HandlerDeps) {
     // from the client's useEffect is redundant. Sending snapshot + replay again would
     // create duplicate streaming blocks and re-deliver already-received messages.
     if (!alreadyInSession) {
-      // Send stream snapshot FIRST if streaming is in progress (design spec order)
+      // Send stream snapshot FIRST if streaming is in progress (design spec order).
+      // Buffer replay was already done inside joinWithSync above.
       const snapshot = wsHub.getStreamSnapshot(sessionId)
       if (snapshot) {
         wsHub.sendTo(connectionId, {
@@ -237,11 +239,14 @@ export function createWsHandler(deps: HandlerDeps) {
         })
       }
 
-      // Then replay buffered messages the client missed (with _seq for client tracking)
-      const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
-      for (const entry of missed) {
-        wsHub.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
-      }
+      // Send sync-result so client knows if there was a gap in buffered messages
+      wsHub.sendTo(connectionId, {
+        type: 'sync-result',
+        sessionId,
+        replayed: syncResult.replayed,
+        hasGap: syncResult.hasGap,
+        gapRange: syncResult.gapRange,
+      } as any)
     }
 
     // Send model name + detect pending requests from session history (async, non-blocking)
@@ -308,9 +313,9 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   /** Multi mode subscription: subscribe to a session without leaving others.
-   *  Sends session-state and replays buffered messages, but skips lock/pending logic. */
+   *  Sends session-state, replays buffered messages, and sends sync-result. Skips lock/pending logic. */
   function handleSubscribeSession(connectionId: string, sessionId: string, lastSeq?: number) {
-    wsHub.subscribeSession(connectionId, sessionId)
+    const syncResult = wsHub.subscribeWithSync(connectionId, sessionId, lastSeq ?? 0)
 
     const activeSession = sessionManager.getActive(sessionId)
     const lockHolder = lockManager.getHolder(sessionId)
@@ -325,7 +330,8 @@ export function createWsHandler(deps: HandlerDeps) {
       permissionMode: activeSession?.permissionMode,
     })
 
-    // Send stream snapshot if streaming is in progress
+    // Send stream snapshot if streaming is in progress.
+    // Buffer replay was already done inside subscribeWithSync above.
     const snapshot = wsHub.getStreamSnapshot(sessionId)
     if (snapshot) {
       wsHub.sendTo(connectionId, {
@@ -336,11 +342,14 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     }
 
-    // Replay buffered messages the client missed
-    const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
-    for (const entry of missed) {
-      wsHub.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
-    }
+    // Send sync-result so client knows if there was a gap in buffered messages
+    wsHub.sendTo(connectionId, {
+      type: 'sync-result',
+      sessionId,
+      replayed: syncResult.replayed,
+      hasGap: syncResult.hasGap,
+      gapRange: syncResult.gapRange,
+    } as any)
   }
 
   async function handleSendMessage(
