@@ -14,6 +14,7 @@ import { sessionRoutes } from './routes/sessions.js'
 import { settingsRoutes } from './routes/settings.js'
 import { commandRoutes } from './routes/commands.js'
 import { fileRoutes } from './routes/files.js'
+import { browseRoutes } from './routes/browse.js'
 import open from 'open'
 import { LogCollector } from './log-collector.js'
 import { ServerManager } from './server-manager.js'
@@ -22,6 +23,52 @@ import { createTray } from './tray.js'
 import { managementRoutes } from './routes/management.js'
 import { AuthManager } from './auth.js'
 import { adminRoutes } from './routes/admin.js'
+import { spawn } from 'child_process'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
+import { existsSync } from 'fs'
+
+/** 全局 systray 引用，重启时需要 kill 掉旧进程 */
+let _systrayInstance: any = null
+export function setSystrayInstance(instance: any) { _systrayInstance = instance }
+
+/** 重启服务器：spawn 新进程后退出当前进程 */
+export function restartServer() {
+  // 先 kill 旧的 systray Go 进程，避免重启后出现重复图标
+  if (_systrayInstance) {
+    try { _systrayInstance.kill(false) } catch {}
+  }
+  setTimeout(() => {
+    const serverDir = dirname(fileURLToPath(import.meta.url))
+    const projectRoot = join(serverDir, '..', '..', '..')
+    // 找到 tsx 可执行文件
+    const tsxPaths = [
+      join(projectRoot, 'packages', 'server', 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.CMD' : 'tsx'),
+      join(projectRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.CMD' : 'tsx'),
+    ]
+    const tsxBin = tsxPaths.find(p => existsSync(p))
+    const scriptPath = join(projectRoot, 'packages', 'server', 'src', 'index.ts')
+
+    if (tsxBin) {
+      // 用 tsx 启动
+      spawn(tsxBin, [scriptPath, '--mode=auto'], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: projectRoot,
+        shell: process.platform === 'win32',
+      }).unref()
+    } else {
+      // fallback: 用 node 启动编译后的代码
+      const distPath = join(projectRoot, 'packages', 'server', 'dist', 'index.js')
+      spawn(process.argv[0], [distPath, '--mode=auto'], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: projectRoot,
+      }).unref()
+    }
+    process.exit(0)
+  }, 300)
+}
 
 const config = loadConfig()
 const server = Fastify({ logger: true })
@@ -57,12 +104,14 @@ const authManager = new AuthManager()
 
 // Session manager
 const sessionManager = new SessionManager()
+serverManager.setSessionManager(sessionManager)
 
 // Routes
 await server.register(healthRoutes)
 await server.register(sessionRoutes(sessionManager))
 await server.register(commandRoutes(sessionManager))
 await server.register(fileRoutes)
+await server.register(browseRoutes)
 if (db) {
   await server.register(settingsRoutes(db))
 }
@@ -72,8 +121,11 @@ await server.register(adminRoutes(authManager))
 // WebSocket
 const handleWs = createWsHandler({ wsHub, lockManager, sessionManager })
 server.register(async (app) => {
-  app.get('/ws', { websocket: true }, (socket) => {
-    handleWs(socket)
+  app.get('/ws', { websocket: true }, (socket, request) => {
+    handleWs(socket, {
+      userAgent: request.headers['user-agent'] ?? undefined,
+      ip: request.ip,
+    })
   })
 })
 
@@ -97,7 +149,7 @@ server.listen({ port: config.port, host: config.host }, (err) => {
 
   // 创建系统托盘
   try {
-    createTray(config.port, {
+    const trayInstance = createTray(config.port, {
       onOpenUI: () => {
         open(`http://localhost:${config.port}`)
       },
@@ -106,16 +158,7 @@ server.listen({ port: config.port, host: config.host }, (err) => {
       },
       onRestart: () => {
         logCollector.info('server', '服务器正在重启...')
-        // 重启整个进程（Fastify close 后无法重新 listen）
-        setTimeout(() => {
-          const { spawn } = require('child_process')
-          spawn(process.argv[0], process.argv.slice(1), {
-            detached: true,
-            stdio: 'ignore',
-            cwd: process.cwd(),
-          }).unref()
-          process.exit(0)
-        }, 500)
+        restartServer()
       },
       onResetPassword: () => {
         if (authManager) {
@@ -126,10 +169,12 @@ server.listen({ port: config.port, host: config.host }, (err) => {
       },
       onQuit: async () => {
         logCollector.info('server', '用户通过托盘退出')
+        try { trayInstance.kill(false) } catch {}
         await server.close()
         process.exit(0)
       },
     })
+    setSystrayInstance(trayInstance)
     logCollector.info('server', '系统托盘已创建')
   } catch (err) {
     server.log.warn(`系统托盘创建失败（可能无桌面环境）: ${err}`)
