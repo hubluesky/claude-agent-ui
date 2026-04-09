@@ -568,6 +568,29 @@ class WebSocketManager {
     }
   }
 
+  /** Build content blocks from the stream accumulator.
+   *  Only produces text/thinking blocks — tool_use comes from the final SDK message. */
+  private buildContentFromAccumulator(
+    accumulator: Map<number, { blockType: string; content: string }>
+  ): any[] {
+    const blocks: any[] = []
+    const sorted = [...accumulator.entries()].sort((a, b) => a[0] - b[0])
+    for (const [, entry] of sorted) {
+      if (entry.blockType === 'thinking') {
+        blocks.push({ type: 'thinking', thinking: entry.content })
+      } else if (entry.blockType === 'text') {
+        blocks.push({ type: 'text', text: entry.content })
+      }
+    }
+    return blocks
+  }
+
+  /** Create an empty content block for the given type */
+  private createEmptyBlock(blockType: string): any {
+    if (blockType === 'thinking') return { type: 'thinking', thinking: '' }
+    return { type: 'text', text: '' }
+  }
+
   private handleStreamEvent(sessionId: string, agentMsg: AgentMessage) {
     const evt = (agentMsg as any).event
     if (!evt) return
@@ -576,16 +599,12 @@ class WebSocketManager {
     const streamState = s.getStreamState(sessionId)
 
     if (evt.type === 'content_block_start') {
-      // Index 0 = new response starting → clear stale entries
-      if (evt.index === 0) {
-        streamState.accumulator.clear()
-      }
+      const blockType = evt.content_block?.type ?? 'text'
 
       // ── Spinner timing ──
       if (streamState.requestStartTime === null) {
         streamState.requestStartTime = Date.now()
       }
-      const blockType = evt.content_block?.type ?? 'text'
       if (blockType === 'thinking') {
         streamState.spinnerMode = 'thinking'
         if (streamState.thinkingStartTime === null) {
@@ -600,32 +619,53 @@ class WebSocketManager {
         streamState.spinnerMode = 'tool-use'
       }
 
-      streamState.accumulator.set(evt.index, {
-        blockType: evt.content_block?.type ?? 'text',
-        content: '',
-      })
-
-      // Flush pending delta before creating new block
+      // Flush pending deltas before modifying the message structure
       this.flushStreamState(sessionId, streamState)
 
-      // Push a new _streaming_block to the container
       const container = s.containers.get(sessionId)
-      if (container) {
+      if (!container) return
+
+      if (evt.index === 0) {
+        // New response — clear stale accumulator entries and create streaming assistant message
+        streamState.accumulator.clear()
+        streamState.accumulator.set(0, { blockType, content: '' })
+
+        const streamingMsg: any = {
+          ...agentMsg,
+          type: 'assistant',
+          _streaming: true,
+          message: {
+            role: 'assistant',
+            content: [this.createEmptyBlock(blockType)],
+          },
+        }
         const next = new Map(s.containers)
         next.set(sessionId, {
           ...container,
-          messages: [
-            ...container.messages,
-            {
-              ...agentMsg,
-              type: '_streaming_block' as any,
-              _blockType: evt.content_block?.type ?? 'text',
-              _content: '',
-              _index: evt.index,
-            },
-          ],
+          messages: [...container.messages, streamingMsg],
+          streamingVersion: container.streamingVersion + 1,
         })
         useSessionContainerStore.setState({ containers: next })
+      } else {
+        // Subsequent block in same response — append empty block to streaming message
+        streamState.accumulator.set(evt.index, { blockType, content: '' })
+        const messages = container.messages
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i] as any
+          if (msg._streaming && msg.type === 'assistant') {
+            const updatedContent = [...(msg.message?.content ?? []), this.createEmptyBlock(blockType)]
+            const updated = [...messages]
+            updated[i] = { ...msg, message: { ...msg.message, content: updatedContent } }
+            const next = new Map(s.containers)
+            next.set(sessionId, {
+              ...container,
+              messages: updated,
+              streamingVersion: container.streamingVersion + 1,
+            })
+            useSessionContainerStore.setState({ containers: next })
+            break
+          }
+        }
       }
     } else if (evt.type === 'content_block_delta') {
       const delta = evt.delta
@@ -637,8 +677,9 @@ class WebSocketManager {
       }
       streamState.responseLength += deltaText.length
 
-      // Accumulate in pendingDeltaText for RAF batching
-      streamState.pendingDeltaText += deltaText
+      // Accumulate in pendingDeltas for RAF batching (per block index)
+      const prev = streamState.pendingDeltas.get(evt.index) ?? ''
+      streamState.pendingDeltas.set(evt.index, prev + deltaText)
 
       if (streamState.pendingDeltaRafId === null) {
         streamState.pendingDeltaRafId = requestAnimationFrame(() => {
@@ -648,140 +689,103 @@ class WebSocketManager {
     }
   }
 
-  /** Flush accumulated pending delta text to the store */
+  /** Flush all accumulated pending deltas to the store */
   private flushStreamState(sessionId: string, streamState: StreamState) {
     streamState.pendingDeltaRafId = null
-    if (!streamState.pendingDeltaText) return
-    const text = streamState.pendingDeltaText
-    streamState.pendingDeltaText = ''
-    store().appendStreamingText(sessionId, text)
+    if (streamState.pendingDeltas.size === 0) return
+    const s = store()
+    for (const [blockIndex, text] of streamState.pendingDeltas) {
+      if (text) s.updateStreamingBlock(sessionId, blockIndex, text)
+    }
+    streamState.pendingDeltas.clear()
   }
 
   private handleFinalAssistantMessage(sessionId: string, agentMsg: AgentMessage) {
     let s = store()
-    const container = s.containers.get(sessionId)
-    if (!container) return
-
     const streamState = s.getStreamState(sessionId)
 
-    // Flush any buffered streaming text
+    // 1. Flush any buffered streaming text
     if (streamState.pendingDeltaRafId !== null) {
       cancelAnimationFrame(streamState.pendingDeltaRafId)
       streamState.pendingDeltaRafId = null
     }
-    if (streamState.pendingDeltaText) {
-      const text = streamState.pendingDeltaText
-      streamState.pendingDeltaText = ''
-      s.appendStreamingText(sessionId, text)
+    if (streamState.pendingDeltas.size > 0) {
+      for (const [blockIndex, text] of streamState.pendingDeltas) {
+        if (text) s.updateStreamingBlock(sessionId, blockIndex, text)
+      }
+      streamState.pendingDeltas.clear()
     }
 
-    // Re-read latest state after flush — the flush may have created a new
-    // containers Map, and we must read from that to avoid overwriting it.
+    // 2. Re-read store after flush (flush may create new containers Map)
     s = store()
+    const container = s.containers.get(sessionId)
+    if (!container) return
 
     const finalMsg = agentMsg as any
     const apiId = finalMsg.message?.id
+    const messages = container.messages
 
-    // Build streamed content map from accumulator
-    const streamedByIndex = new Map<number, { blockType: string; content: string }>()
-    for (const [idx, acc] of streamState.accumulator) {
-      if (acc.content) {
-        streamedByIndex.set(idx, { blockType: acc.blockType, content: acc.content })
-      }
-    }
-
-    // Deduplicate: remove streaming blocks and previous assistant msg with same API id
-    const current = s.containers.get(sessionId)?.messages ?? []
-    const cleaned = current.filter((m: any) => {
-      if (m.type === '_streaming_block') return false
-      if (apiId && m.type === 'assistant' && (m as any).message?.id === apiId) return false
-      return true
-    })
-
-    // Patch content blocks from accumulated stream content
-    const contentBlocks: any[] = finalMsg.message?.content ?? []
-
-    if (streamedByIndex.size > 0) {
-      const usedIndices = new Set<number>()
-
-      // Step 1: Patch existing empty blocks by matching TYPE
-      for (const block of contentBlocks) {
-        if (block.type === 'text' && !block.text) {
-          for (const [idx, s2] of streamedByIndex) {
-            if (s2.blockType === 'text' && s2.content && !usedIndices.has(idx)) {
-              block.text = s2.content
-              usedIndices.add(idx)
-              break
-            }
-          }
-        } else if (block.type === 'thinking' && !block.thinking) {
-          for (const [idx, s2] of streamedByIndex) {
-            if (s2.blockType === 'thinking' && s2.content && !usedIndices.has(idx)) {
-              block.thinking = s2.content
-              usedIndices.add(idx)
-              break
-            }
-          }
-        }
-      }
-
-      // Step 2: Insert accumulated text/thinking blocks MISSING from the message
-      const hasText = contentBlocks.some((b: any) => b.type === 'text' && b.text)
-      const hasThinking = contentBlocks.some((b: any) => b.type === 'thinking' && b.thinking)
-      let insertedThinking: any = null
-      let insertedText: any = null
-
-      if (!hasThinking || !hasText) {
-        for (const [idx, s2] of streamedByIndex) {
-          if (usedIndices.has(idx)) continue
-          if (!insertedThinking && s2.blockType === 'thinking' && s2.content && !hasThinking) {
-            insertedThinking = { type: 'thinking', thinking: s2.content }
-          } else if (!insertedText && s2.blockType === 'text' && s2.content && !hasText) {
-            insertedText = { type: 'text', text: s2.content }
-          }
-          if ((insertedThinking || hasThinking) && (insertedText || hasText)) break
-        }
-      }
-
-      if ((insertedThinking || insertedText) && finalMsg.message) {
-        const inserts: any[] = []
-        if (insertedThinking) inserts.push(insertedThinking)
-        if (insertedText) inserts.push(insertedText)
-        // Insert before tool_use blocks
-        const toolIdx = contentBlocks.findIndex(
-          (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
-        )
-        if (toolIdx >= 0) {
-          contentBlocks.splice(toolIdx, 0, ...inserts)
-        } else {
-          contentBlocks.push(...inserts)
-        }
-      }
-    }
-
-    // Check if the final message has actual content after patching
-    const hasRealContent = contentBlocks.some(
-      (b: any) =>
-        (b.type === 'text' && b.text) ||
-        (b.type === 'thinking' && b.thinking) ||
-        b.type === 'tool_use' ||
-        b.type === 'server_tool_use'
+    // 3. Find the streaming message
+    const streamIdx = messages.findIndex(
+      (m: any) => m._streaming && m.type === 'assistant'
     )
 
-    if (!hasRealContent && streamedByIndex.size > 0) {
-      // Empty partial message — keep streaming blocks visible, skip this update
-      return
+    // 4. Build merged content: accumulator (text/thinking) + SDK (tool_use, redacted_thinking)
+    const accumulatedContent = this.buildContentFromAccumulator(streamState.accumulator)
+    const sdkContent: any[] = finalMsg.message?.content ?? []
+    const toolBlocks = sdkContent.filter(
+      (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
+        || b.type === 'tool_result' || b.type === 'web_search_tool_result'
+        || b.type === 'code_execution_tool_result'
+    )
+    const redactedBlocks = sdkContent.filter(
+      (b: any) => b.type === 'redacted_thinking'
+    )
+    const mergedContent = [...accumulatedContent, ...redactedBlocks, ...toolBlocks]
+
+    // 5. If accumulator is empty, trust the SDK message directly (no stream events scenario)
+    const useRawSdk = streamState.accumulator.size === 0
+
+    // 6. Build final message
+    const merged: any = {
+      ...finalMsg,
+      message: {
+        ...finalMsg.message,
+        content: useRawSdk ? sdkContent : mergedContent,
+      },
+    }
+    delete merged._streaming
+
+    // 7. Deduplicate: also remove any previous assistant message with same API id
+    let cleaned = messages
+    if (apiId) {
+      cleaned = messages.filter((m: any) => {
+        if ((m as any)._streaming) return true  // Keep the streaming msg — we'll replace it by index
+        if (m.type === 'assistant' && (m as any).message?.id === apiId) return false
+        return true
+      })
     }
 
-    // Write cleaned + patched final message to the container
+    // 8. Write to store
     const nextContainers = new Map(s.containers)
-    const c = s.containers.get(sessionId)
-    if (c) {
-      nextContainers.set(sessionId, { ...c, messages: [...cleaned, agentMsg] })
-      useSessionContainerStore.setState({ containers: nextContainers })
+    if (streamIdx >= 0) {
+      // Replace the streaming message in-place
+      const updated = [...cleaned]
+      const newStreamIdx = updated.findIndex((m: any) => (m as any)._streaming && m.type === 'assistant')
+      if (newStreamIdx >= 0) {
+        updated[newStreamIdx] = merged
+      } else {
+        updated.push(merged)
+      }
+      nextContainers.set(sessionId, { ...container, messages: updated })
+    } else {
+      // No streaming message found — fallback: just push the final message
+      const updated = [...cleaned, merged]
+      nextContainers.set(sessionId, { ...container, messages: updated })
     }
+    useSessionContainerStore.setState({ containers: nextContainers })
 
-    // Clear stream state so next turn starts fresh
+    // 9. Clear stream state
     streamState.clear()
   }
 
@@ -919,6 +923,8 @@ class WebSocketManager {
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
+    // Finalize any in-progress streaming message (e.g. abort during streaming)
+    s.clearStreamingFlag(sessionId)
     // Refresh session list in sidebar (force — session just completed, title may have changed)
     const sessStore = useSessionStore.getState()
     if (sessStore.currentProjectCwd) {
@@ -1014,7 +1020,6 @@ class WebSocketManager {
   }
 
   private handleStreamSnapshot(msg: any) {
-    // Reconnection: apply accumulated stream content as synthetic streaming blocks
     const snapshot = msg as any
     const sessionId = snapshot.sessionId as string | undefined
     if (!sessionId) return
@@ -1024,52 +1029,39 @@ class WebSocketManager {
     if (!container) return
 
     const streamState = s.getStreamState(sessionId)
+    streamState.accumulator.clear()
 
+    // Build content blocks from snapshot
+    const contentBlocks: any[] = []
     for (const block of snapshot.blocks ?? []) {
-      // Feed into accumulator
-      if (block.index === 0) {
-        streamState.accumulator.clear()
-      }
       streamState.accumulator.set(block.index, {
         blockType: block.type,
         content: block.content ?? '',
       })
-
-      // Push _streaming_block for content_block_start
-      const startEvent: AgentMessage = {
-        type: 'stream_event',
-        uuid: snapshot.messageId,
-        event: {
-          type: 'content_block_start',
-          index: block.index,
-          content_block: { type: block.type },
-        },
-      } as any
-
-      const nextContainers1 = new Map(s.containers)
-      const c1 = nextContainers1.get(sessionId)
-      if (c1) {
-        nextContainers1.set(sessionId, {
-          ...c1,
-          messages: [
-            ...c1.messages,
-            {
-              ...startEvent,
-              type: '_streaming_block' as any,
-              _blockType: block.type,
-              _content: '',
-              _index: block.index,
-            },
-          ],
-        })
-        useSessionContainerStore.setState({ containers: nextContainers1 })
-      }
-
-      // Append the content via appendStreamingText
-      if (block.content) {
-        s.appendStreamingText(sessionId, block.content)
+      if (block.type === 'thinking') {
+        contentBlocks.push({ type: 'thinking', thinking: block.content ?? '' })
+      } else {
+        contentBlocks.push({ type: 'text', text: block.content ?? '' })
       }
     }
+
+    if (contentBlocks.length === 0) return
+
+    // Create a single streaming assistant message
+    const streamingMsg: any = {
+      type: 'assistant',
+      _streaming: true,
+      uuid: snapshot.messageId,
+      message: { role: 'assistant', content: contentBlocks },
+    }
+
+    const next = new Map(s.containers)
+    next.set(sessionId, {
+      ...container,
+      messages: [...container.messages, streamingMsg],
+      streamingVersion: container.streamingVersion + 1,
+    })
+    useSessionContainerStore.setState({ containers: next })
   }
 
   private handleSessionTitleUpdated(msg: any) {
@@ -1118,7 +1110,7 @@ class WebSocketManager {
       if (!container) return
       // Preserve live (optimistic + streaming) messages
       const live = container.messages.filter(
-        (m: any) => m._optimistic || m.type === '_streaming_block'
+        (m: any) => m._optimistic || (m as any)._streaming === true
       )
       s.replaceMessages(sessionId, [...(result.messages as AgentMessage[]), ...live], result.hasMore)
       s.setNeedsFullSync(sessionId, false)
