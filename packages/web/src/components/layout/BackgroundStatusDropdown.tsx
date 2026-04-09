@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo } from 'react'
 import { useMultiPanelStore, type PanelSummary } from '../../stores/multiPanelStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useSessionContainerStore } from '../../stores/sessionContainerStore'
 
 interface BackgroundStatusDropdownProps {
   onClose: () => void
@@ -30,6 +31,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
   const selectSession = useSessionStore((s) => s.selectSession)
   const viewMode = useSettingsStore((s) => s.viewMode)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
+  const containers = useSessionContainerStore((s) => s.containers)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -51,10 +53,17 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
   }, [isCurrentValid, currentSessionId, currentSessions])
 
   // Collect panel items; in Multi mode show all, in Single exclude current
+  // Supplement status from sessionContainerStore for accuracy
   const items: PanelSummary[] = []
   for (const [sid, summary] of panelSummaries) {
     if (viewMode === 'multi' || sid !== currentSessionId) {
-      items.push(summary)
+      const containerStatus = containers.get(sid)?.sessionStatus
+      const container = containers.get(sid)
+      const hasApproval = container
+        ? (container.pendingApproval !== null || container.pendingPlanApproval !== null)
+        : summary.hasApproval
+      const status = containerStatus ?? summary.status
+      items.push({ ...summary, status, hasApproval })
     }
   }
 

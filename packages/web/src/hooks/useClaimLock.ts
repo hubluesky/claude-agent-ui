@@ -1,11 +1,12 @@
 import { useCallback } from 'react'
+import { wsManager } from '../lib/WebSocketManager'
 import { useSessionStore } from '../stores/sessionStore'
-import { useWebSocket } from './useWebSocket'
 
 export function useClaimLock() {
-  const { claimLock } = useWebSocket()
+  const currentSessionId = useSessionStore((s) => s.currentSessionId)
   return useCallback(() => {
-    const sid = useSessionStore.getState().currentSessionId
-    if (sid && sid !== '__new__') claimLock(sid)
-  }, [claimLock])
+    if (currentSessionId && currentSessionId !== '__new__') {
+      wsManager.claimLock(currentSessionId)
+    }
+  }, [currentSessionId])
 }
