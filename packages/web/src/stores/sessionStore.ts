@@ -2,19 +2,24 @@ import { create } from 'zustand'
 import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
 import { fetchProjects, fetchSessions } from '../lib/api'
 
+const CACHE_TTL_MS = 30_000 // 30 seconds
+
 interface SessionState {
   projects: ProjectInfo[]
   projectsLoading: boolean
+  projectsFetchedAt: number
   sessions: Map<string, SessionSummary[]>
   sessionsLoading: Map<string, boolean>
+  sessionsFetchedAt: Map<string, number>
   currentSessionId: string | null
   currentProjectCwd: string | null
   composerDraft: string | null
 }
 
 interface SessionActions {
-  loadProjects(): Promise<void>
-  loadProjectSessions(cwd: string): Promise<void>
+  loadProjects(force?: boolean): Promise<void>
+  loadProjectSessions(cwd: string, force?: boolean): Promise<void>
+  invalidateProjectSessions(cwd: string): void
   selectProject(cwd: string): void
   selectSession(sessionId: string, cwd: string): void
   setCurrentSessionId(id: string | null): void
@@ -25,23 +30,33 @@ interface SessionActions {
 export const useSessionStore = create<SessionState & SessionActions>((set, get) => ({
   projects: [],
   projectsLoading: false,
+  projectsFetchedAt: 0,
   sessions: new Map(),
   sessionsLoading: new Map(),
+  sessionsFetchedAt: new Map(),
   currentSessionId: null,
   currentProjectCwd: null,
   composerDraft: null,
 
-  async loadProjects() {
+  async loadProjects(force = false) {
+    const { projectsFetchedAt, projectsLoading } = get()
+    if (!force && projectsLoading) return
+    if (!force && projectsFetchedAt && Date.now() - projectsFetchedAt < CACHE_TTL_MS) return
     set({ projectsLoading: true })
     try {
       const projects = await fetchProjects()
-      set({ projects, projectsLoading: false })
+      set({ projects, projectsLoading: false, projectsFetchedAt: Date.now() })
     } catch {
       set({ projectsLoading: false })
     }
   },
 
-  async loadProjectSessions(cwd: string) {
+  async loadProjectSessions(cwd: string, force = false) {
+    const { sessionsFetchedAt, sessionsLoading } = get()
+    if (!force && sessionsLoading.get(cwd)) return
+    const fetchedAt = sessionsFetchedAt.get(cwd) ?? 0
+    if (!force && fetchedAt && Date.now() - fetchedAt < CACHE_TTL_MS) return
+
     const loading = new Map(get().sessionsLoading)
     loading.set(cwd, true)
     set({ sessionsLoading: loading })
@@ -51,12 +66,20 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
       sessions.set(cwd, result.sessions)
       const loadingDone = new Map(get().sessionsLoading)
       loadingDone.set(cwd, false)
-      set({ sessions, sessionsLoading: loadingDone })
+      const updatedFetchedAt = new Map(get().sessionsFetchedAt)
+      updatedFetchedAt.set(cwd, Date.now())
+      set({ sessions, sessionsLoading: loadingDone, sessionsFetchedAt: updatedFetchedAt })
     } catch {
       const loadingDone = new Map(get().sessionsLoading)
       loadingDone.set(cwd, false)
       set({ sessionsLoading: loadingDone })
     }
+  },
+
+  invalidateProjectSessions(cwd: string) {
+    const updatedFetchedAt = new Map(get().sessionsFetchedAt)
+    updatedFetchedAt.delete(cwd)
+    set({ sessionsFetchedAt: updatedFetchedAt, projectsFetchedAt: 0 })
   },
 
   selectProject(cwd: string) {

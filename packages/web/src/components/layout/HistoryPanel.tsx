@@ -26,15 +26,27 @@ export function HistoryPanel({ onSelect, onClose }: HistoryPanelProps) {
   const [loading, setLoading] = useState(false)
   const loadingRef = useRef(false)
   const offsetRef = useRef(0)
+  const lastFetchedCwd = useRef<string | null>(null)
+  const lastFetchedAt = useRef(0)
 
   useEffect(() => {
     if (!currentProjectCwd) return
+    // Skip fetch if same project was loaded recently (30s cache)
+    const now = Date.now()
+    if (
+      lastFetchedCwd.current === currentProjectCwd &&
+      allSessions.length > 0 &&
+      now - lastFetchedAt.current < 30_000
+    ) return
+
     setLoading(true)
     offsetRef.current = 0
     fetchSessions(currentProjectCwd, { limit: PAGE_SIZE, offset: 0 }).then((res) => {
       setAllSessions(res.sessions)
       setHasMore(res.hasMore)
       offsetRef.current = res.sessions.length
+      lastFetchedCwd.current = currentProjectCwd
+      lastFetchedAt.current = Date.now()
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [currentProjectCwd])

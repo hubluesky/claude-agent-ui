@@ -37,7 +37,7 @@ export function ChatInterface({
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
   const hasMessages = useSessionContainerStore((s) =>
-    ctx.sessionId && ctx.sessionId !== '__new__'
+    ctx.sessionId
       ? (s.containers.get(ctx.sessionId)?.messages.length ?? 0) > 0
       : false
   )
@@ -83,7 +83,12 @@ export function ChatInterface({
       contentBlocks.push({ type: 'text', text: prompt })
     }
     if (ctx.sessionId) {
-      useSessionContainerStore.getState().pushMessage(ctx.sessionId, {
+      const store = useSessionContainerStore.getState()
+      // Ensure container exists for __new__ so optimistic message is visible immediately
+      if (ctx.sessionId === '__new__') {
+        store.getOrCreate('__new__', currentProjectCwd ?? '')
+      }
+      store.pushMessage(ctx.sessionId, {
         type: 'user',
         _optimistic: true,
         message: { role: 'user', content: contentBlocks },
