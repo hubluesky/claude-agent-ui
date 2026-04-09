@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useGlobalConnection } from '../../hooks/useContainer'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { wsManager } from '../../lib/WebSocketManager'
+import { useSessionContainerStore } from '../../stores/sessionContainerStore'
 
 /** Extract short name from SDK displayName + description.
  *  "Opus (1M context)" + "Opus 4.6 with 1M context..." → "Opus 4.6" */
@@ -33,11 +35,9 @@ function formatModelId(id: string | undefined): string | undefined {
 
 export function ModelSelector() {
   const [open, setOpen] = useState(false)
-  const models = useConnectionStore((s) => s.models)
-  const accountInfo = useConnectionStore((s) => s.accountInfo)
-  const contextUsage = useConnectionStore((s) => s.contextUsage)
+  const { models, accountInfo } = useGlobalConnection()
+  const { contextUsage } = useChatSession()
   const currentModel = accountInfo?.model ?? contextUsage?.model
-  const { send } = useWebSocket()
   const sessionId = useSessionStore((s) => s.currentSessionId)
 
   // Show short model name: prefer extracting from models list, fallback to ID parsing
@@ -49,9 +49,9 @@ export function ModelSelector() {
 
   const handleSelect = (model: string) => {
     if (sessionId && sessionId !== '__new__' && model !== currentModel) {
-      send({ type: 'set-model', sessionId, model } as any)
+      wsManager.setModel(sessionId, model)
       // Optimistically update local state
-      useConnectionStore.getState().setAccountInfo({ ...accountInfo, model })
+      useSessionContainerStore.getState().setGlobal({ accountInfo: { ...accountInfo, model } })
     }
     setOpen(false)
   }

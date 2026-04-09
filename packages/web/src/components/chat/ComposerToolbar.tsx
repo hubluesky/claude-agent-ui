@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useGlobalConnection } from '../../hooks/useContainer'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { wsManager } from '../../lib/WebSocketManager'
 import { MODES, ModeIcon } from './ModesPopup'
 import { PlusMenu } from './PlusMenu'
 
@@ -35,10 +36,10 @@ export function ComposerToolbar({
   showModes, setShowModes,
 }: ComposerToolbarProps & { showModes: boolean; setShowModes: (v: boolean) => void }) {
   const [showPlusMenu, setShowPlusMenu] = useState(false)
-  const { sessionStatus, connectionStatus } = useConnectionStore()
+  const { connectionStatus } = useGlobalConnection()
+  const { sessionStatus } = useChatSession()
   const { currentSessionId } = useSessionStore()
   const { permissionMode, setPermissionMode } = useSettingsStore()
-  const { send } = useWebSocket()
 
   const isDisconnected = connectionStatus !== 'connected'
 
@@ -67,9 +68,9 @@ export function ComposerToolbar({
     const nextMode = modeOrder[(currentIndex + 1) % modeOrder.length]
     setPermissionMode(nextMode)
     if (currentSessionId && currentSessionId !== '__new__') {
-      send({ type: 'set-mode', sessionId: currentSessionId, mode: nextMode })
+      wsManager.setMode(currentSessionId, nextMode)
     }
-  }, [permissionMode, currentSessionId, setPermissionMode, send])
+  }, [permissionMode, currentSessionId, setPermissionMode])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
