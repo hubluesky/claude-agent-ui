@@ -31,19 +31,16 @@ export function createWsHandler(deps: HandlerDeps) {
   }
   const pendingRequestMap = new Map<string, PendingRequest>()
 
-  // Start heartbeat and register dead connection handler
-  wsHub.setOnDeadConnection((deadConnectionId) => {
-    lockManager.onDisconnect(deadConnectionId)
-  })
+  // Start heartbeat
   wsHub.startHeartbeat()
 
   function resendPendingRequests(sessionId: string, connectionId: string, readonly: boolean) {
     for (const [, entry] of pendingRequestMap) {
       if (entry.sessionId !== sessionId) continue
       if (entry.type === 'tool-approval') {
-        wsHub.sendTo(connectionId, { type: 'tool-approval-request', ...entry.payload, readonly } as any)
+        wsHub.sendTo(connectionId, { type: 'tool-approval-request', sessionId, ...entry.payload, readonly } as any)
       } else if (entry.type === 'ask-user') {
-        wsHub.sendTo(connectionId, { type: 'ask-user-request', ...entry.payload, readonly } as any)
+        wsHub.sendTo(connectionId, { type: 'ask-user-request', sessionId, ...entry.payload, readonly } as any)
       } else if (entry.type === 'plan-approval') {
         wsHub.sendTo(connectionId, { type: 'plan-approval', sessionId, ...entry.payload, readonly } as any)
       }
@@ -54,9 +51,6 @@ export function createWsHandler(deps: HandlerDeps) {
   lockManager.setOnRelease((sessionId: string) => {
     wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
   })
-
-  // Allow lock manager to detect dead connections — acquire() auto-releases stale locks
-  lockManager.setIsConnectionAlive((connectionId: string) => !!wsHub.getClient(connectionId))
 
   return function handleConnection(ws: WebSocket, meta?: { userAgent?: string; ip?: string }) {
     const connectionId = wsHub.register(ws, meta)
@@ -76,7 +70,6 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     ws.on('close', () => {
-      lockManager.onDisconnect(connectionId)
       wsHub.unregister(connectionId)
     })
   }
@@ -111,7 +104,7 @@ export function createWsHandler(deps: HandlerDeps) {
         handleReleaseLock(connectionId, msg.sessionId)
         break
       case 'claim-lock':
-        handleClaimLock(connectionId, msg.sessionId)
+        // No-op: claim-lock is removed in session-lifecycle lock model
         break
       case 'leave-session':
         wsHub.leaveSession(connectionId)
@@ -176,24 +169,43 @@ export function createWsHandler(deps: HandlerDeps) {
   function handleJoinSession(connectionId: string, sessionId: string, lastSeq?: number) {
     const syncResult = wsHub.joinWithSync(connectionId, sessionId, lastSeq ?? 0)
     const alreadyInSession = syncResult.alreadyInSession
-    let lockHolder = lockManager.getHolder(sessionId)
-    let activeSession = sessionManager.getActive(sessionId)
+    const lockHolder = lockManager.getHolder(sessionId)
+    const activeSession = sessionManager.getActive(sessionId)
 
-    // Detect stale lock: if the lock holder is a dead connection (no longer registered
-    // in wsHub), release it immediately. This fixes permanent deadlocks caused by
-    // bindSessionEvents acquiring locks via a closure-captured connectionId that became
-    // stale after a WS reconnection during SDK initialization.
-    if (lockHolder && lockHolder !== connectionId && !wsHub.getClient(lockHolder)) {
-      lockManager.release(sessionId)
-      lockHolder = null
+    wsHub.sendTo(connectionId, {
+      type: 'session-state',
+      sessionId,
+      sessionStatus: activeSession?.status ?? 'idle',
+      lockStatus: lockManager.getStatus(sessionId),
+      lockHolderId: lockHolder ?? undefined,
+      isLockHolder: lockHolder === connectionId,
+      permissionMode: activeSession?.permissionMode,
+    })
+
+    // Skip snapshot + replay if client was already subscribed to this session.
+    if (!alreadyInSession) {
+      const snapshot = wsHub.getStreamSnapshot(sessionId)
+      if (snapshot) {
+        wsHub.sendTo(connectionId, {
+          type: 'stream-snapshot',
+          sessionId,
+          messageId: snapshot.messageId,
+          blocks: snapshot.blocks,
+        })
+      }
+
+      wsHub.sendTo(connectionId, {
+        type: 'sync-result',
+        sessionId,
+        replayed: syncResult.replayed,
+        hasGap: syncResult.hasGap,
+        gapRange: syncResult.gapRange,
+      } as any)
     }
-
-    const isLockHolder = lockHolder === connectionId
 
     // Warm up session for MCP/model/context data if not already active
     if (!activeSession && sessionId && sessionId !== '__new__') {
       sessionManager.resumeSession(sessionId).then((session) => {
-        // Bind info events (models, account-info, mcp-status)
         session.on('models', (models: any[]) => {
           wsHub.broadcast(sessionId, {
             type: 'models',
@@ -221,51 +233,13 @@ export function createWsHandler(deps: HandlerDeps) {
             maxTokens: usage.maxTokens, percentage: usage.percentage, model: usage.model,
           })
         })
-        // Trigger background init
         if ('warmUp' in session) (session as any).warmUp()
       }).catch(() => {})
-    }
-    wsHub.sendTo(connectionId, {
-      type: 'session-state',
-      sessionId,
-      sessionStatus: activeSession?.status ?? 'idle',
-      lockStatus: lockManager.getStatus(sessionId),
-      lockHolderId: lockHolder ?? undefined,
-      isLockHolder,
-      permissionMode: activeSession?.permissionMode,
-    })
-
-    // Skip snapshot + replay if client was already subscribed to this session.
-    // The server-side init handler already joined the client; the second join-session
-    // from the client's useEffect is redundant. Sending snapshot + replay again would
-    // create duplicate streaming blocks and re-deliver already-received messages.
-    if (!alreadyInSession) {
-      // Send stream snapshot FIRST if streaming is in progress (design spec order).
-      // Buffer replay was already done inside joinWithSync above.
-      const snapshot = wsHub.getStreamSnapshot(sessionId)
-      if (snapshot) {
-        wsHub.sendTo(connectionId, {
-          type: 'stream-snapshot',
-          sessionId,
-          messageId: snapshot.messageId,
-          blocks: snapshot.blocks,
-        })
-      }
-
-      // Send sync-result so client knows if there was a gap in buffered messages
-      wsHub.sendTo(connectionId, {
-        type: 'sync-result',
-        sessionId,
-        replayed: syncResult.replayed,
-        hasGap: syncResult.hasGap,
-        gapRange: syncResult.gapRange,
-      } as any)
     }
 
     // Send model name + detect pending requests from session history (async, non-blocking)
     if (sessionId && sessionId !== '__new__') {
       getSessionMessages(sessionId).then((msgs: any[]) => {
-        // Extract model name from last assistant message
         for (let i = msgs.length - 1; i >= 0; i--) {
           const model = msgs[i]?.message?.model
           if (msgs[i].type === 'assistant' && model) {
@@ -278,51 +252,13 @@ export function createWsHandler(deps: HandlerDeps) {
           }
         }
 
-        // Detect pending requests from history (e.g., after server restart).
-        // If the last assistant message has an AskUserQuestion/ExitPlanMode/other tool_use
-        // without a corresponding tool_result, reconstruct the pending request.
         detectPendingFromHistory(sessionId, connectionId, msgs)
       }).catch(() => {})
     }
 
     // Re-send any pending tool-approval or ask-user requests for this session
-    resendPendingRequests(sessionId, connectionId, !isLockHolder)
-
-    if (!lockHolder) {
-      // Auto-acquire the lock for the joining client when:
-      // 1. There are pending approval/ask-user requests (existing behavior), OR
-      // 2. The session is actively running — the user who started it should
-      //    retain control even after WS reconnection or session switching.
-      //    Without this, a WS drop + reconnect would leave the lock idle
-      //    and the user unable to interact (abort, approve, etc.).
-      const sessionIsActive = activeSession && activeSession.status === 'running'
-      let hasPending = false
-      for (const [, entry] of pendingRequestMap) {
-        if (entry.sessionId === sessionId) { hasPending = true; break }
-      }
-      if (hasPending || sessionIsActive) {
-        lockManager.acquire(sessionId, connectionId)
-        wsHub.broadcast(sessionId, {
-          type: 'lock-status',
-          sessionId,
-          status: 'locked',
-          holderId: connectionId,
-        })
-        if (hasPending) {
-          resendPendingRequests(sessionId, connectionId, false)
-        }
-        // Correct the session-state we already sent (it had isLockHolder: false)
-        wsHub.sendTo(connectionId, {
-          type: 'session-state',
-          sessionId,
-          sessionStatus: activeSession?.status ?? 'idle',
-          lockStatus: 'locked',
-          lockHolderId: connectionId,
-          isLockHolder: true,
-          permissionMode: activeSession?.permissionMode,
-        })
-      }
-    }
+    const readonly = lockHolder !== null && lockHolder !== connectionId
+    resendPendingRequests(sessionId, connectionId, readonly)
   }
 
   /** Multi mode subscription: subscribe to a session without leaving others.
@@ -343,8 +279,6 @@ export function createWsHandler(deps: HandlerDeps) {
       permissionMode: activeSession?.permissionMode,
     })
 
-    // Send stream snapshot if streaming is in progress.
-    // Buffer replay was already done inside subscribeWithSync above.
     const snapshot = wsHub.getStreamSnapshot(sessionId)
     if (snapshot) {
       wsHub.sendTo(connectionId, {
@@ -355,7 +289,6 @@ export function createWsHandler(deps: HandlerDeps) {
       })
     }
 
-    // Send sync-result so client knows if there was a gap in buffered messages
     wsHub.sendTo(connectionId, {
       type: 'sync-result',
       sessionId,
@@ -392,17 +325,14 @@ export function createWsHandler(deps: HandlerDeps) {
         return
       }
 
-      session = sessionManager.getActive(effectiveSessionId) ?? await sessionManager.resumeSession(effectiveSessionId)
-    }
-
-    if (effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
-      lockManager.acquire(effectiveSessionId, connectionId)
       wsHub.broadcast(effectiveSessionId, {
         type: 'lock-status',
         sessionId: effectiveSessionId,
         status: 'locked',
         holderId: connectionId,
       })
+
+      session = sessionManager.getActive(effectiveSessionId) ?? await sessionManager.resumeSession(effectiveSessionId)
     }
 
     // Build content blocks for broadcast (includes images if present)
@@ -456,11 +386,22 @@ export function createWsHandler(deps: HandlerDeps) {
     // and to ensure the latest connectionId is captured in closures.
     session.removeAllListeners()
 
-    // Store the ownerConnectionId on the session so it can be updated by
-    // handleReconnect when the WS reconnects. All closures below use
-    // session.ownerConnectionId instead of the captured `connectionId` parameter,
-    // preventing stale-connectionId deadlocks.
-    session.ownerConnectionId = connectionId
+    // Clean up stale pending requests for this session.
+    // When bindSessionEvents is called for a new send, any pending approval/ask-user
+    // from the previous query is no longer valid — notify clients and clear.
+    for (const [requestId, entry] of pendingRequestMap) {
+      if (entry.sessionId !== sessionId) continue
+      const resolvedType = entry.type === 'tool-approval' ? 'tool-approval-resolved'
+        : entry.type === 'ask-user' ? 'ask-user-resolved'
+        : 'plan-approval-resolved'
+      wsHub.broadcast(sessionId, {
+        type: resolvedType,
+        sessionId,
+        requestId,
+        decision: { behavior: 'deny', message: 'New query started' },
+      } as any)
+      pendingRequestMap.delete(requestId)
+    }
 
     let realSessionId = sessionId
     let pendingUserPrompt = sessionId.startsWith('pending-') ? prompt : undefined
@@ -471,15 +412,14 @@ export function createWsHandler(deps: HandlerDeps) {
       if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
         const newId = msg.session_id
         if (realSessionId.startsWith('pending-')) {
-          const ownerId = session.ownerConnectionId ?? connectionId
           sessionManager.registerActive(newId, session)
-          lockManager.acquire(newId, ownerId)
-          wsHub.joinSession(ownerId, newId)
+          lockManager.acquire(newId, connectionId)
+          wsHub.joinSession(connectionId, newId)
           wsHub.broadcast(newId, {
             type: 'lock-status',
             sessionId: newId,
             status: 'locked',
-            holderId: ownerId,
+            holderId: connectionId,
           })
           realSessionId = newId
 
@@ -506,7 +446,6 @@ export function createWsHandler(deps: HandlerDeps) {
             pendingContentBlocks = undefined
           }
         } else if (realSessionId !== newId) {
-          const ownerId = session.ownerConnectionId ?? connectionId
           sessionManager.registerActive(newId, session)
           // Migrate pending requests from old session ID to new one
           for (const [, entry] of pendingRequestMap) {
@@ -516,15 +455,15 @@ export function createWsHandler(deps: HandlerDeps) {
           }
           // Migrate lock from old session ID to new one
           lockManager.release(realSessionId)
-          lockManager.acquire(newId, ownerId)
+          lockManager.acquire(newId, connectionId)
           // Migrate session subscription to new ID
-          wsHub.joinSession(ownerId, newId)
+          wsHub.joinSession(connectionId, newId)
           // Broadcast lock status under new session ID
           wsHub.broadcast(newId, {
             type: 'lock-status',
             sessionId: newId,
             status: 'locked',
-            holderId: ownerId,
+            holderId: connectionId,
           })
           realSessionId = newId
         }
@@ -588,6 +527,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('tool-approval', (req) => {
+      lockManager.startTimeout(realSessionId)
       pendingRequestMap.set(req.requestId, {
         sessionId: realSessionId,
         type: 'tool-approval',
@@ -596,42 +536,49 @@ export function createWsHandler(deps: HandlerDeps) {
       })
       // Approval requests are NOT buffered — resendPendingRequests handles reconnection.
       // Send directly to each client (lock holder gets readonly=false, others readonly=true).
+      const holder = lockManager.getHolder(realSessionId)
       for (const connId of wsHub.getSessionClients(realSessionId)) {
         wsHub.sendTo(connId, {
           type: 'tool-approval-request',
+          sessionId: realSessionId,
           ...req,
-          readonly: connId !== session.ownerConnectionId,
+          readonly: holder !== null && connId !== holder,
         })
       }
     })
 
     session.on('ask-user', (req) => {
+      lockManager.startTimeout(realSessionId)
       pendingRequestMap.set(req.requestId, {
         sessionId: realSessionId,
         type: 'ask-user',
         payload: req,
       })
+      const holder = lockManager.getHolder(realSessionId)
       for (const connId of wsHub.getSessionClients(realSessionId)) {
         wsHub.sendTo(connId, {
           type: 'ask-user-request',
+          sessionId: realSessionId,
           ...req,
-          readonly: connId !== session.ownerConnectionId,
+          readonly: holder !== null && connId !== holder,
         })
       }
     })
 
     session.on('plan-approval', (req) => {
+      lockManager.startTimeout(realSessionId)
       pendingRequestMap.set(req.requestId, {
         sessionId: realSessionId,
         type: 'plan-approval',
         payload: req,
       })
+      const holder = lockManager.getHolder(realSessionId)
       for (const connId of wsHub.getSessionClients(realSessionId)) {
         wsHub.sendTo(connId, {
           type: 'plan-approval',
           sessionId: realSessionId,
           ...req,
-          readonly: connId !== session.ownerConnectionId,
+          readonly: holder !== null && connId !== holder,
         })
       }
     })
@@ -687,7 +634,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('complete', (result) => {
-      lockManager.resetIdleTimer(realSessionId)
+      lockManager.startTimeout(realSessionId)
       wsHub.broadcast(realSessionId, {
         type: 'session-complete',
         sessionId: realSessionId,
@@ -715,7 +662,7 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('error', (err) => {
-      lockManager.resetIdleTimer(realSessionId)
+      lockManager.startTimeout(realSessionId)
       wsHub.broadcast(realSessionId, {
         type: 'error',
         message: err.message,
@@ -724,22 +671,28 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function handleToolApprovalResponse(_connectionId: string, requestId: string, decision: ToolApprovalDecision) {
+  function handleToolApprovalResponse(connectionId: string, requestId: string, decision: ToolApprovalDecision) {
     const entry = pendingRequestMap.get(requestId)
     if (!entry) return
-
-    // No lock check — any connected client can respond to approval requests.
-    // Lock controls who can send new messages, not who can respond to pending approvals.
 
     const session = sessionManager.getActive(entry.sessionId)
     if (!session) return
 
+    // Acquire lock for the responder and broadcast
+    lockManager.acquire(entry.sessionId, connectionId)
+    wsHub.broadcast(entry.sessionId, {
+      type: 'lock-status',
+      sessionId: entry.sessionId,
+      status: 'locked',
+      holderId: connectionId,
+    })
+
     session.resolveToolApproval(requestId, decision)
-    lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
     wsHub.broadcast(entry.sessionId, {
       type: 'tool-approval-resolved',
+      sessionId: entry.sessionId,
       requestId,
       decision: { behavior: decision.behavior, message: decision.behavior === 'deny' ? decision.message : undefined },
     })
@@ -750,6 +703,15 @@ export function createWsHandler(deps: HandlerDeps) {
     if (!entry) return
 
     let session = sessionManager.getActive(entry.sessionId)
+
+    // Acquire lock for the responder and broadcast
+    lockManager.acquire(entry.sessionId, connectionId)
+    wsHub.broadcast(entry.sessionId, {
+      type: 'lock-status',
+      sessionId: entry.sessionId,
+      status: 'locked',
+      holderId: connectionId,
+    })
 
     if (session) {
       // Active session — resolve directly
@@ -763,13 +725,6 @@ export function createWsHandler(deps: HandlerDeps) {
         if (session instanceof V1QuerySession) {
           session.cacheAskUserAnswer(answers)
           bindSessionEvents(session, entry.sessionId, connectionId)
-          lockManager.acquire(entry.sessionId, connectionId)
-          wsHub.broadcast(entry.sessionId, {
-            type: 'lock-status',
-            sessionId: entry.sessionId,
-            status: 'locked',
-            holderId: connectionId,
-          })
           // Resume with empty prompt — SDK picks up pending tool_use from history
           session.send('', { cwd: session.projectCwd })
         }
@@ -778,18 +733,18 @@ export function createWsHandler(deps: HandlerDeps) {
       }
     }
 
-    lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
     wsHub.broadcast(entry.sessionId, {
       type: 'ask-user-resolved',
+      sessionId: entry.sessionId,
       requestId,
       answers,
     })
   }
 
   async function handleResolvePlanApproval(
-    _connectionId: string,
+    connectionId: string,
     _sessionId: string,
     requestId: string,
     decision: PlanApprovalDecision['decision'],
@@ -800,6 +755,15 @@ export function createWsHandler(deps: HandlerDeps) {
 
     const session = sessionManager.getActive(entry.sessionId)
     if (!session || !(session instanceof V1QuerySession)) return
+
+    // Acquire lock for the responder and broadcast
+    lockManager.acquire(entry.sessionId, connectionId)
+    wsHub.broadcast(entry.sessionId, {
+      type: 'lock-status',
+      sessionId: entry.sessionId,
+      status: 'locked',
+      holderId: connectionId,
+    })
 
     // 1. Switch permission mode BEFORE resolving — prevents race where SDK
     //    starts executing next tool before mode is updated
@@ -823,12 +787,12 @@ export function createWsHandler(deps: HandlerDeps) {
 
     // 2. Resolve the plan approval promise — SDK unblocks and uses the new mode
     session.resolvePlanApproval(requestId, { decision, feedback })
-    lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
     // 3. Broadcast resolved to all clients
     wsHub.broadcast(entry.sessionId, {
       type: 'plan-approval-resolved',
+      sessionId: entry.sessionId,
       requestId,
       decision,
     })
@@ -850,10 +814,8 @@ export function createWsHandler(deps: HandlerDeps) {
     if (!session) return
 
     await session.abort()
-    lockManager.release(sessionId)
 
     wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId })
-    wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
   }
 
   async function handleForkSession(connectionId: string, sessionId: string, atMessageId?: string) {
@@ -884,22 +846,6 @@ export function createWsHandler(deps: HandlerDeps) {
       return
     }
     lockManager.release(sessionId)
-  }
-
-  function handleClaimLock(connectionId: string, sessionId: string) {
-    const result = lockManager.acquire(sessionId, connectionId)
-    if (!result.success) {
-      wsHub.sendTo(connectionId, { type: 'error', message: 'Session already locked', code: 'session_locked' })
-      return
-    }
-    wsHub.broadcast(sessionId, {
-      type: 'lock-status',
-      sessionId,
-      status: 'locked',
-      holderId: connectionId,
-    })
-    // Re-send pending requests as non-readonly to the new holder
-    resendPendingRequests(sessionId, connectionId, false)
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: string) {
@@ -954,6 +900,7 @@ export function createWsHandler(deps: HandlerDeps) {
           }
           wsHub.broadcast(sessionId, {
             type: 'plan-approval-resolved',
+            sessionId,
             requestId,
             decision: planDecision,
           })
@@ -996,6 +943,7 @@ export function createWsHandler(deps: HandlerDeps) {
       if (decision) {
         wsHub.broadcast(sessionId, {
           type: 'tool-approval-resolved',
+          sessionId,
           requestId,
           decision,
         })
@@ -1111,20 +1059,9 @@ export function createWsHandler(deps: HandlerDeps) {
     }
   }
 
-  function handleReconnect(connectionId: string, previousConnectionId: string) {
-    // Migrate lock ownership — session join is handled by the client's
-    // resubscribeAll() to avoid duplicate buffer replays.
-    lockManager.onReconnect(previousConnectionId, connectionId)
-
-    // Update ownerConnectionId on all active sessions so that closures in
-    // bindSessionEvents use the new connectionId for lock acquisition and
-    // readonly checks. Without this, a WS reconnection during SDK processing
-    // would leave the closure pointing at a dead connectionId.
-    for (const [, session] of sessionManager.getAllActive()) {
-      if (session.ownerConnectionId === previousConnectionId) {
-        session.ownerConnectionId = connectionId
-      }
-    }
+  function handleReconnect(_connectionId: string, _previousConnectionId: string) {
+    // Lock no longer tracks connections — nothing to migrate.
+    // Session join is handled by the client's resubscribeAll().
   }
 
   /**
@@ -1171,21 +1108,16 @@ export function createWsHandler(deps: HandlerDeps) {
               questions: block.input.questions,
             },
           })
-          // Send to the joining client
+          // Send to the joining client — use lockManager to determine readonly
+          const holder = lockManager.getHolder(sessionId)
+          const readonly = holder !== null && holder !== connectionId
           wsHub.sendTo(connectionId, {
             type: 'ask-user-request',
+            sessionId,
             requestId,
             questions: block.input.questions,
-            readonly: false,
+            readonly,
           } as any)
-          // Acquire lock for the client so they can respond
-          lockManager.acquire(sessionId, connectionId)
-          wsHub.broadcast(sessionId, {
-            type: 'lock-status',
-            sessionId,
-            status: 'locked',
-            holderId: connectionId,
-          })
           return  // Only restore first pending request
         }
 

@@ -2,101 +2,43 @@ export interface SessionLock {
   holderId: string
   sessionId: string
   acquiredAt: number
-  gracePeriodTimer: ReturnType<typeof setTimeout> | null
-  idleTimer: ReturnType<typeof setTimeout> | null
+  timeoutTimer: ReturnType<typeof setTimeout> | null
 }
 
-const GRACE_PERIOD_MS = 60_000  // 1 min grace after disconnect
-const IDLE_TIMEOUT_MS = 60_000  // 1 min no interaction → auto-release
+const TIMEOUT_MS = 60_000
 
 export class LockManager {
   private locks = new Map<string, SessionLock>()
-  private isConnectionAlive: ((connectionId: string) => boolean) | null = null
 
   constructor(private onRelease: (sessionId: string) => void) {}
 
-  /** Allow handler to override the release callback after construction */
   setOnRelease(cb: (sessionId: string) => void): void {
     this.onRelease = cb
-  }
-
-  /** Set a callback to check whether a connection is still alive.
-   *  Used by acquire() to auto-release locks held by dead connections. */
-  setIsConnectionAlive(cb: (connectionId: string) => boolean): void {
-    this.isConnectionAlive = cb
   }
 
   acquire(sessionId: string, connectionId: string): { success: boolean; holder?: string } {
     const existing = this.locks.get(sessionId)
     if (existing && existing.holderId !== connectionId) {
-      // If the current holder is a dead connection, release the stale lock first
-      if (this.isConnectionAlive && !this.isConnectionAlive(existing.holderId)) {
-        this.release(sessionId)
-      } else {
-        return { success: false, holder: existing.holderId }
-      }
+      return { success: false, holder: existing.holderId }
     }
-    if (existing) {
-      if (existing.gracePeriodTimer) clearTimeout(existing.gracePeriodTimer)
-      if (existing.idleTimer) clearTimeout(existing.idleTimer)
-    }
-    this.locks.set(sessionId, {
-      holderId: connectionId,
-      sessionId,
-      acquiredAt: Date.now(),
-      gracePeriodTimer: null,
-      idleTimer: null, // Don't start idle timer on acquire — handler starts it after session completes
-    })
+    if (existing?.timeoutTimer) clearTimeout(existing.timeoutTimer)
+    this.locks.set(sessionId, { holderId: connectionId, sessionId, acquiredAt: Date.now(), timeoutTimer: null })
     return { success: true }
   }
 
   release(sessionId: string): void {
     const lock = this.locks.get(sessionId)
     if (!lock) return
-    if (lock.gracePeriodTimer) clearTimeout(lock.gracePeriodTimer)
-    if (lock.idleTimer) clearTimeout(lock.idleTimer)
+    if (lock.timeoutTimer) clearTimeout(lock.timeoutTimer)
     this.locks.delete(sessionId)
     this.onRelease(sessionId)
   }
 
-  resetIdleTimer(sessionId: string): void {
+  startTimeout(sessionId: string): void {
     const lock = this.locks.get(sessionId)
     if (!lock) return
-    if (lock.idleTimer) clearTimeout(lock.idleTimer)
-    lock.idleTimer = this.startIdleTimer(sessionId)
-  }
-
-  onDisconnect(connectionId: string): void {
-    for (const [sessionId, lock] of this.locks) {
-      if (lock.holderId === connectionId) {
-        if (lock.idleTimer) {
-          clearTimeout(lock.idleTimer)
-          lock.idleTimer = null
-        }
-        lock.gracePeriodTimer = setTimeout(() => {
-          this.release(sessionId)
-        }, GRACE_PERIOD_MS)
-      }
-    }
-  }
-
-  onReconnect(previousConnectionId: string, newConnectionId: string): void {
-    for (const lock of this.locks.values()) {
-      if (lock.holderId === previousConnectionId) {
-        if (lock.gracePeriodTimer) {
-          clearTimeout(lock.gracePeriodTimer)
-          lock.gracePeriodTimer = null
-        }
-        lock.holderId = newConnectionId
-        // Do NOT start a new idle timer here.
-        // The idle timer was cleared by onDisconnect. If the session is still
-        // running, there's no reason to start a countdown — resetIdleTimer()
-        // will be called when the session completes or a tool response is sent.
-        // Starting it here caused locks to expire after 1 minute even for
-        // active sessions, because resetIdleTimer is never called during
-        // normal (non-approval) tool execution.
-      }
-    }
+    if (lock.timeoutTimer) clearTimeout(lock.timeoutTimer)
+    lock.timeoutTimer = setTimeout(() => { this.release(sessionId) }, TIMEOUT_MS)
   }
 
   getHolder(sessionId: string): string | null {
@@ -114,16 +56,8 @@ export class LockManager {
   getLockedSessions(connectionId: string): string[] {
     const sessions: string[] = []
     for (const [sessionId, lock] of this.locks) {
-      if (lock.holderId === connectionId) {
-        sessions.push(sessionId)
-      }
+      if (lock.holderId === connectionId) sessions.push(sessionId)
     }
     return sessions
-  }
-
-  private startIdleTimer(sessionId: string): ReturnType<typeof setTimeout> {
-    return setTimeout(() => {
-      this.release(sessionId)
-    }, IDLE_TIMEOUT_MS)
   }
 }
