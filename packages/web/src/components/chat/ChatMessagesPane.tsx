@@ -1,7 +1,5 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
-import { useMessageStore } from '../../stores/messageStore'
-import { useSettingsStore } from '../../stores/settingsStore'
 import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { PlanApprovalCard } from './PlanApprovalCard'
@@ -10,8 +8,6 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 interface ChatMessagesPaneProps {
   sessionId: string
   limit?: number
-  /** When true, skip global messageStore loadInitial (Multi mode panels load independently) */
-  compact?: boolean
 }
 
 // Virtuoso firstItemIndex: start at a high number so we have room to prepend.
@@ -19,7 +15,7 @@ interface ChatMessagesPaneProps {
 // logical indices of existing items stable → no scroll jump / flicker.
 const START_INDEX = 100_000
 
-export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPaneProps) {
+export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const ctx = useChatSession()
   const rawMessages = ctx.messages
   const messages = useMemo(() => {
@@ -32,7 +28,6 @@ export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPane
   const loadMore = ctx.loadMore
   const sessionStatus = ctx.sessionStatus
   const pendingPlanApproval = ctx.pendingPlanApproval
-  const loadInitial = useMessageStore((s) => s.loadInitial)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const isLoadingMoreRef = useRef(false)
   const isAtBottomRef = useRef(true)
@@ -71,27 +66,6 @@ export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPane
     }
     prevMessagesRef.current = messages
   }
-
-  // Load messages when session changes or when returning to single mode.
-  // Compact panels (Multi mode) load independently; skip global store load.
-  const viewMode = useSettingsStore((s) => s.viewMode)
-  useEffect(() => {
-    if (compact) return
-    // __new__ session has no persisted messages — only optimistic messages in the store.
-    // Skip API load; messages will arrive via WebSocket once the session is created.
-    if (sessionId === '__new__') return
-    // If the WS handler already set currentLoadedSessionId to this session
-    // (e.g. new session created via send-message), skip the force re-fetch
-    // to avoid clearing live/optimistic messages and showing a loading flash.
-    const current = useMessageStore.getState().currentLoadedSessionId
-    if (current !== sessionId) {
-      // Force re-fetch by clearing currentLoadedSessionId synchronously
-      // before calling loadInitial. This avoids a race condition where a
-      // separate effect clears it AFTER loadInitial already started fetching.
-      useMessageStore.setState({ currentLoadedSessionId: null })
-    }
-    loadInitial(sessionId)
-  }, [sessionId, loadInitial, compact, viewMode])
 
   // Scroll to bottom when Footer content changes (PlanApprovalCard, ThinkingIndicator)
   useEffect(() => {

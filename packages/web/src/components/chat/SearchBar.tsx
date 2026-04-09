@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useMessageStore } from '../../stores/messageStore'
+import { useChatSession } from '../../providers/ChatSessionContext'
 
 /** Global search state — shared between SearchBar and MessageComponent */
 let _searchQuery = ''
@@ -25,7 +25,7 @@ export function useSearchQuery() {
 export function SearchBar({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState(_searchQuery)
   const inputRef = useRef<HTMLInputElement>(null)
-  const messages = useMessageStore((s) => s.messages)
+  const { messages } = useChatSession()
 
   useEffect(() => {
     inputRef.current?.focus()
