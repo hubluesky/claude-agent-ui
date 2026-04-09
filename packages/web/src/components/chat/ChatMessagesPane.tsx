@@ -1,8 +1,10 @@
-import { useRef, useCallback, useEffect, useMemo, useLayoutEffect } from 'react'
+import { useRef, useCallback, useEffect, useMemo, useLayoutEffect, useState } from 'react'
 import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { PlanApprovalCard } from './PlanApprovalCard'
 import { useChatSession } from '../../providers/ChatSessionContext'
+import { useSessionContainerStore } from '../../stores/sessionContainerStore'
+import type { SpinnerMode } from '../../stores/sessionContainerStore'
 
 interface ChatMessagesPaneProps {
   sessionId: string
@@ -40,6 +42,28 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const loadMore = ctx.loadMore
   const sessionStatus = ctx.sessionStatus
   const pendingPlanApproval = ctx.pendingPlanApproval
+
+  // ── Spinner state from mutable StreamState (polled every 500ms) ──
+  const [spinnerMode, setSpinnerMode] = useState<SpinnerMode>('requesting')
+  const [requestStartTime, setRequestStartTime] = useState<number | null>(null)
+  const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null)
+  const [thinkingEndTime, setThinkingEndTime] = useState<number | null>(null)
+  const [responseLength, setResponseLength] = useState(0)
+
+  useEffect(() => {
+    if (sessionStatus !== 'running') return
+    const poll = () => {
+      const ss = useSessionContainerStore.getState().getStreamState(sessionId)
+      setSpinnerMode(ss.spinnerMode)
+      setRequestStartTime(ss.requestStartTime)
+      setThinkingStartTime(ss.thinkingStartTime)
+      setThinkingEndTime(ss.thinkingEndTime)
+      setResponseLength(ss.responseLength)
+    }
+    poll()
+    const id = setInterval(poll, 500)
+    return () => clearInterval(id)
+  }, [sessionId, sessionStatus])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -187,7 +211,14 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
       {/* Footer */}
       {sessionStatus === 'running' && (
         <div className="px-4 py-2.5">
-          <ThinkingIndicator />
+          <ThinkingIndicator
+            spinnerMode={spinnerMode}
+            requestStartTime={requestStartTime}
+            thinkingStartTime={thinkingStartTime}
+            thinkingEndTime={thinkingEndTime}
+            responseLength={responseLength}
+            messages={rawMessages}
+          />
         </div>
       )}
       <PlanApprovalCard />
