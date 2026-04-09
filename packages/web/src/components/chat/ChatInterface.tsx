@@ -10,12 +10,11 @@ import { StatusBar } from './StatusBar'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { SearchBar } from './SearchBar'
 import { useChatSession } from '../../providers/ChatSessionContext'
-import { useWebSocket, clearStreamingState } from '../../hooks/useWebSocket'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useMessageStore, clearPendingDelta } from '../../stores/messageStore'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { useSessionContainerStore } from '../../stores/sessionContainerStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { wsManager } from '../../lib/WebSocketManager'
 import type { ApprovalPanelConfig } from './ApprovalPanel'
 
 interface ChatInterfaceProps {
@@ -34,11 +33,14 @@ export function ChatInterface({
   onClosePanel,
 }: ChatInterfaceProps) {
   const ctx = useChatSession()
-  const { joinSession, leaveSession } = useWebSocket()
   const { helpOpen, setHelpOpen, searchOpen, setSearchOpen } = useKeyboardShortcuts()
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
-  const hasMessages = useMessageStore((s) => s.messages.length > 0)
+  const hasMessages = useSessionContainerStore((s) =>
+    ctx.sessionId && ctx.sessionId !== '__new__'
+      ? (s.containers.get(ctx.sessionId)?.messages.length ?? 0) > 0
+      : false
+  )
   const isNewSession = ctx.sessionId === '__new__'
 
   // Track previous session ID to distinguish __new__ → real ID (same session)
@@ -47,32 +49,28 @@ export function ChatInterface({
   useEffect(() => {
     const prevSession = prevSessionRef.current
     prevSessionRef.current = ctx.sessionId
-    // Compact panels (Multi mode) use independent REST-loaded messages —
-    // they must NOT join the shared WS or touch the global messageStore.
-    if (compact) return
 
-    // __new__ → real ID: same session (server just assigned the ID via init message).
-    // Do NOT clear streaming state or connection store — content is in flight!
-    const isNewToReal = prevSession === '__new__' && ctx.sessionId !== null && ctx.sessionId !== '__new__'
+    if (!ctx.sessionId || ctx.sessionId === '__new__') return
 
-    if (isNewSession) {
-      // Switching to a new/different session — clean slate
-      useConnectionStore.getState().reset()
-      clearStreamingState()
-      clearPendingDelta()
-      leaveSession()
-      useMessageStore.getState().clear()
-    } else if (ctx.sessionId) {
-      if (!isNewToReal) {
-        // Genuine session switch (A → B): clear stale state from previous session.
-        // Server's session-state response will populate the correct values shortly.
-        useConnectionStore.getState().reset()
-        clearStreamingState()
-        clearPendingDelta()
+    // 订阅当前 session
+    const store = useSessionContainerStore.getState()
+    const container = store.containers.get(ctx.sessionId)
+    const lastSeq = container?.lastSeq ?? 0
+
+    wsManager.joinSession(ctx.sessionId, lastSeq)
+
+    // 离开旧 session（混合策略）
+    if (prevSession && prevSession !== '__new__' && prevSession !== ctx.sessionId) {
+      const prevContainer = store.containers.get(prevSession)
+      if (prevContainer?.sessionStatus === 'running') {
+        // running session 保持订阅
+        wsManager.subscribe(prevSession, prevContainer.lastSeq)
+      } else {
+        // idle session 取消订阅
+        wsManager.unsubscribe(prevSession)
       }
-      joinSession(ctx.sessionId)
     }
-  }, [ctx.sessionId, joinSession, leaveSession, isNewSession, compact])
+  }, [ctx.sessionId])
 
   const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
     const contentBlocks: any[] = []
@@ -84,11 +82,13 @@ export function ChatInterface({
     if (prompt) {
       contentBlocks.push({ type: 'text', text: prompt })
     }
-    useMessageStore.getState().appendMessage({
-      type: 'user',
-      _optimistic: true,
-      message: { role: 'user', content: contentBlocks },
-    } as any)
+    if (ctx.sessionId) {
+      useSessionContainerStore.getState().pushMessage(ctx.sessionId, {
+        type: 'user',
+        _optimistic: true,
+        message: { role: 'user', content: contentBlocks },
+      } as any)
+    }
 
     const { maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
     ctx.send(prompt, {
@@ -175,7 +175,7 @@ export function ChatInterface({
           </div>
         </div>
       ) : (
-        <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} compact={compact} />
+        <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} />
       )}
       {compact ? null : approvalConfig ? (
         <ApprovalPanel config={approvalConfig} />
