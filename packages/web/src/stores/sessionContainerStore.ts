@@ -79,8 +79,6 @@ export type SpinnerMode = 'requesting' | 'thinking' | 'responding' | 'tool-use'
 export class StreamState {
   accumulator = new Map<number, { blockType: string; content: string }>()
   pendingDeltas = new Map<number, string>()
-  /** @deprecated Will be removed in Task 2 — use pendingDeltas instead */
-  pendingDeltaText = ''
   pendingDeltaRafId: number | null = null
 
   // Spinner state tracking
@@ -93,7 +91,6 @@ export class StreamState {
   clear() {
     this.accumulator.clear()
     this.pendingDeltas.clear()
-    this.pendingDeltaText = ''
     if (this.pendingDeltaRafId !== null) {
       cancelAnimationFrame(this.pendingDeltaRafId)
       this.pendingDeltaRafId = null
@@ -182,8 +179,6 @@ interface SessionContainerActions {
   setLoadingHistory(sessionId: string, loading: boolean): void
   setLoadingMore(sessionId: string, loading: boolean): void
   setHasMore(sessionId: string, hasMore: boolean): void
-  /** @deprecated Will be removed in Task 2 — use updateStreamingBlock instead */
-  appendStreamingText(sessionId: string, text: string): void
   /** Updates a specific content block inside the _streaming assistant message */
   updateStreamingBlock(sessionId: string, blockIndex: number, text: string): void
   /** Removes _streaming flag from all messages in a session (for abort/complete) */
@@ -374,31 +369,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     if (!c) return
     const next = new Map(containers)
     next.set(sessionId, { ...c, hasMore })
-    set({ containers: next })
-  },
-
-  appendStreamingText(sessionId, text) {
-    const { containers } = get()
-    const c = containers.get(sessionId)
-    if (!c) return
-    // Find the last _streaming_block and append text
-    const messages = c.messages
-    let found = false
-    const updated = [...messages]
-    for (let i = updated.length - 1; i >= 0; i--) {
-      if ((updated[i] as any).type === '_streaming_block') {
-        const prev = updated[i] as any
-        updated[i] = { ...prev, _content: prev._content + text }
-        found = true
-        break
-      }
-    }
-    if (!found) {
-      console.warn('[sessionContainerStore:appendStreamingText] no _streaming_block found for session:', sessionId)
-      return
-    }
-    const next = new Map(containers)
-    next.set(sessionId, { ...c, messages: updated })
     set({ containers: next })
   },
 
