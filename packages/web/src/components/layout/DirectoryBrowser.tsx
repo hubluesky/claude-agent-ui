@@ -13,6 +13,8 @@ export function DirectoryBrowser({ onSelect, onClose }: DirectoryBrowserProps) {
   const [pathInput, setPathInput] = useState('')
   const [selectedDir, setSelectedDir] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   const loadDir = useCallback(async (path?: string) => {
     setLoading(true)
@@ -33,15 +35,15 @@ export function DirectoryBrowser({ onSelect, onClose }: DirectoryBrowserProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [])
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose()
-  }, [onClose])
+    if (e.target === overlayRef.current) onCloseRef.current()
+  }, [])
 
   const handlePathSubmit = useCallback(() => {
     const trimmed = pathInput.trim()

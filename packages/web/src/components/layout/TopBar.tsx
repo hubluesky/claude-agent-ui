@@ -96,6 +96,7 @@ export function TopBar() {
           </div>
         ) : (
           <button
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={toggleProjects}
             className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors ${
               showProjects

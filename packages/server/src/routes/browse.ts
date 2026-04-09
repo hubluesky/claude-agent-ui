@@ -5,7 +5,8 @@ import type { FastifyInstance } from 'fastify'
 
 export async function browseRoutes(app: FastifyInstance) {
   app.get('/api/browse-directory', async (request, reply) => {
-    const { path: rawPath } = request.query as Record<string, string>
+    const query = request.query as Record<string, unknown>
+    const rawPath = typeof query.path === 'string' ? query.path : undefined
     const targetPath = rawPath ? resolve(rawPath) : homedir()
 
     try {
