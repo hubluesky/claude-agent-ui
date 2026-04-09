@@ -2,8 +2,9 @@ import { useState, useRef, useCallback, useMemo } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useEmbedStore } from '../../stores/embedStore'
-import { useMultiPanelStore } from '../../stores/multiPanelStore'
 import { HistoryPanel } from './HistoryPanel'
+import { ProjectPanel } from './ProjectPanel'
+import { DirectoryBrowser } from './DirectoryBrowser'
 import { ViewModeToggle } from './ViewModeToggle'
 import { BackgroundStatusButton } from './BackgroundStatusButton'
 
@@ -12,15 +13,14 @@ export function TopBar() {
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
   const currentSessions = useSessionStore((s) => s.currentProjectCwd ? s.sessions.get(s.currentProjectCwd) : undefined) ?? []
   const selectSession = useSessionStore((s) => s.selectSession)
+  const selectProject = useSessionStore((s) => s.selectProject)
   const renameSession = useSessionStore((s) => s.renameSession)
-  const sidebarOpen = useSettingsStore((s) => s.sidebarOpen)
-  const setSidebarOpen = useSettingsStore((s) => s.setSidebarOpen)
   const viewMode = useSettingsStore((s) => s.viewMode)
   const isEmbed = useEmbedStore((s) => s.isEmbed)
-  const panelSummary = useMultiPanelStore((s) => currentSessionId ? s.panelSummaries.get(currentSessionId) : undefined)
-  const isInMulti = useMultiPanelStore((s) => currentSessionId ? s.panelSessionIds.includes(currentSessionId) : false)
 
+  const [showProjects, setShowProjects] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showDirBrowser, setShowDirBrowser] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -31,8 +31,7 @@ export function TopBar() {
     () => currentSessions.find((s) => s.sessionId === currentSessionId),
     [currentSessions, currentSessionId],
   )
-  // Fallback to panelSummary title when session list hasn't loaded yet (e.g. switching from multi-view)
-  const sessionTitle = currentSession?.title || panelSummary?.title || (isNewSession ? 'New conversation' : '')
+  const sessionTitle = currentSession?.title || (isNewSession ? 'New conversation' : '')
 
   const handleTitleClick = useCallback(() => {
     if (isNewSession || !currentSessionId) return
@@ -63,25 +62,30 @@ export function TopBar() {
   }, [currentProjectCwd, selectSession])
 
   const handleCloseHistory = useCallback(() => setShowHistory(false), [])
+  const handleCloseProjects = useCallback(() => setShowProjects(false), [])
 
-  const handleAddToMulti = useCallback(() => {
-    if (!currentSessionId || currentSessionId === '__new__' || !currentProjectCwd) return
-    const { projects } = useSessionStore.getState()
-    const project = projects.find((p) => p.cwd === currentProjectCwd)
-    const projectName = project?.name ?? currentProjectCwd.split(/[/\\]/).pop() ?? ''
-    const session = currentSessions.find((s) => s.sessionId === currentSessionId)
-    useMultiPanelStore.getState().addPanel(currentSessionId, {
-      sessionId: currentSessionId,
-      title: session?.title ?? '',
-      projectCwd: currentProjectCwd,
-      projectName,
+  const toggleProjects = useCallback(() => {
+    setShowProjects((v) => {
+      if (!v) setShowHistory(false)
+      return !v
     })
-  }, [currentSessionId, currentProjectCwd, currentSessions])
+  }, [])
 
-  const handleRemoveFromMulti = useCallback(() => {
-    if (!currentSessionId) return
-    useMultiPanelStore.getState().removePanel(currentSessionId)
-  }, [currentSessionId])
+  const toggleHistory = useCallback(() => {
+    setShowHistory((v) => {
+      if (!v) setShowProjects(false)
+      return !v
+    })
+  }, [])
+
+  const handleNewProject = useCallback(() => {
+    setShowDirBrowser(true)
+  }, [])
+
+  const handleDirSelect = useCallback((path: string) => {
+    selectProject(path)
+    setShowDirBrowser(false)
+  }, [selectProject])
 
   return (
     <div className="flex items-center justify-between h-10 shrink-0 px-3 border-b border-[var(--border)] relative">
@@ -92,8 +96,12 @@ export function TopBar() {
           </div>
         ) : (
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[var(--border)] text-[var(--text-muted)] shrink-0"
+            onClick={toggleProjects}
+            className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+              showProjects
+                ? 'bg-[var(--border)] text-[var(--accent)]'
+                : 'hover:bg-[var(--border)] text-[var(--text-muted)]'
+            }`}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -130,42 +138,11 @@ export function TopBar() {
 
       <div className="flex items-center gap-1 shrink-0">
         {!isEmbed && <ViewModeToggle />}
-        {/* Pin/Unpin to Multi — only in Single mode for non-new sessions */}
-        {!isEmbed && viewMode === 'single' && currentSessionId && currentSessionId !== '__new__' && (
-          isInMulti ? (
-            <button
-              onClick={handleRemoveFromMulti}
-              className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--accent)] hover:bg-[var(--border)]"
-              title="从 Multi 移除"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
-                <rect x="14" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
-                <rect x="3" y="14" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
-                <rect x="14" y="14" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              onClick={handleAddToMulti}
-              className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--border)] hover:text-[var(--accent)]"
-              title="添加到 Multi"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.5 14v7M14 17.5h7" />
-              </svg>
-            </button>
-          )
-        )}
         {!isEmbed && <BackgroundStatusButton />}
-        {/* History and new session only in Single mode (project-specific) */}
         {(viewMode === 'single' || isEmbed) && (
           <>
             <button
-              onClick={() => setShowHistory(!showHistory)}
+              onClick={toggleHistory}
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
                 showHistory ? 'bg-[var(--border)] text-[var(--text-primary)]' : 'hover:bg-[var(--border)] text-[var(--text-muted)]'
               }`}
@@ -190,10 +167,24 @@ export function TopBar() {
         )}
       </div>
 
+      {showProjects && (
+        <ProjectPanel
+          onClose={handleCloseProjects}
+          onNewProject={handleNewProject}
+        />
+      )}
+
       {showHistory && (
         <HistoryPanel
           onSelect={handleSelectHistory}
           onClose={handleCloseHistory}
+        />
+      )}
+
+      {showDirBrowser && (
+        <DirectoryBrowser
+          onSelect={handleDirSelect}
+          onClose={() => setShowDirBrowser(false)}
         />
       )}
     </div>

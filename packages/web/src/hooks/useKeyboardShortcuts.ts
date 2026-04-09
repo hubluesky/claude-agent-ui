@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useSettingsStore } from '../stores/settingsStore'
 import { useSessionStore } from '../stores/sessionStore'
 
 export interface ShortcutDef {
@@ -21,14 +20,6 @@ export function useKeyboardShortcuts() {
         label: '新建会话',
         action: () => {
           useSessionStore.getState().setCurrentSessionId('__new__')
-        },
-      },
-      {
-        key: 'b', ctrl: true,
-        label: '切换侧边栏',
-        action: () => {
-          const s = useSettingsStore.getState()
-          s.setSidebarOpen(!s.sidebarOpen)
         },
       },
       {
@@ -64,7 +55,6 @@ export function useKeyboardShortcuts() {
 
 export const SHORTCUT_LIST: { keys: string; label: string }[] = [
   { keys: 'Ctrl+N', label: '新建会话' },
-  { keys: 'Ctrl+B', label: '切换侧边栏' },
   { keys: 'Ctrl+F', label: '搜索消息' },
   { keys: 'Ctrl+/', label: '快捷键帮助' },
   { keys: 'Enter', label: '发送消息' },
