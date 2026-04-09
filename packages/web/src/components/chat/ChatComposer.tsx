@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useChatSession } from '../../providers/ChatSessionContext'
-import { useWebSocket } from '../../hooks/useWebSocket'
-import { useConnectionStore } from '../../stores/connectionStore'
-import { useMessageStore } from '../../stores/messageStore'
+import { useGlobalConnection } from '../../hooks/useContainer'
+import { useSessionContainerStore } from '../../stores/sessionContainerStore'
+import { wsManager } from '../../lib/WebSocketManager'
 import { useCommandStore } from '../../stores/commandStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -61,8 +61,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const ctx = useChatSession()
   const { lockStatus, sessionStatus } = ctx
-  const models = useConnectionStore((s) => s.models)
-  const accountInfo = useConnectionStore((s) => s.accountInfo)
+  const { models, accountInfo } = useGlobalConnection()
   const commands = useCommandStore((s) => s.commands)
   const [fileResults, setFileResults] = useState<FileItem[]>([])
   const [fileSelectedIndex, setFileSelectedIndex] = useState(0)
@@ -89,7 +88,6 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
   const isLockHolder = lockStatus === 'locked_self'
   const inputDisabled = isLocked
-  const { send } = useWebSocket()
 
   const handleReleaseLock = useCallback(() => {
     if (isLockHolder) {
@@ -101,17 +99,17 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
     setPermissionMode(newMode)
     const sid = useSessionStore.getState().currentSessionId
     if (sid && sid !== '__new__') {
-      send({ type: 'set-mode', sessionId: sid, mode: newMode })
+      wsManager.send({ type: 'set-mode', sessionId: sid, mode: newMode })
     }
-  }, [setPermissionMode, send])
+  }, [setPermissionMode])
 
   const handleEffortChange = useCallback((newEffort: typeof effort) => {
     setEffort(newEffort)
     const sid = useSessionStore.getState().currentSessionId
     if (sid && sid !== '__new__') {
-      send({ type: 'set-effort', sessionId: sid, effort: newEffort })
+      wsManager.send({ type: 'set-effort', sessionId: sid, effort: newEffort })
     }
-  }, [setEffort, send])
+  }, [setEffort])
 
   // Slash command detection (cursor-based, like @ trigger)
   const filteredCommands = useMemo(() => {
@@ -200,7 +198,10 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const executeCommand = useCallback((cmd: LocalSlashCommand) => {
     if (cmd.action === 'local') {
       if (cmd.name === 'clear') {
-        useMessageStore.getState().clear()
+        const sid = useSessionStore.getState().currentSessionId
+        if (sid && sid !== '__new__') {
+          useSessionContainerStore.getState().clearMessages(sid)
+        }
         // Navigate to new session (like CLI behavior)
         useSessionStore.getState().setCurrentSessionId('__new__')
       }

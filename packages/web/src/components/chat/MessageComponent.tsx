@@ -3,9 +3,9 @@ import type { AgentMessage } from '@claude-agent-ui/shared'
 import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
 import { ToolIcon, formatToolSummary } from './tool-display'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useConnectionStore } from '../../stores/connectionStore'
+import { wsManager } from '../../lib/WebSocketManager'
 import { HighlightText } from './SearchBar'
 import { ImagePreviewModal } from './ImagePreviewModal'
 
@@ -386,12 +386,19 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
 // ---- Message Actions (⋯ menu with Fork + Rewind) ----
 
 function MessageActions({ messageId }: { messageId: string }) {
-  const { forkSession, rewindFiles } = useWebSocket()
+  const { forkSession, rewindFiles, rewindPreview: ctxRewindPreview } = useChatSession()
   const sessionId = useSessionStore((s) => s.currentSessionId)
-  const rewindPreview = useConnectionStore((s) => (s as any).rewindPreview)
+  const [rewindPreview, setLocalRewindPreview] = useState<typeof ctxRewindPreview>(null)
   const [open, setOpen] = useState(false)
   const [showRewindPreview, setShowRewindPreview] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  // Sync rewindPreview from context when it changes
+  useEffect(() => {
+    if (showRewindPreview) {
+      setLocalRewindPreview(ctxRewindPreview)
+    }
+  }, [ctxRewindPreview, showRewindPreview])
 
   useEffect(() => {
     if (!open) return
@@ -403,30 +410,28 @@ function MessageActions({ messageId }: { messageId: string }) {
   }, [open])
 
   const handleFork = () => {
-    if (sessionId && sessionId !== '__new__') {
-      forkSession(sessionId, messageId)
-    }
+    forkSession(messageId)
     setOpen(false)
   }
 
   const handleRewindDryRun = () => {
     if (!sessionId || sessionId === '__new__') return
-    ;(useConnectionStore.getState() as any).setRewindPreview(null)
-    rewindFiles(sessionId, messageId, true)
+    setLocalRewindPreview(null)
+    rewindFiles(messageId, true)
     setShowRewindPreview(true)
     setOpen(false)
   }
 
   const handleRewindConfirm = () => {
     if (!sessionId || sessionId === '__new__') return
-    rewindFiles(sessionId, messageId, false)
+    rewindFiles(messageId, false)
     setShowRewindPreview(false)
-    ;(useConnectionStore.getState() as any).setRewindPreview(null)
+    setLocalRewindPreview(null)
   }
 
   const handleRewindClose = () => {
     setShowRewindPreview(false)
-    ;(useConnectionStore.getState() as any).setRewindPreview(null)
+    setLocalRewindPreview(null)
   }
 
   const preview = showRewindPreview ? rewindPreview : null
@@ -503,14 +508,12 @@ function MessageActions({ messageId }: { messageId: string }) {
 
 function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string }) {
   const [expanded, setExpanded] = useState(false)
-  const { getSubagentMessages } = useWebSocket()
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const subagentData = useConnectionStore((s) => s.subagentMessages)
+  const { getSubagentMessages, subagentMessages: subagentData, sessionId } = useChatSession()
   const messages = (subagentData && subagentData.agentId === agentId) ? subagentData.messages : null
 
   const handleExpand = () => {
     if (!expanded && agentId && sessionId && sessionId !== '__new__') {
-      getSubagentMessages(sessionId, agentId)
+      getSubagentMessages(agentId)
     }
     setExpanded(!expanded)
   }
@@ -576,12 +579,11 @@ function SubagentMessageRow({ msg }: { msg: any }) {
 }
 
 function StopTaskButton({ taskId }: { taskId: string }) {
-  const { send } = useWebSocket()
-  const sessionId = useSessionStore((s) => s.currentSessionId)
+  const { sessionId } = useChatSession()
 
   const handleStop = () => {
     if (sessionId && sessionId !== '__new__') {
-      send({ type: 'stop-task', sessionId, taskId } as any)
+      wsManager.send({ type: 'stop-task', sessionId, taskId } as any)
     }
   }
 

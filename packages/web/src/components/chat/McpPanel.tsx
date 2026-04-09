@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useConnectionStore } from '../../stores/connectionStore'
-import { useSessionStore } from '../../stores/sessionStore'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { useChatSession } from '../../providers/ChatSessionContext'
 
 const STATUS_STYLES: Record<string, { color: string; label: string }> = {
   connected: { color: 'var(--success)', label: 'connected' },
@@ -12,26 +10,18 @@ const STATUS_STYLES: Record<string, { color: string; label: string }> = {
 }
 
 export function McpPanel({ onClose }: { onClose: () => void }) {
-  const servers = useConnectionStore((s) => s.mcpServers)
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const { getMcpStatus, toggleMcpServer, reconnectMcpServer } = useWebSocket()
+  const { mcpServers: servers, getMcpStatus, toggleMcpServer, reconnectMcpServer } = useChatSession()
 
   useEffect(() => {
-    if (sessionId && sessionId !== '__new__') {
-      getMcpStatus(sessionId)
-    }
-  }, [sessionId])
+    getMcpStatus()
+  }, [])
 
   const handleToggle = (name: string, currentEnabled: boolean) => {
-    if (sessionId && sessionId !== '__new__') {
-      toggleMcpServer(sessionId, name, !currentEnabled)
-    }
+    toggleMcpServer(name, !currentEnabled)
   }
 
   const handleReconnect = (name: string) => {
-    if (sessionId && sessionId !== '__new__') {
-      reconnectMcpServer(sessionId, name)
-    }
+    reconnectMcpServer(name)
   }
 
   return (
@@ -145,14 +135,12 @@ export function McpPanel({ onClose }: { onClose: () => void }) {
 /** Compact MCP indicator for StatusBar — always visible, fetches on mount */
 export function McpIndicator() {
   const [open, setOpen] = useState(false)
-  const servers = useConnectionStore((s) => s.mcpServers)
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const { getMcpStatus } = useWebSocket()
+  const { mcpServers: servers, getMcpStatus, sessionId } = useChatSession()
 
   // Fetch MCP status on mount / session change
   useEffect(() => {
     if (sessionId && sessionId !== '__new__') {
-      getMcpStatus(sessionId)
+      getMcpStatus()
     }
   }, [sessionId])
 

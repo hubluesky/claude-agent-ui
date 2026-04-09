@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useConnectionStore } from '../../stores/connectionStore'
-import { useSessionStore } from '../../stores/sessionStore'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { useChatSession } from '../../providers/ChatSessionContext'
 
 const CATEGORY_COLORS = [
   '#60a5fa', // blue — System prompt
@@ -15,7 +13,7 @@ const CATEGORY_COLORS = [
 ]
 
 export function ContextPanel({ onClose }: { onClose: () => void }) {
-  const contextUsage = useConnectionStore((s) => s.contextUsage)
+  const { contextUsage } = useChatSession()
 
   if (!contextUsage) {
     return (
@@ -110,18 +108,15 @@ function formatTokens(n: number): string {
 /** Compact token bar for StatusBar */
 export function ContextUsageIndicator() {
   const [open, setOpen] = useState(false)
-  const contextUsage = useConnectionStore((s) => s.contextUsage)
-  const sessionStatus = useConnectionStore((s) => s.sessionStatus)
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const { getContextUsage } = useWebSocket()
+  const { contextUsage, sessionStatus, sessionId, getContextUsage } = useChatSession()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     if (!sessionId || sessionId === '__new__') return
-    getContextUsage(sessionId)
+    getContextUsage()
     intervalRef.current = setInterval(() => {
-      if (useConnectionStore.getState().sessionStatus === 'running') {
-        getContextUsage(sessionId)
+      if (sessionStatus === 'running') {
+        getContextUsage()
       }
     }, 15000)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
@@ -129,7 +124,7 @@ export function ContextUsageIndicator() {
 
   useEffect(() => {
     if (sessionStatus === 'running' && sessionId && sessionId !== '__new__') {
-      getContextUsage(sessionId)
+      getContextUsage()
     }
   }, [sessionStatus])
 
