@@ -83,10 +83,9 @@ class WebSocketManager {
 
   /** Subscribe (observe) a session — receives messages but doesn't hold the lock */
   subscribe(sessionId: string, lastSeq = 0) {
-    this.send({ type: 'subscribe-session', sessionId } as any)
+    this.send({ type: 'subscribe-session', sessionId, lastSeq } as any)
     const s = store()
     s.setSubscribed(sessionId, true)
-    s.setLastSeq(sessionId, lastSeq)
   }
 
   /** Unsubscribe from a session subscription */
@@ -340,6 +339,11 @@ class WebSocketManager {
         } else {
           // Still open — restart heartbeat monitoring
           this.resetHeartbeat()
+          // Long background (>5min) — resubscribe all to catch up on missed messages
+          const bgDuration = Date.now() - this.lastBackgroundTime
+          if (bgDuration > 5 * 60 * 1000) {
+            this.resubscribeAll()
+          }
         }
       }
     }
@@ -531,8 +535,11 @@ class WebSocketManager {
     }
 
     // ── 2. Session guard: route to correct container ──
-    // If no sessionId tag, fall back to the active session
+    // If no sessionId tag, fall back to the active session (legacy compat)
     const targetSessionId = sessionId ?? useSessionStore.getState().currentSessionId
+    if (!sessionId) {
+      console.warn('[WSManager] agent-message missing sessionId, falling back to active session:', targetSessionId)
+    }
     if (!targetSessionId || targetSessionId === '__new__') return
 
     const s = store()
@@ -865,11 +872,17 @@ class WebSocketManager {
     const sessionId = (msg as any).sessionId as string | undefined
     if (!sessionId) return
     const s = store()
+    s.setSessionStatus(sessionId, 'idle')
     // Clear pending requests but preserve lock status — lock persists across queries
     s.setApproval(sessionId, null)
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
+    // Refresh session list in sidebar
+    const sessStore = useSessionStore.getState()
+    if (sessStore.currentProjectCwd) {
+      sessStore.loadProjectSessions(sessStore.currentProjectCwd)
+    }
   }
 
   private handleSessionForked(msg: any) {
@@ -1030,12 +1043,14 @@ class WebSocketManager {
   }
 
   private handleSyncResult(msg: any) {
-    // Sync result: server sent full message list after gap in sequence numbers
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    const messages = msg.messages as AgentMessage[] | undefined
-    if (!messages) return
-    store().replaceMessages(sessionId, messages, msg.hasMore ?? false)
+
+    // If server detected a gap in sequence numbers, do a full REST sync
+    if (msg.hasGap) {
+      store().setNeedsFullSync(sessionId, true)
+      this.doFullSync(sessionId)
+    }
   }
 
   private handlePing() {

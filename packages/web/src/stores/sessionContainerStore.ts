@@ -214,8 +214,10 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
       const keys = Array.from(next.keys())
       for (const key of keys) {
         if (next.size <= MAX_HOT_CONTAINERS) break
-        // Never evict active session
+        // Never evict active session or subscribed (running) sessions
         if (key === activeSessionId || key === sessionId) continue
+        const c = next.get(key)!
+        if (c.subscribed) continue
         next.delete(key)
         // Also clean up stream state
         const { streamStates } = get()
