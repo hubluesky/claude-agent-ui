@@ -96,9 +96,8 @@ class WebSocketManager {
 
   /** Join a session as the active/writing client */
   joinSession(sessionId: string, lastSeq = 0) {
-    // Reset lastSeq in the container when joining
-    store().setLastSeq(sessionId, 0)
     this.send({ type: 'join-session', sessionId, lastSeq } as any)
+    store().setSubscribed(sessionId, true)
   }
 
   leaveSession() {
@@ -383,6 +382,11 @@ class WebSocketManager {
     if (seq != null) {
       const sessionId = (msg as any).sessionId as string | undefined
       if (sessionId) {
+        const container = store().containers.get(sessionId)
+        // Skip messages we've already processed (reconnection replay dedup)
+        if (container && seq <= container.lastSeq) {
+          return
+        }
         store().setLastSeq(sessionId, seq)
       }
     }
@@ -514,17 +518,24 @@ class WebSocketManager {
       const newId = (agentMsg as any).session_id as string
       const sessState = useSessionStore.getState()
       if (!sessState.currentSessionId || sessState.currentSessionId !== newId) {
+        const s = store()
+        // Migrate optimistic messages from __new__ container to the real session
+        const newContainer = s.containers.get('__new__')
+        if (newContainer && newContainer.messages.length > 0) {
+          s.migrateContainer('__new__', newId)
+        } else {
+          const cwd = sessState.currentProjectCwd ?? ''
+          s.getOrCreate(newId, cwd)
+        }
         sessState.setCurrentSessionId(newId)
-        // Ensure container exists for the new session
-        const cwd = sessState.currentProjectCwd ?? ''
-        store().getOrCreate(newId, cwd)
         // Join the real session
         if (this.ws?.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: 'join-session', sessionId: newId }))
         }
-        // Refresh sidebar session list
+        // Refresh sidebar session list (force bypass cache — new session just created)
         if (sessState.currentProjectCwd) {
-          sessState.loadProjectSessions(sessState.currentProjectCwd)
+          sessState.invalidateProjectSessions(sessState.currentProjectCwd)
+          sessState.loadProjectSessions(sessState.currentProjectCwd, true)
         }
       }
       // Capture model name from init
@@ -878,10 +889,11 @@ class WebSocketManager {
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
-    // Refresh session list in sidebar
+    // Refresh session list in sidebar (force — session just completed, title may have changed)
     const sessStore = useSessionStore.getState()
     if (sessStore.currentProjectCwd) {
-      sessStore.loadProjectSessions(sessStore.currentProjectCwd)
+      sessStore.invalidateProjectSessions(sessStore.currentProjectCwd)
+      sessStore.loadProjectSessions(sessStore.currentProjectCwd, true)
     }
   }
 
@@ -893,9 +905,10 @@ class WebSocketManager {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'join-session', sessionId: newId }))
     }
-    // Refresh sidebar
+    // Refresh sidebar (force — new forked session)
     if (sessState.currentProjectCwd) {
-      sessState.loadProjectSessions(sessState.currentProjectCwd)
+      sessState.invalidateProjectSessions(sessState.currentProjectCwd)
+      sessState.loadProjectSessions(sessState.currentProjectCwd, true)
     }
   }
 
