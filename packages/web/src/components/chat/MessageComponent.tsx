@@ -154,10 +154,16 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                     </div>
                   ) : null
                 }
+                const charCount = thinkingText.length
+                const charLabel = charCount >= 1000 ? `${(charCount / 1000).toFixed(1)}k` : String(charCount)
                 return (
                   <details key={i} className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2">
-                    <summary className="text-xs text-[var(--purple)] cursor-pointer">Thinking...</summary>
-                    <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{thinkingText}</p>
+                    <summary className="text-xs text-[var(--purple)] cursor-pointer select-none">
+                      Thinking — {charLabel} 字
+                    </summary>
+                    <p className="text-xs text-[var(--text-secondary)] mt-2 whitespace-pre-wrap leading-relaxed">
+                      {thinkingText}
+                    </p>
                   </details>
                 )
               }
@@ -220,11 +226,14 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       )
     }
     if (blockType === 'thinking') {
+      if (!content) return null
       return (
-        <details open className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2 ml-10">
-          <summary className="text-xs text-[var(--purple)] cursor-pointer">Thinking...</summary>
-          <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{content}</p>
-        </details>
+        <div className="ml-10 border-l-2 border-[var(--purple-subtle-border)] pl-3 py-1">
+          <p className="text-xs text-[#a78bfa] whitespace-pre-wrap leading-relaxed">
+            {content}
+            <span className="inline-block w-1.5 h-3 bg-[var(--purple)] rounded-sm ml-0.5 animate-pulse" />
+          </p>
+        </div>
       )
     }
     return null
