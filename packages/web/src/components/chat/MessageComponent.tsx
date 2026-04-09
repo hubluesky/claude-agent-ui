@@ -76,10 +76,7 @@ export function isMessageVisible(message: AgentMessage): boolean {
     return subtype.startsWith('error')
   }
 
-  if ((message as any).type === '_streaming_block') {
-    const blockType = (message as any)._blockType
-    return blockType === 'text' || blockType === 'thinking'
-  }
+  if ((message as any)._streaming) return true
 
   if (message.type === 'system') {
     const sub = (message as any).subtype
@@ -131,6 +128,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
           <div className="flex-1 min-w-0 space-y-2">
             {contentBlocks.map((block: any, i: number) => {
               if (block.type === 'text') {
+                const isStreaming = (message as any)._streaming === true
                 const textClass = classifyText(block.text)
                 if (textClass === 'internal-output') return null
                 if (textClass === 'compact-summary') {
@@ -143,10 +141,38 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                 }
                 const assistantTaskNotif = parseTaskNotificationXml(block.text)
                 if (assistantTaskNotif) return <TaskNotificationCard key={i} data={assistantTaskNotif} />
+                if (isStreaming) {
+                  // Streaming: plain text with cursor animation (no markdown — too expensive mid-stream)
+                  if (!block.text) return null
+                  return (
+                    <div key={i} className="flex gap-3 items-start">
+                      <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed flex-1">
+                        {block.text}
+                        <span className="inline-block w-2 h-4 bg-[var(--accent)] rounded-sm ml-0.5 animate-pulse" />
+                      </p>
+                    </div>
+                  )
+                }
                 return <div key={i} className="text-sm text-[var(--text-primary)] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
               }
               if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+                const isStreaming = (message as any)._streaming === true
                 const thinkingText = block.thinking || block.text || ''
+
+                if (isStreaming) {
+                  // Streaming: open display with cursor animation
+                  if (!thinkingText) return null
+                  return (
+                    <div key={i} className="border-l-2 border-[var(--purple-subtle-border)] pl-3 py-1">
+                      <p className="text-xs text-[var(--purple)] whitespace-pre-wrap leading-relaxed">
+                        {thinkingText}
+                        <span className="inline-block w-1.5 h-3 bg-[var(--purple)] rounded-sm ml-0.5 animate-pulse" />
+                      </p>
+                    </div>
+                  )
+                }
+
+                // Final: existing collapsible rendering
                 if (!thinkingText) {
                   return block.type === 'redacted_thinking' ? (
                     <div key={i} className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2">
@@ -208,35 +234,6 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     }
     // Success results: don't render result text — the assistant message already shows it.
     // Only render if there was no assistant message (e.g. empty conversation).
-    return null
-  }
-
-  // Streaming block
-  if ((message as any).type === '_streaming_block') {
-    const blockType = (message as any)._blockType
-    const content = (message as any)._content ?? ''
-    if (blockType === 'text') {
-      if (!content) return null
-      return (
-        <div className="flex gap-3 items-start">
-          <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
-          </div>
-          <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed flex-1">{content}<span className="inline-block w-2 h-4 bg-[var(--accent)] rounded-sm ml-0.5 animate-pulse" /></p>
-        </div>
-      )
-    }
-    if (blockType === 'thinking') {
-      if (!content) return null
-      return (
-        <div className="ml-10 border-l-2 border-[var(--purple-subtle-border)] pl-3 py-1">
-          <p className="text-xs text-[var(--purple)] whitespace-pre-wrap leading-relaxed">
-            {content}
-            <span className="inline-block w-1.5 h-3 bg-[var(--purple)] rounded-sm ml-0.5 animate-pulse" />
-          </p>
-        </div>
-      )
-    }
     return null
   }
 
