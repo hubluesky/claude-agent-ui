@@ -55,6 +55,9 @@ export function createWsHandler(deps: HandlerDeps) {
     wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
   })
 
+  // Allow lock manager to detect dead connections — acquire() auto-releases stale locks
+  lockManager.setIsConnectionAlive((connectionId: string) => !!wsHub.getClient(connectionId))
+
   return function handleConnection(ws: WebSocket, meta?: { userAgent?: string; ip?: string }) {
     const connectionId = wsHub.register(ws, meta)
     wsHub.sendTo(connectionId, { type: 'init', connectionId })
@@ -173,8 +176,18 @@ export function createWsHandler(deps: HandlerDeps) {
   function handleJoinSession(connectionId: string, sessionId: string, lastSeq?: number) {
     const syncResult = wsHub.joinWithSync(connectionId, sessionId, lastSeq ?? 0)
     const alreadyInSession = syncResult.alreadyInSession
-    const lockHolder = lockManager.getHolder(sessionId)
+    let lockHolder = lockManager.getHolder(sessionId)
     let activeSession = sessionManager.getActive(sessionId)
+
+    // Detect stale lock: if the lock holder is a dead connection (no longer registered
+    // in wsHub), release it immediately. This fixes permanent deadlocks caused by
+    // bindSessionEvents acquiring locks via a closure-captured connectionId that became
+    // stale after a WS reconnection during SDK initialization.
+    if (lockHolder && lockHolder !== connectionId && !wsHub.getClient(lockHolder)) {
+      lockManager.release(sessionId)
+      lockHolder = null
+    }
+
     const isLockHolder = lockHolder === connectionId
 
     // Warm up session for MCP/model/context data if not already active
@@ -443,6 +456,12 @@ export function createWsHandler(deps: HandlerDeps) {
     // and to ensure the latest connectionId is captured in closures.
     session.removeAllListeners()
 
+    // Store the ownerConnectionId on the session so it can be updated by
+    // handleReconnect when the WS reconnects. All closures below use
+    // session.ownerConnectionId instead of the captured `connectionId` parameter,
+    // preventing stale-connectionId deadlocks.
+    session.ownerConnectionId = connectionId
+
     let realSessionId = sessionId
     let pendingUserPrompt = sessionId.startsWith('pending-') ? prompt : undefined
     let pendingContentBlocks = sessionId.startsWith('pending-') ? contentBlocks : undefined
@@ -452,14 +471,15 @@ export function createWsHandler(deps: HandlerDeps) {
       if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
         const newId = msg.session_id
         if (realSessionId.startsWith('pending-')) {
+          const ownerId = session.ownerConnectionId ?? connectionId
           sessionManager.registerActive(newId, session)
-          lockManager.acquire(newId, connectionId)
-          wsHub.joinSession(connectionId, newId)
+          lockManager.acquire(newId, ownerId)
+          wsHub.joinSession(ownerId, newId)
           wsHub.broadcast(newId, {
             type: 'lock-status',
             sessionId: newId,
             status: 'locked',
-            holderId: connectionId,
+            holderId: ownerId,
           })
           realSessionId = newId
 
@@ -486,6 +506,7 @@ export function createWsHandler(deps: HandlerDeps) {
             pendingContentBlocks = undefined
           }
         } else if (realSessionId !== newId) {
+          const ownerId = session.ownerConnectionId ?? connectionId
           sessionManager.registerActive(newId, session)
           // Migrate pending requests from old session ID to new one
           for (const [, entry] of pendingRequestMap) {
@@ -495,15 +516,15 @@ export function createWsHandler(deps: HandlerDeps) {
           }
           // Migrate lock from old session ID to new one
           lockManager.release(realSessionId)
-          lockManager.acquire(newId, connectionId)
+          lockManager.acquire(newId, ownerId)
           // Migrate session subscription to new ID
-          wsHub.joinSession(connectionId, newId)
+          wsHub.joinSession(ownerId, newId)
           // Broadcast lock status under new session ID
           wsHub.broadcast(newId, {
             type: 'lock-status',
             sessionId: newId,
             status: 'locked',
-            holderId: connectionId,
+            holderId: ownerId,
           })
           realSessionId = newId
         }
@@ -579,7 +600,7 @@ export function createWsHandler(deps: HandlerDeps) {
         wsHub.sendTo(connId, {
           type: 'tool-approval-request',
           ...req,
-          readonly: connId !== connectionId,
+          readonly: connId !== session.ownerConnectionId,
         })
       }
     })
@@ -594,7 +615,7 @@ export function createWsHandler(deps: HandlerDeps) {
         wsHub.sendTo(connId, {
           type: 'ask-user-request',
           ...req,
-          readonly: connId !== connectionId,
+          readonly: connId !== session.ownerConnectionId,
         })
       }
     })
@@ -610,7 +631,7 @@ export function createWsHandler(deps: HandlerDeps) {
           type: 'plan-approval',
           sessionId: realSessionId,
           ...req,
-          readonly: connId !== connectionId,
+          readonly: connId !== session.ownerConnectionId,
         })
       }
     })
@@ -1091,9 +1112,19 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleReconnect(connectionId: string, previousConnectionId: string) {
-    // Only migrate lock ownership — session join is handled by the client's
+    // Migrate lock ownership — session join is handled by the client's
     // resubscribeAll() to avoid duplicate buffer replays.
     lockManager.onReconnect(previousConnectionId, connectionId)
+
+    // Update ownerConnectionId on all active sessions so that closures in
+    // bindSessionEvents use the new connectionId for lock acquisition and
+    // readonly checks. Without this, a WS reconnection during SDK processing
+    // would leave the closure pointing at a dead connectionId.
+    for (const [, session] of sessionManager.getAllActive()) {
+      if (session.ownerConnectionId === previousConnectionId) {
+        session.ownerConnectionId = connectionId
+      }
+    }
   }
 
   /**

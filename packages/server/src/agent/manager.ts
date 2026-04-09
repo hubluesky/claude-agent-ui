@@ -163,6 +163,10 @@ export class SessionManager {
     return this.activeSessions.get(sessionId)
   }
 
+  getAllActive(): ReadonlyMap<string, AgentSession> {
+    return this.activeSessions
+  }
+
   removeActive(sessionId: string): void {
     this.activeSessions.delete(sessionId)
   }

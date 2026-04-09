@@ -11,6 +11,7 @@ const IDLE_TIMEOUT_MS = 60_000  // 1 min no interaction → auto-release
 
 export class LockManager {
   private locks = new Map<string, SessionLock>()
+  private isConnectionAlive: ((connectionId: string) => boolean) | null = null
 
   constructor(private onRelease: (sessionId: string) => void) {}
 
@@ -19,10 +20,21 @@ export class LockManager {
     this.onRelease = cb
   }
 
+  /** Set a callback to check whether a connection is still alive.
+   *  Used by acquire() to auto-release locks held by dead connections. */
+  setIsConnectionAlive(cb: (connectionId: string) => boolean): void {
+    this.isConnectionAlive = cb
+  }
+
   acquire(sessionId: string, connectionId: string): { success: boolean; holder?: string } {
     const existing = this.locks.get(sessionId)
     if (existing && existing.holderId !== connectionId) {
-      return { success: false, holder: existing.holderId }
+      // If the current holder is a dead connection, release the stale lock first
+      if (this.isConnectionAlive && !this.isConnectionAlive(existing.holderId)) {
+        this.release(sessionId)
+      } else {
+        return { success: false, holder: existing.holderId }
+      }
     }
     if (existing) {
       if (existing.gracePeriodTimer) clearTimeout(existing.gracePeriodTimer)

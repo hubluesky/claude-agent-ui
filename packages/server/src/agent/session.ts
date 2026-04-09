@@ -14,6 +14,11 @@ export interface AgentSessionEvents {
 }
 
 export abstract class AgentSession extends EventEmitter {
+  /** The connectionId of the client that owns this session.
+   *  Mutable — updated by handleReconnect when the WS reconnects,
+   *  so that closures in bindSessionEvents always use the latest connectionId. */
+  ownerConnectionId: string | null = null
+
   abstract get id(): string | null
   abstract get projectCwd(): string
   abstract get status(): SessionStatus
