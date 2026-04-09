@@ -8,6 +8,7 @@ import type { SessionManager } from '../agent/manager.js'
 import type { AgentSession } from '../agent/session.js'
 import { V1QuerySession } from '../agent/v1-session.js'
 import { forkSession, getSubagentMessages, getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
+import { maybeGenerateTitle } from '../agent/title-generator.js'
 
 const EDIT_TOOLS: Set<string> = new Set(TOOL_CATEGORIES.edit)
 
@@ -54,8 +55,8 @@ export function createWsHandler(deps: HandlerDeps) {
     wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
   })
 
-  return function handleConnection(ws: WebSocket) {
-    const connectionId = wsHub.register(ws)
+  return function handleConnection(ws: WebSocket, meta?: { userAgent?: string; ip?: string }) {
+    const connectionId = wsHub.register(ws, meta)
     wsHub.sendTo(connectionId, { type: 'init', connectionId })
 
     ws.on('message', async (raw) => {
@@ -112,6 +113,12 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'leave-session':
         wsHub.leaveSession(connectionId)
         break
+      case 'subscribe-session':
+        handleSubscribeSession(connectionId, msg.sessionId, msg.lastSeq)
+        break
+      case 'unsubscribe-session':
+        wsHub.unsubscribeSession(connectionId, msg.sessionId)
+        break
       case 'resolve-plan-approval':
         await handleResolvePlanApproval(connectionId, msg.sessionId, msg.requestId, msg.decision, msg.feedback)
         break
@@ -164,7 +171,7 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleJoinSession(connectionId: string, sessionId: string, lastSeq?: number) {
-    wsHub.joinSession(connectionId, sessionId)
+    const alreadyInSession = wsHub.joinSession(connectionId, sessionId)
     const lockHolder = lockManager.getHolder(sessionId)
     let activeSession = sessionManager.getActive(sessionId)
     const isLockHolder = lockHolder === connectionId
@@ -214,26 +221,33 @@ export function createWsHandler(deps: HandlerDeps) {
       permissionMode: activeSession?.permissionMode,
     })
 
-    // Send stream snapshot FIRST if streaming is in progress (design spec order)
-    const snapshot = wsHub.getStreamSnapshot(sessionId)
-    if (snapshot) {
-      wsHub.sendTo(connectionId, {
-        type: 'stream-snapshot',
-        sessionId,
-        messageId: snapshot.messageId,
-        blocks: snapshot.blocks,
-      })
+    // Skip snapshot + replay if client was already subscribed to this session.
+    // The server-side init handler already joined the client; the second join-session
+    // from the client's useEffect is redundant. Sending snapshot + replay again would
+    // create duplicate streaming blocks and re-deliver already-received messages.
+    if (!alreadyInSession) {
+      // Send stream snapshot FIRST if streaming is in progress (design spec order)
+      const snapshot = wsHub.getStreamSnapshot(sessionId)
+      if (snapshot) {
+        wsHub.sendTo(connectionId, {
+          type: 'stream-snapshot',
+          sessionId,
+          messageId: snapshot.messageId,
+          blocks: snapshot.blocks,
+        })
+      }
+
+      // Then replay buffered messages the client missed (with _seq for client tracking)
+      const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
+      for (const entry of missed) {
+        wsHub.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
+      }
     }
 
-    // Then replay buffered messages the client missed (with _seq for client tracking)
-    const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
-    for (const entry of missed) {
-      wsHub.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
-    }
-
-    // Send model name from session history (async, non-blocking)
+    // Send model name + detect pending requests from session history (async, non-blocking)
     if (sessionId && sessionId !== '__new__') {
       getSessionMessages(sessionId).then((msgs: any[]) => {
+        // Extract model name from last assistant message
         for (let i = msgs.length - 1; i >= 0; i--) {
           const model = msgs[i]?.message?.model
           if (msgs[i].type === 'assistant' && model) {
@@ -245,6 +259,11 @@ export function createWsHandler(deps: HandlerDeps) {
             break
           }
         }
+
+        // Detect pending requests from history (e.g., after server restart).
+        // If the last assistant message has an AskUserQuestion/ExitPlanMode/other tool_use
+        // without a corresponding tool_result, reconstruct the pending request.
+        detectPendingFromHistory(sessionId, connectionId, msgs)
       }).catch(() => {})
     }
 
@@ -252,11 +271,18 @@ export function createWsHandler(deps: HandlerDeps) {
     resendPendingRequests(sessionId, connectionId, !isLockHolder)
 
     if (!lockHolder) {
+      // Auto-acquire the lock for the joining client when:
+      // 1. There are pending approval/ask-user requests (existing behavior), OR
+      // 2. The session is actively running — the user who started it should
+      //    retain control even after WS reconnection or session switching.
+      //    Without this, a WS drop + reconnect would leave the lock idle
+      //    and the user unable to interact (abort, approve, etc.).
+      const sessionIsActive = activeSession && activeSession.status === 'running'
       let hasPending = false
       for (const [, entry] of pendingRequestMap) {
         if (entry.sessionId === sessionId) { hasPending = true; break }
       }
-      if (hasPending) {
+      if (hasPending || sessionIsActive) {
         lockManager.acquire(sessionId, connectionId)
         wsHub.broadcast(sessionId, {
           type: 'lock-status',
@@ -264,8 +290,56 @@ export function createWsHandler(deps: HandlerDeps) {
           status: 'locked',
           holderId: connectionId,
         })
-        resendPendingRequests(sessionId, connectionId, false)
+        if (hasPending) {
+          resendPendingRequests(sessionId, connectionId, false)
+        }
+        // Correct the session-state we already sent (it had isLockHolder: false)
+        wsHub.sendTo(connectionId, {
+          type: 'session-state',
+          sessionId,
+          sessionStatus: activeSession?.status ?? 'idle',
+          lockStatus: 'locked',
+          lockHolderId: connectionId,
+          isLockHolder: true,
+          permissionMode: activeSession?.permissionMode,
+        })
       }
+    }
+  }
+
+  /** Multi mode subscription: subscribe to a session without leaving others.
+   *  Sends session-state and replays buffered messages, but skips lock/pending logic. */
+  function handleSubscribeSession(connectionId: string, sessionId: string, lastSeq?: number) {
+    wsHub.subscribeSession(connectionId, sessionId)
+
+    const activeSession = sessionManager.getActive(sessionId)
+    const lockHolder = lockManager.getHolder(sessionId)
+
+    wsHub.sendTo(connectionId, {
+      type: 'session-state',
+      sessionId,
+      sessionStatus: activeSession?.status ?? 'idle',
+      lockStatus: lockManager.getStatus(sessionId),
+      lockHolderId: lockHolder ?? undefined,
+      isLockHolder: lockHolder === connectionId,
+      permissionMode: activeSession?.permissionMode,
+    })
+
+    // Send stream snapshot if streaming is in progress
+    const snapshot = wsHub.getStreamSnapshot(sessionId)
+    if (snapshot) {
+      wsHub.sendTo(connectionId, {
+        type: 'stream-snapshot',
+        sessionId,
+        messageId: snapshot.messageId,
+        blocks: snapshot.blocks,
+      })
+    }
+
+    // Replay buffered messages the client missed
+    const missed = wsHub.getBufferedAfter(sessionId, lastSeq)
+    for (const entry of missed) {
+      wsHub.sendTo(connectionId, { ...entry.message, _seq: entry.seq } as any)
     }
   }
 
@@ -378,6 +452,14 @@ export function createWsHandler(deps: HandlerDeps) {
             holderId: connectionId,
           })
           realSessionId = newId
+
+          // Broadcast current session status — the initial 'running' state-change
+          // was emitted before any client joined this session, so it was lost.
+          wsHub.broadcast(newId, {
+            type: 'session-state-change',
+            sessionId: newId,
+            state: session.status,
+          })
 
           // Broadcast the deferred user message now that we have a real session ID
           if (pendingUserPrompt || pendingContentBlocks) {
@@ -567,6 +649,20 @@ export function createWsHandler(deps: HandlerDeps) {
       })
       // Clean up buffer after session completes — messages are no longer needed
       wsHub.clearBuffer(realSessionId)
+      // Invalidate sessions cache so list queries reflect the completed session
+      sessionManager.invalidateSessionsCache(session.projectCwd)
+
+      // Auto-generate title if none exists (fire-and-forget, non-blocking)
+      maybeGenerateTitle(realSessionId).then((title) => {
+        if (title) {
+          sessionManager.invalidateSessionsCache(session.projectCwd)
+          wsHub.broadcast(realSessionId, {
+            type: 'session-title-updated',
+            sessionId: realSessionId,
+            title,
+          })
+        }
+      }).catch(() => {})
     })
 
     session.on('error', (err) => {
@@ -600,14 +696,39 @@ export function createWsHandler(deps: HandlerDeps) {
     })
   }
 
-  function handleAskUserResponse(_connectionId: string, requestId: string, answers: Record<string, string>) {
+  async function handleAskUserResponse(connectionId: string, requestId: string, answers: Record<string, string>) {
     const entry = pendingRequestMap.get(requestId)
     if (!entry) return
 
-    const session = sessionManager.getActive(entry.sessionId)
-    if (!session) return
+    let session = sessionManager.getActive(entry.sessionId)
 
-    session.resolveAskUser(requestId, { answers })
+    if (session) {
+      // Active session — resolve directly
+      session.resolveAskUser(requestId, { answers })
+    } else {
+      // No active session (e.g., after server restart).
+      // Resume the session with the cached answer — SDK will re-trigger canUseTool
+      // for the pending AskUserQuestion, and the cached answer auto-resolves it.
+      try {
+        session = await sessionManager.resumeSession(entry.sessionId)
+        if (session instanceof V1QuerySession) {
+          session.cacheAskUserAnswer(answers)
+          bindSessionEvents(session, entry.sessionId, connectionId)
+          lockManager.acquire(entry.sessionId, connectionId)
+          wsHub.broadcast(entry.sessionId, {
+            type: 'lock-status',
+            sessionId: entry.sessionId,
+            status: 'locked',
+            holderId: connectionId,
+          })
+          // Resume with empty prompt — SDK picks up pending tool_use from history
+          session.send('', { cwd: session.projectCwd })
+        }
+      } catch {
+        // Resume failed — silently drop
+      }
+    }
+
     lockManager.resetIdleTimer(entry.sessionId)
     pendingRequestMap.delete(requestId)
 
@@ -691,6 +812,9 @@ export function createWsHandler(deps: HandlerDeps) {
       const result = await forkSession(sessionId, {
         upToMessageId: atMessageId,
       })
+      // Invalidate cache so the forked session appears in list queries
+      const originalSession = sessionManager.getActive(sessionId)
+      sessionManager.invalidateSessionsCache(originalSession?.projectCwd)
       wsHub.sendTo(connectionId, {
         type: 'session-forked',
         sessionId: result.sessionId,
@@ -944,6 +1068,76 @@ export function createWsHandler(deps: HandlerDeps) {
     const oldClient = wsHub.getClient(previousConnectionId)
     if (oldClient?.sessionId) {
       wsHub.joinSession(connectionId, oldClient.sessionId)
+    }
+  }
+
+  /**
+   * Scan session message history for unresolved tool_use requests (AskUserQuestion,
+   * ExitPlanMode, other tools). If found, reconstruct and add to pendingRequestMap
+   * so the client sees the pending panel on reconnect after server restart.
+   */
+  function detectPendingFromHistory(sessionId: string, connectionId: string, msgs: any[]) {
+    // Skip if there are already pending requests for this session
+    for (const [, entry] of pendingRequestMap) {
+      if (entry.sessionId === sessionId) return
+    }
+
+    // Collect all tool_use IDs that have a matching tool_result
+    const resolvedToolUseIds = new Set<string>()
+    for (const msg of msgs) {
+      const content = msg?.message?.content
+      if (!Array.isArray(content)) continue
+      for (const block of content) {
+        if (block.type === 'tool_result' && block.tool_use_id) {
+          resolvedToolUseIds.add(block.tool_use_id)
+        }
+      }
+    }
+
+    // Walk backwards to find the last assistant message with unresolved tool_use
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i]
+      if (msg.type !== 'assistant') continue
+
+      const content = msg?.message?.content
+      if (!Array.isArray(content)) continue
+
+      for (const block of content) {
+        if (block.type !== 'tool_use' || !block.id || resolvedToolUseIds.has(block.id)) continue
+
+        if (block.name === 'AskUserQuestion' && block.input?.questions) {
+          const requestId = block.id
+          pendingRequestMap.set(requestId, {
+            sessionId,
+            type: 'ask-user',
+            payload: {
+              requestId,
+              questions: block.input.questions,
+            },
+          })
+          // Send to the joining client
+          wsHub.sendTo(connectionId, {
+            type: 'ask-user-request',
+            requestId,
+            questions: block.input.questions,
+            readonly: false,
+          } as any)
+          // Acquire lock for the client so they can respond
+          lockManager.acquire(sessionId, connectionId)
+          wsHub.broadcast(sessionId, {
+            type: 'lock-status',
+            sessionId,
+            status: 'locked',
+            holderId: connectionId,
+          })
+          return  // Only restore first pending request
+        }
+
+        // Could add ExitPlanMode and other tool types here if needed
+      }
+
+      // Only check the last assistant message — if it has no pending, earlier ones are resolved
+      break
     }
   }
 }

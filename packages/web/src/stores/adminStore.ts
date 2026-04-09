@@ -36,6 +36,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       })
       const data = await res.json()
       if (!res.ok) { set({ error: data.error, loading: false }); return false }
+      sessionStorage.setItem('admin-session', '1')
       set({ loading: false })
       await get().fetchStatus()
       return true
@@ -54,6 +55,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       })
       const data = await res.json()
       if (!res.ok) { set({ error: data.error, loading: false }); return false }
+      sessionStorage.setItem('admin-session', '1')
       set({ loading: false })
       await get().fetchStatus()
       return true
@@ -63,6 +65,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
 
   logout: async () => {
+    sessionStorage.removeItem('admin-session')
     await fetch('/api/admin/logout', { method: 'POST' })
     await get().fetchStatus()
   },

@@ -62,6 +62,17 @@ export interface C2S_LeaveSession {
   type: 'leave-session'
 }
 
+export interface C2S_SubscribeSession {
+  type: 'subscribe-session'
+  sessionId: string
+  lastSeq?: number
+}
+
+export interface C2S_UnsubscribeSession {
+  type: 'unsubscribe-session'
+  sessionId: string
+}
+
 export interface C2S_ResolvePlanApproval {
   type: 'resolve-plan-approval'
   sessionId: string
@@ -364,6 +375,12 @@ export interface S2C_StreamSnapshot {
   blocks: { index: number; type: 'text' | 'thinking'; content: string }[]
 }
 
+export interface S2C_SessionTitleUpdated {
+  type: 'session-title-updated'
+  sessionId: string
+  title: string
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -374,6 +391,8 @@ export type C2SMessage =
   | C2S_SetEffort
   | C2S_Reconnect
   | C2S_LeaveSession
+  | C2S_SubscribeSession
+  | C2S_UnsubscribeSession
   | C2S_ResolvePlanApproval
   | C2S_ReleaseLock
   | C2S_ClaimLock
@@ -413,4 +432,5 @@ export type S2CMessage =
   | S2C_SubagentMessages
   | S2C_Ping
   | S2C_StreamSnapshot
+  | S2C_SessionTitleUpdated
   | S2C_Error

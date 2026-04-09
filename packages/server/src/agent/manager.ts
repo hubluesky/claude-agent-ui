@@ -139,6 +139,24 @@ export class SessionManager {
 
   registerActive(sessionId: string, session: AgentSession): void {
     this.activeSessions.set(sessionId, session)
+    // Invalidate caches so the new session appears in subsequent list queries
+    this.invalidateSessionsCache(session.projectCwd)
+  }
+
+  /** Clear sessions & projects cache for a project so the next list query is fresh.
+   *  If no cwd is provided, clear ALL caches. */
+  invalidateSessionsCache(cwd?: string): void {
+    this._projectsCache = null
+    if (!cwd) {
+      this._sessionsCache.clear()
+    } else {
+      // Remove all cache entries whose key starts with this cwd
+      for (const key of this._sessionsCache.keys()) {
+        if (key.startsWith(cwd + ':')) {
+          this._sessionsCache.delete(key)
+        }
+      }
+    }
   }
 
   getActive(sessionId: string): AgentSession | undefined {

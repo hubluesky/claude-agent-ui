@@ -23,7 +23,10 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
   const panelSummaries = useMultiPanelStore((s) => s.panelSummaries)
   const panelIds = useMultiPanelStore((s) => s.panelSessionIds)
   const addPanel = useMultiPanelStore((s) => s.addPanel)
+  const removePanel = useMultiPanelStore((s) => s.removePanel)
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
+  const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
+  const currentSessions = useSessionStore((s) => s.currentProjectCwd ? s.sessions.get(s.currentProjectCwd) : undefined) ?? []
   const selectSession = useSessionStore((s) => s.selectSession)
   const viewMode = useSettingsStore((s) => s.viewMode)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
@@ -39,7 +42,15 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
     return () => { clearTimeout(timer); document.removeEventListener('mousedown', handleClick) }
   }, [onClose])
 
-  // Collect items, in Multi mode show all, in Single exclude current
+  // ── Build the current session entry (for the "pin current" section) ──
+  const isCurrentValid = currentSessionId && currentSessionId !== '__new__'
+  const isCurrentInPanel = isCurrentValid ? panelIds.includes(currentSessionId) : false
+  const currentSessionInfo = useMemo(() => {
+    if (!isCurrentValid) return null
+    return currentSessions.find((s) => s.sessionId === currentSessionId)
+  }, [isCurrentValid, currentSessionId, currentSessions])
+
+  // Collect panel items; in Multi mode show all, in Single exclude current
   const items: PanelSummary[] = []
   for (const [sid, summary] of panelSummaries) {
     if (viewMode === 'multi' || sid !== currentSessionId) {
@@ -55,7 +66,6 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
       if (!map.has(group)) map.set(group, [])
       map.get(group)!.push(item)
     }
-    // Return in defined order, only non-empty groups
     const ordered = new Map<StatusGroup, PanelSummary[]>()
     for (const key of STATUS_GROUP_ORDER) {
       const list = map.get(key)
@@ -66,16 +76,39 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
 
   const handleClick = (summary: PanelSummary) => {
     selectSession(summary.sessionId, summary.projectCwd)
-    // Switch to single view for quick access
     if (viewMode === 'multi') {
       setViewMode('single')
     }
     onClose()
   }
 
-  const handleAdd = (summary: PanelSummary, e: React.MouseEvent) => {
+  const handleTogglePanel = (sessionId: string, summary: PanelSummary | null, e: React.MouseEvent) => {
     e.stopPropagation()
-    addPanel(summary.sessionId, summary)
+    if (panelIds.includes(sessionId)) {
+      removePanel(sessionId)
+    } else if (summary) {
+      addPanel(sessionId, summary)
+    }
+  }
+
+  const handleAddCurrent = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!isCurrentValid || !currentProjectCwd) return
+    const { projects } = useSessionStore.getState()
+    const project = projects.find((p) => p.cwd === currentProjectCwd)
+    const projectName = project?.name ?? currentProjectCwd.split(/[/\\]/).pop() ?? ''
+    addPanel(currentSessionId, {
+      sessionId: currentSessionId,
+      title: currentSessionInfo?.title ?? '',
+      projectCwd: currentProjectCwd,
+      projectName,
+    })
+  }
+
+  const handleRemoveCurrent = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!currentSessionId) return
+    removePanel(currentSessionId)
   }
 
   return (
@@ -85,15 +118,47 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
     >
       <div className="flex items-center gap-1.5 px-3.5 py-2.5 border-b border-[var(--border)]">
         <span className="text-xs font-semibold flex-1 text-[var(--text-primary)]">后台会话</span>
-        <span className="text-[9px] text-[var(--text-dim)]">{items.length} 个</span>
+        <span className="text-[9px] text-[var(--text-dim)]">{panelIds.length} 个面板</span>
       </div>
+
+      {/* ── Current session pin/unpin (only in Single mode) ── */}
+      {viewMode === 'single' && isCurrentValid && (
+        <div className="px-1.5 pt-1.5 pb-1 border-b border-[var(--border)]">
+          <div className="flex items-center gap-2 px-2.5 py-[7px] rounded-[7px] bg-[var(--bg-secondary)]">
+            <div className="w-[7px] h-[7px] rounded-full shrink-0 bg-[var(--accent)]" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold truncate text-[var(--text-primary)]">
+                {currentSessionInfo?.title || '当前会话'}
+              </div>
+              <div className="text-[8px] text-[var(--text-muted)] truncate mt-0.5">当前查看</div>
+            </div>
+            {isCurrentInPanel ? (
+              <button
+                onClick={handleRemoveCurrent}
+                className="h-[20px] px-1.5 rounded bg-[var(--accent-subtle-bg)] border border-[var(--accent-subtle-border)] text-[var(--accent)] flex items-center justify-center text-[9px] font-semibold shrink-0 cursor-pointer hover:bg-[var(--error-subtle-bg)] hover:border-[var(--error-subtle-border)] hover:text-[var(--error)] transition-colors"
+                title="从面板移除"
+              >
+                移除
+              </button>
+            ) : (
+              <button
+                onClick={handleAddCurrent}
+                className="h-[20px] px-1.5 rounded border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-subtle-bg)] flex items-center justify-center text-[9px] font-semibold shrink-0 cursor-pointer bg-transparent transition-colors"
+                title="添加到面板"
+              >
+                添加
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto py-1 px-1.5">
         {items.length === 0 ? (
           <div className="text-center text-[var(--text-muted)] text-xs py-6">没有后台会话</div>
         ) : (
           Array.from(grouped.entries()).map(([groupName, sessions]) => (
             <div key={groupName} className="mb-1">
-              {/* Status group header */}
               <div className={`px-2.5 py-1 text-[8px] font-semibold uppercase tracking-wider ${
                 groupName === '需要注意' ? 'text-[var(--warning)]'
                   : groupName === '进行中' ? 'text-[var(--success)]'
@@ -131,13 +196,17 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
                       <span className="text-[7px] bg-[var(--warning)] text-[var(--bg-primary)] px-1.5 rounded font-bold">审批</span>
                     )}
                     {inPanel ? (
-                      <div className="w-[18px] h-[18px] rounded bg-[var(--accent-subtle-bg)] border border-[var(--accent-subtle-border)] text-[var(--accent)] flex items-center justify-center text-[8px] shrink-0">
+                      <button
+                        onClick={(e) => handleTogglePanel(item.sessionId, null, e)}
+                        className="w-[18px] h-[18px] rounded bg-[var(--accent-subtle-bg)] border border-[var(--accent-subtle-border)] text-[var(--accent)] flex items-center justify-center text-[8px] shrink-0 cursor-pointer hover:bg-[var(--error-subtle-bg)] hover:border-[var(--error-subtle-border)] hover:text-[var(--error)] transition-colors"
+                        title="从面板移除"
+                      >
                         ✓
-                      </div>
+                      </button>
                     ) : (
                       <button
-                        onClick={(e) => handleAdd(item, e)}
-                        className="w-[18px] h-[18px] rounded border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-subtle-bg)] flex items-center justify-center text-[10px] shrink-0 cursor-pointer bg-transparent"
+                        onClick={(e) => handleTogglePanel(item.sessionId, item, e)}
+                        className="w-[18px] h-[18px] rounded border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-subtle-bg)] flex items-center justify-center text-[10px] shrink-0 cursor-pointer bg-transparent transition-colors"
                         title="添加到面板"
                       >
                         +
@@ -151,7 +220,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
         )}
       </div>
       <div className="px-3 py-2 border-t border-[var(--border)] text-center text-[9px] text-[var(--text-muted)]">
-        点击切换 · + 添加到面板 · ✓ 已在面板
+        点击切换 · + 添加到面板 · ✓ 点击移除
       </div>
     </div>
   )

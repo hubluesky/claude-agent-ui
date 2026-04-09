@@ -5,7 +5,7 @@ import type { AdminSetupRequest, AdminLoginRequest, AdminChangePasswordRequest }
 const COOKIE_NAME = 'claude-admin-token'
 
 function cookieOptions() {
-  return { path: '/', httpOnly: true, sameSite: 'lax' as const, maxAge: 7 * 24 * 60 * 60 }
+  return { path: '/', httpOnly: true, sameSite: 'lax' as const }
 }
 
 function isLocalhost(request: FastifyRequest): boolean {

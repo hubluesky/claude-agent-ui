@@ -76,8 +76,13 @@ export class LockManager {
           lock.gracePeriodTimer = null
         }
         lock.holderId = newConnectionId
-        if (lock.idleTimer) clearTimeout(lock.idleTimer)
-        lock.idleTimer = this.startIdleTimer(lock.sessionId)
+        // Do NOT start a new idle timer here.
+        // The idle timer was cleared by onDisconnect. If the session is still
+        // running, there's no reason to start a countdown — resetIdleTimer()
+        // will be called when the session completes or a tool response is sent.
+        // Starting it here caused locks to expire after 1 minute even for
+        // active sessions, because resetIdleTimer is never called during
+        // normal (non-approval) tool execution.
       }
     }
   }

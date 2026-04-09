@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { S2CMessage, C2SMessage, ToolApprovalDecision, PlanApprovalDecisionType } from '@claude-agent-ui/shared'
+import type { S2CMessage, C2SMessage, ToolApprovalDecision, PlanApprovalDecisionType, AgentMessage, SessionStatus } from '@claude-agent-ui/shared'
 import { useToastStore } from '../components/chat/Toast'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useMessageStore, flushStreamingDelta } from '../stores/messageStore'
@@ -8,6 +8,23 @@ import { useCommandStore } from '../stores/commandStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
 const CONNECTION_ID_KEY = 'claude-agent-ui-connection-id'
+
+// ── Multi-session handler registry ────────────────────────────
+// Maps sessionId → callbacks for compact panels watching multiple sessions.
+// handleServerMessage dispatches to registered handlers instead of the global store.
+export interface MultiSessionCallbacks {
+  onMessage: (msg: AgentMessage) => void
+  onStatusChange: (status: SessionStatus) => void
+  onComplete: () => void
+}
+const _multiSessionHandlers = new Map<string, MultiSessionCallbacks>()
+
+export function registerMultiSession(sessionId: string, callbacks: MultiSessionCallbacks) {
+  _multiSessionHandlers.set(sessionId, callbacks)
+}
+export function unregisterMultiSession(sessionId: string) {
+  _multiSessionHandlers.delete(sessionId)
+}
 
 // ── Singleton WebSocket connection ──────────────────────────────
 let ws: WebSocket | null = null
@@ -23,6 +40,11 @@ const HEARTBEAT_TIMEOUT = 60_000
 // Accumulates streaming content independently of _streaming_block store entries.
 // Survives across multiple partial assistant messages (includePartialMessages: true).
 const _streamContentAccumulator = new Map<number, { blockType: string; content: string }>()
+
+/** Clear all session-scoped streaming state. Call when switching sessions. */
+export function clearStreamingState() {
+  _streamContentAccumulator.clear()
+}
 
 function resetHeartbeatTimer() {
   if (heartbeatTimer) clearTimeout(heartbeatTimer)
@@ -150,7 +172,12 @@ function handleServerMessage(msg: S2CMessage) {
       sessionStorage.setItem(CONNECTION_ID_KEY, msg.connectionId)
       break
 
-    case 'session-state':
+    case 'session-state': {
+      const multiH = _multiSessionHandlers.get(msg.sessionId)
+      if (multiH) {
+        multiH.onStatusChange(msg.sessionStatus)
+        break // Handled by independent panel
+      }
       conn.setSessionStatus(msg.sessionStatus)
       conn.setLockHolderId(msg.lockHolderId ?? null)
       conn.setLockStatus(
@@ -162,8 +189,20 @@ function handleServerMessage(msg: S2CMessage) {
         useSettingsStore.getState().setPermissionMode(msg.permissionMode)
       }
       break
+    }
 
-    case 'agent-message':
+    case 'agent-message': {
+      // ── 0. Multi-session dispatch: route to compact panel handler if registered ──
+      const msgSessionId = (msg as any).sessionId as string | undefined
+      if (msgSessionId) {
+        const multiHandler = _multiSessionHandlers.get(msgSessionId)
+        if (multiHandler) {
+          multiHandler.onMessage(msg.message)
+          break // Handled by the independent panel — skip global store
+        }
+      }
+
+      // ── 1. Handle system init first (establishes/changes session context) ──
       if (msg.message.type === 'system' && (msg.message as any).subtype === 'init' && (msg.message as any).session_id) {
         const newId = (msg.message as any).session_id
         if (!sess.currentSessionId || sess.currentSessionId !== newId) {
@@ -187,6 +226,20 @@ function handleServerMessage(msg: S2CMessage) {
           const prev = conn.accountInfo
           conn.setAccountInfo({ ...prev, model: (msg.message as any).model })
         }
+      }
+
+      // ── 2. Session guard: ignore messages for other sessions ──
+      // The server tags every agent-message with its sessionId. If it doesn't
+      // match the session we're currently viewing, drop it to prevent cross-
+      // session contamination (e.g. running session X bleeding into session Y).
+      const currentLoaded = useMessageStore.getState().currentLoadedSessionId
+      if (msgSessionId && currentLoaded && msgSessionId !== currentLoaded) {
+        break // Different session — ignore
+      }
+      // If we're on __new__ and no session has been loaded yet, only system init
+      // (handled above) can establish context. Block everything else.
+      if (!currentLoaded && sess.currentSessionId === '__new__') {
+        break
       }
 
       // NOTE: Do NOT sync permissionMode from SDK status messages here.
@@ -325,6 +378,7 @@ function handleServerMessage(msg: S2CMessage) {
         msgs.appendMessage(msg.message)
       }
       break
+    }
 
     case 'tool-approval-request':
       conn.setPendingApproval({
@@ -420,9 +474,15 @@ function handleServerMessage(msg: S2CMessage) {
       break
     }
 
-    case 'session-state-change':
+    case 'session-state-change': {
+      const multiH = _multiSessionHandlers.get(msg.sessionId)
+      if (multiH) {
+        multiH.onStatusChange(msg.state)
+        break // Handled by independent panel
+      }
       conn.setSessionStatus(msg.state)
       break
+    }
 
     case 'mode-change':
       useSettingsStore.getState().setPermissionMode(msg.mode)
@@ -491,13 +551,22 @@ function handleServerMessage(msg: S2CMessage) {
       break
 
     case 'session-complete':
-    case 'session-aborted':
+    case 'session-aborted': {
+      const sid = (msg as any).sessionId as string | undefined
+      if (sid) {
+        const multiH = _multiSessionHandlers.get(sid)
+        if (multiH) {
+          multiH.onComplete()
+          break
+        }
+      }
       // Clear pending requests but preserve lock status — lock persists across queries
       conn.setPendingApproval(null)
       conn.setPendingAskUser(null)
       conn.setPendingPlanApproval(null)
       conn.setPlanModalOpen(false)
       break
+    }
 
     case 'session-forked': {
       const newId = (msg as any).sessionId as string
@@ -523,6 +592,34 @@ function handleServerMessage(msg: S2CMessage) {
     case 'stream-snapshot': {
       // Reconnection: apply accumulated stream content as synthetic streaming blocks
       const snapshot = msg as any
+      const snapshotSid = snapshot.sessionId as string | undefined
+      if (snapshotSid) {
+        const multiH = _multiSessionHandlers.get(snapshotSid)
+        if (multiH) {
+          // Dispatch stream snapshot as synthetic messages to the independent panel
+          for (const block of snapshot.blocks ?? []) {
+            multiH.onMessage({
+              type: 'stream_event',
+              event: {
+                type: 'content_block_start',
+                index: block.index,
+                content_block: { type: block.type },
+              },
+            } as any)
+            multiH.onMessage({
+              type: 'stream_event',
+              event: {
+                type: 'content_block_delta',
+                index: block.index,
+                delta: block.type === 'text'
+                  ? { type: 'text_delta', text: block.content }
+                  : { type: 'thinking_delta', thinking: block.content },
+              },
+            } as any)
+          }
+          break
+        }
+      }
       const msgStore = useMessageStore.getState()
       for (const block of snapshot.blocks ?? []) {
         msgStore.appendStreamDelta({
@@ -546,6 +643,20 @@ function handleServerMessage(msg: S2CMessage) {
           },
         } as any)
       }
+      break
+    }
+
+    case 'session-title-updated': {
+      // Update session title in the store when server auto-generates it
+      const titleMsg = msg as any
+      const sessions = new Map(useSessionStore.getState().sessions)
+      for (const [cwd, list] of sessions) {
+        const updated = list.map((s) =>
+          s.sessionId === titleMsg.sessionId ? { ...s, title: titleMsg.title } : s
+        )
+        sessions.set(cwd, updated)
+      }
+      useSessionStore.setState({ sessions })
       break
     }
 
@@ -581,6 +692,18 @@ function joinSession(sessionId: string) {
   // Reset lastSeq when switching sessions (seq numbers are per-session on server)
   useConnectionStore.getState().setLastSeq(0)
   send({ type: 'join-session', sessionId, lastSeq: 0 } as any)
+}
+
+function leaveSession() {
+  send({ type: 'leave-session' } as any)
+}
+
+function subscribeSession(sessionId: string) {
+  send({ type: 'subscribe-session', sessionId } as any)
+}
+
+function unsubscribeSession(sessionId: string) {
+  send({ type: 'unsubscribe-session', sessionId } as any)
 }
 
 function respondToolApproval(requestId: string, decision: ToolApprovalDecision) {
@@ -656,5 +779,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { send, sendMessage, joinSession, forkSession, getContextUsage, getMcpStatus, toggleMcpServer, reconnectMcpServer, rewindFiles, getSubagentMessages, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
+  return { send, sendMessage, joinSession, leaveSession, subscribeSession, unsubscribeSession, forkSession, getContextUsage, getMcpStatus, toggleMcpServer, reconnectMcpServer, rewindFiles, getSubagentMessages, respondToolApproval, respondAskUser, respondPlanApproval, abort, releaseLock, claimLock, disconnect }
 }

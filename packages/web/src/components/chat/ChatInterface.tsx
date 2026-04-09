@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { ChatMessagesPane } from './ChatMessagesPane'
 import { ChatComposer } from './ChatComposer'
 import { ApprovalPanel } from './ApprovalPanel'
@@ -10,10 +10,11 @@ import { StatusBar } from './StatusBar'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { SearchBar } from './SearchBar'
 import { useChatSession } from '../../providers/ChatSessionContext'
-import { useWebSocket } from '../../hooks/useWebSocket'
+import { useWebSocket, clearStreamingState } from '../../hooks/useWebSocket'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useMessageStore } from '../../stores/messageStore'
+import { useMessageStore, clearPendingDelta } from '../../stores/messageStore'
+import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import type { ApprovalPanelConfig } from './ApprovalPanel'
 
@@ -33,24 +34,45 @@ export function ChatInterface({
   onClosePanel,
 }: ChatInterfaceProps) {
   const ctx = useChatSession()
-  const { joinSession } = useWebSocket()
+  const { joinSession, leaveSession } = useWebSocket()
   const { helpOpen, setHelpOpen, searchOpen, setSearchOpen } = useKeyboardShortcuts()
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
   const hasMessages = useMessageStore((s) => s.messages.length > 0)
   const isNewSession = ctx.sessionId === '__new__'
 
+  // Track previous session ID to distinguish __new__ → real ID (same session)
+  // from genuine session switches (A → B, or A → __new__).
+  const prevSessionRef = useRef(ctx.sessionId)
   useEffect(() => {
+    const prevSession = prevSessionRef.current
+    prevSessionRef.current = ctx.sessionId
     // Compact panels (Multi mode) use independent REST-loaded messages —
     // they must NOT join the shared WS or touch the global messageStore.
     if (compact) return
-    if (ctx.sessionId && !isNewSession) {
+
+    // __new__ → real ID: same session (server just assigned the ID via init message).
+    // Do NOT clear streaming state or connection store — content is in flight!
+    const isNewToReal = prevSession === '__new__' && ctx.sessionId !== null && ctx.sessionId !== '__new__'
+
+    if (isNewSession) {
+      // Switching to a new/different session — clean slate
+      useConnectionStore.getState().reset()
+      clearStreamingState()
+      clearPendingDelta()
+      leaveSession()
+      useMessageStore.getState().clear()
+    } else if (ctx.sessionId) {
+      if (!isNewToReal) {
+        // Genuine session switch (A → B): clear stale state from previous session.
+        // Server's session-state response will populate the correct values shortly.
+        useConnectionStore.getState().reset()
+        clearStreamingState()
+        clearPendingDelta()
+      }
       joinSession(ctx.sessionId)
     }
-    if (isNewSession) {
-      useMessageStore.getState().clear()
-    }
-  }, [ctx.sessionId, joinSession, isNewSession, compact])
+  }, [ctx.sessionId, joinSession, leaveSession, isNewSession, compact])
 
   const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
     const contentBlocks: any[] = []
@@ -145,7 +167,12 @@ export function ChatInterface({
           <div className={`${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center`}>
             <span className={`${compact ? 'text-sm' : 'text-xl'} font-bold font-mono text-[#d97706]`}>C</span>
           </div>
-          <p className={`${compact ? 'text-xs' : 'text-sm'} text-[#7c7872]`}>New conversation in {currentProjectCwd?.split(/[/\\]/).pop()}</p>
+          <div className="flex flex-col items-center gap-1 max-w-[90%]">
+            <p className={`${compact ? 'text-xs' : 'text-sm'} text-[var(--text-secondary)]`}>New conversation in {currentProjectCwd?.split(/[/\\]/).pop()}</p>
+            {currentProjectCwd && (
+              <p className={`${compact ? 'text-[10px]' : 'text-xs'} text-[var(--text-muted)] truncate max-w-full`} title={currentProjectCwd}>{currentProjectCwd}</p>
+            )}
+          </div>
         </div>
       ) : (
         <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} compact={compact} />

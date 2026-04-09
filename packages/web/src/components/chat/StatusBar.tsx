@@ -1,6 +1,7 @@
 import { useChatSession } from '../../providers/ChatSessionContext'
 import { useConnectionStore } from '../../stores/connectionStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useSessionStore } from '../../stores/sessionStore'
 import { ModelSelector } from './ModelSelector'
 import { ContextUsageIndicator } from './ContextPanel'
 import { McpIndicator } from './McpPanel'
@@ -35,6 +36,7 @@ export function StatusBar() {
   const { connectionStatus } = useChatSession()
   const accountInfo = useConnectionStore((s) => s.accountInfo)
   const effort = useSettingsStore((s) => s.effort)
+  const currentSessionId = useSessionStore((s) => s.currentSessionId)
   const isConnected = connectionStatus === 'connected'
 
   return (
@@ -81,6 +83,17 @@ export function StatusBar() {
 
       {/* Spacer */}
       <span className="flex-1" />
+
+      {/* Session ID */}
+      {currentSessionId && currentSessionId !== '__new__' && (
+        <span
+          className="font-mono text-[10px] text-[var(--text-dim)] cursor-pointer hover:text-[var(--text-muted)] truncate max-w-[180px]"
+          title={`Session ID: ${currentSessionId}\n点击复制`}
+          onClick={() => navigator.clipboard.writeText(currentSessionId)}
+        >
+          {currentSessionId.slice(0, 8)}
+        </span>
+      )}
 
       {/* Theme toggle */}
       <ThemeToggle />

@@ -122,9 +122,11 @@ html, body, #root {
   50% { box-shadow: 0 0 8px 1px rgba(217, 119, 6, 0.4); }
 }
 
-/* Isolate the composer glow animation so it doesn't trigger full-page repaints */
+/* Isolate the composer glow animation so it doesn't trigger full-page repaints.
+   Do NOT use 'contain: paint' — it clips absolute-positioned popups (ModesPopup etc.) */
 [data-composer-wrapper] {
-  contain: layout style paint;
+  contain: layout style;
+  isolation: isolate;
 }
 
 /* ---- Mobile scroll flicker prevention ---- */

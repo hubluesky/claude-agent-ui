@@ -14,6 +14,11 @@ interface ChatMessagesPaneProps {
   compact?: boolean
 }
 
+// Virtuoso firstItemIndex: start at a high number so we have room to prepend.
+// When loadMore prepends N items, firstItemIndex decreases by N, keeping the
+// logical indices of existing items stable → no scroll jump / flicker.
+const START_INDEX = 100_000
+
 export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPaneProps) {
   const ctx = useChatSession()
   const rawMessages = ctx.messages
@@ -34,6 +39,38 @@ export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPane
 
   // Track loading state in ref to avoid stale closure in startReached
   isLoadingMoreRef.current = isLoadingMore
+
+  // ── firstItemIndex tracking (anti-flicker for loadMore prepend) ─────
+  // Compute during render (before Virtuoso draws) so there's zero delay.
+  const firstItemIndexRef = useRef(START_INDEX)
+  const prevMessagesRef = useRef(messages)
+  const prevSessionIdRef = useRef(sessionId)
+
+  // Reset on session switch
+  if (sessionId !== prevSessionIdRef.current) {
+    firstItemIndexRef.current = START_INDEX
+    prevMessagesRef.current = []
+    prevSessionIdRef.current = sessionId
+  }
+
+  // Detect prepend: array grew AND the last element is the same reference → items prepended
+  const prev = prevMessagesRef.current
+  if (messages !== prev) {
+    if (messages.length > prev.length && prev.length > 0) {
+      const prevLast = prev[prev.length - 1]
+      const currLast = messages[messages.length - 1]
+      if (prevLast === currLast) {
+        // loadMore prepended items
+        firstItemIndexRef.current -= (messages.length - prev.length)
+      }
+    } else if (messages.length === 0 || (prev.length > 0 && messages.length > 0
+        && messages[messages.length - 1] !== prev[prev.length - 1]
+        && messages.length <= prev.length)) {
+      // Full replacement (loadInitial, session switch) → reset
+      firstItemIndexRef.current = START_INDEX
+    }
+    prevMessagesRef.current = messages
+  }
 
   // Load messages when session changes or when returning to single mode.
   // Compact panels (Multi mode) load independently; skip global store load.
@@ -95,6 +132,7 @@ export function ChatMessagesPane({ sessionId, limit, compact }: ChatMessagesPane
     <div className="flex-1 flex flex-col overflow-hidden">
       <Virtuoso
         ref={virtuosoRef}
+        firstItemIndex={firstItemIndexRef.current}
         data={messages}
         initialTopMostItemIndex={Math.max(0, messages.length - 1)}
         followOutput="smooth"

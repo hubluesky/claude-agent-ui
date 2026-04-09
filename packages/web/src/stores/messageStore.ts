@@ -51,6 +51,15 @@ let _deltaRafId: number | null = null
 let _storeGet: (() => MessageState & MessageActions) | null = null
 let _storeSet: ((partial: Partial<MessageState>) => void) | null = null
 
+/** Discard any buffered streaming delta text. Call when switching sessions. */
+export function clearPendingDelta() {
+  if (_deltaRafId !== null) {
+    cancelAnimationFrame(_deltaRafId)
+    _deltaRafId = null
+  }
+  _pendingDeltaText = ''
+}
+
 function _flushStreamingDelta() {
   _deltaRafId = null
   if (!_pendingDeltaText || !_storeGet || !_storeSet) return
@@ -135,7 +144,12 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     }
 
     // No cache — full load with Loading indicator
-    const optimistic = current.filter((m: any) => m._optimistic)
+    // Only preserve optimistic messages if reloading the SAME session (e.g. API refresh).
+    // When switching to a DIFFERENT session, drop them — they belong to the old session
+    // and would otherwise bleed into the new session's chat.
+    const optimistic = currentLoadedSessionId === sessionId
+      ? current.filter((m: any) => m._optimistic)
+      : []
 
     set({ messages: [], isLoadingHistory: true, currentLoadedSessionId: sessionId })
     try {
@@ -178,7 +192,11 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
   },
 
   appendMessage(msg: AgentMessage) {
-    set({ messages: [...get().messages, msg] })
+    const { messages } = get()
+    // Deduplicate by uuid — prevent duplicate messages from reconnection replay
+    const uuid = (msg as any).uuid
+    if (uuid && messages.some((m: any) => (m as any).uuid === uuid)) return
+    set({ messages: [...messages, msg] })
   },
 
   replaceOptimistic(serverMsg: AgentMessage) {

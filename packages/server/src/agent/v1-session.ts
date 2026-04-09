@@ -67,6 +67,8 @@ export class V1QuerySession extends AgentSession {
   private _startFresh = false
   private _prePlanMode: PermissionMode | null = null
   private _lastInputTokens = 0
+  /** Pre-cached AskUser answers — auto-resolved when SDK re-triggers canUseTool on resume */
+  private _cachedAskUserAnswer: Record<string, string> | null = null
 
   constructor(cwd: string, options?: { resumeSessionId?: string }) {
     super()
@@ -82,13 +84,19 @@ export class V1QuerySession extends AgentSession {
   /** Mark session to start fresh (no resume) on next send — used by clear-and-accept */
   markStartFresh(): void { this._startFresh = true }
 
+  /** Pre-cache an AskUser answer so the next resume auto-resolves it */
+  cacheAskUserAnswer(answers: Record<string, string>): void {
+    this._cachedAskUserAnswer = answers
+  }
+
   private setStatus(status: SessionStatus): void {
     this._status = status
     this.emit('state-change', status)
   }
 
   /** Start a background resume query to initialize SDK connection (MCP, models, etc.)
-   *  Non-blocking — fires and forgets. Status stays 'idle'. */
+   *  Non-blocking — fires and forgets. Status stays 'idle'.
+   *  Uses an empty async generator as prompt to avoid writing any messages to JSONL. */
   warmUp(): void {
     if (this.queryInstance || this.lastQueryInstance) return
     const resumeId = this.resumeSessionId ?? this.sessionId
@@ -97,14 +105,16 @@ export class V1QuerySession extends AgentSession {
     const opts = {
       cwd: this._projectCwd,
       resume: resumeId,
-      maxTurns: 1,
+      maxTurns: 0,
       includePartialMessages: false,
       allowDangerouslySkipPermissions: true,
       env: { ...process.env, ...claudeEnv },
     }
 
-    // Run in background, don't change status
-    const q = query({ prompt: '/help' as any, options: opts as any })
+    // Use an empty async generator — SDK initializes but doesn't process any turns,
+    // avoiding "Unknown skill: help" being written to the session JSONL.
+    async function* emptyStream() { /* yields nothing — SDK inits and exits cleanly */ }
+    const q = query({ prompt: emptyStream() as any, options: opts as any })
     this.lastQueryInstance = q
     ;(async () => {
       try {
@@ -425,6 +435,16 @@ export class V1QuerySession extends AgentSession {
   private async handleAskUserTool(
     input: Record<string, unknown>
   ): Promise<{ behavior: string; updatedInput?: Record<string, unknown> }> {
+    // Check for pre-cached answer (restored from history after server restart)
+    if (this._cachedAskUserAnswer) {
+      const cached = this._cachedAskUserAnswer
+      this._cachedAskUserAnswer = null
+      return {
+        behavior: 'allow',
+        updatedInput: { questions: (input as any).questions, answers: cached },
+      }
+    }
+
     this.setStatus('awaiting_user_input')
     const requestId = randomUUID()
     const req: AskUserRequest = {

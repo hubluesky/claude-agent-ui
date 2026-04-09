@@ -7,7 +7,14 @@ export function AdminPage() {
   const status = useAdminStore((s) => s.status)
   const fetchStatus = useAdminStore((s) => s.fetchStatus)
 
-  useEffect(() => { fetchStatus() }, [fetchStatus])
+  useEffect(() => {
+    // 关闭标签页后 sessionStorage 会被清除，重新打开时先登出清 cookie
+    if (!sessionStorage.getItem('admin-session')) {
+      fetch('/api/admin/logout', { method: 'POST' }).then(() => fetchStatus())
+    } else {
+      fetchStatus()
+    }
+  }, [fetchStatus])
 
   if (!status) return <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>加载中...</div>
 

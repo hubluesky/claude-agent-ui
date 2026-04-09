@@ -81,10 +81,11 @@ export class SdkUpdater {
   }
 
   async updateDev(onProgress: ProgressCallback): Promise<void> {
+    const previousVersion = this.getCurrentVersion()
     onProgress({ step: 'downloading', message: '正在执行 pnpm update...' })
 
     return new Promise((resolve, reject) => {
-      const child = spawn('pnpm', ['update', '@anthropic-ai/claude-agent-sdk'], {
+      const child = spawn('pnpm', ['--filter', '@claude-agent-ui/server', 'update', '@anthropic-ai/claude-agent-sdk', '--latest'], {
         cwd: process.cwd(),
         shell: true,
       })
@@ -104,7 +105,21 @@ export class SdkUpdater {
 
       child.on('close', (code) => {
         if (code === 0) {
-          onProgress({ step: 'done', message: '更新完成' })
+          const newVersion = this.getCurrentVersion()
+          if (newVersion !== previousVersion) {
+            onProgress({
+              step: 'done',
+              message: `更新成功: v${previousVersion} → v${newVersion}`,
+              result: {
+                previousVersion,
+                newVersion,
+                changelog: null,
+                features: this.getFeatures(),
+              },
+            })
+          } else {
+            onProgress({ step: 'done', message: `已是最新版本 v${newVersion}` })
+          }
           resolve()
         } else {
           const error = `pnpm update 退出码 ${code}`

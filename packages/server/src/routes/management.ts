@@ -60,16 +60,8 @@ export function managementRoutes(
     // POST /api/server/restart
     app.post('/api/server/restart', async () => {
       logCollector.info('server', '服务器正在重启...')
-      // 延迟重启，先返回响应
-      setTimeout(() => {
-        const { spawn } = require('child_process')
-        spawn(process.argv[0], process.argv.slice(1), {
-          detached: true,
-          stdio: 'ignore',
-          cwd: process.cwd(),
-        }).unref()
-        process.exit(0)
-      }, 500)
+      const { restartServer } = await import('../index.js')
+      restartServer()
       return { ok: true, message: '正在重启' }
     })
 
@@ -159,7 +151,7 @@ export function managementRoutes(
       // 发送初始注释防止代理缓冲
       reply.raw.write(': ok\n\n')
 
-      const status = serverManager.getStatus()
+      const status = await serverManager.getStatus()
 
       try {
         await sdkUpdater.update(status.mode, (progress) => {

@@ -22,6 +22,7 @@ interface ServerState {
   logs: LogEntry[]
   sdkUpdateProgress: SdkUpdateProgress | null
   lastUpdateResult: LastSdkUpdateResult | null
+  restarting: boolean
 
   fetchStatus: () => Promise<void>
   fetchSdkVersion: () => Promise<void>
@@ -37,6 +38,17 @@ interface ServerState {
 
 const API_BASE = '/api'
 const LAST_UPDATE_KEY = 'claude-agent-ui:lastSdkUpdate'
+
+/** 检测 401 并触发 admin 重新认证（重启期间跳过） */
+async function fetchWithAuth(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, init)
+  if (res.status === 401 && !useServerStore.getState().restarting) {
+    // 动态导入避免循环依赖
+    const { useAdminStore } = await import('./adminStore')
+    useAdminStore.getState().fetchStatus()
+  }
+  return res
+}
 
 function loadLastUpdateResult(): LastSdkUpdateResult | null {
   try {
@@ -61,41 +73,57 @@ export const useServerStore = create<ServerState>((set, get) => ({
   logs: [],
   sdkUpdateProgress: null,
   lastUpdateResult: loadLastUpdateResult(),
+  restarting: false,
 
   fetchStatus: async () => {
     try {
-      const res = await fetch(`${API_BASE}/server/status`)
+      const res = await fetchWithAuth(`${API_BASE}/server/status`)
       if (res.ok) set({ status: await res.json() })
     } catch { /* ignore */ }
   },
 
   fetchSdkVersion: async () => {
     try {
-      const res = await fetch(`${API_BASE}/sdk/version`)
+      const res = await fetchWithAuth(`${API_BASE}/sdk/version`)
       if (res.ok) set({ sdkVersion: await res.json() })
     } catch { /* ignore */ }
   },
 
   fetchSdkFeatures: async () => {
     try {
-      const res = await fetch(`${API_BASE}/sdk/features`)
+      const res = await fetchWithAuth(`${API_BASE}/sdk/features`)
       if (res.ok) set({ sdkFeatures: await res.json() })
     } catch { /* ignore */ }
   },
 
   fetchConfig: async () => {
     try {
-      const res = await fetch(`${API_BASE}/server/config`)
+      const res = await fetchWithAuth(`${API_BASE}/server/config`)
       if (res.ok) set({ config: await res.json() })
     } catch { /* ignore */ }
   },
 
   restart: async () => {
-    await fetch(`${API_BASE}/server/restart`, { method: 'POST' })
+    set({ restarting: true })
+    try {
+      await fetchWithAuth(`${API_BASE}/server/restart`, { method: 'POST' })
+    } catch { /* 重启时连接会断开 */ }
+    // 轮询等待新服务器就绪，然后刷新页面
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 1000))
+      try {
+        const res = await fetch(`${API_BASE}/admin/status`)
+        if (res.ok) {
+          window.location.reload()
+          return
+        }
+      } catch { /* 服务器还没起来 */ }
+    }
+    set({ restarting: false })
   },
 
   updateConfig: async (update) => {
-    await fetch(`${API_BASE}/server/config`, {
+    await fetchWithAuth(`${API_BASE}/server/config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -104,13 +132,13 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   clearLogs: async () => {
-    await fetch(`${API_BASE}/server/logs`, { method: 'DELETE' })
+    await fetchWithAuth(`${API_BASE}/server/logs`, { method: 'DELETE' })
     set({ logs: [] })
   },
 
   startSdkUpdate: () => {
     set({ sdkUpdateProgress: { step: 'stopping', message: '准备更新...' } })
-    fetch(`${API_BASE}/sdk/update`, { method: 'POST' }).then(async (res) => {
+    fetchWithAuth(`${API_BASE}/sdk/update`, { method: 'POST' }).then(async (res) => {
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       if (!reader) return
@@ -134,6 +162,10 @@ export const useServerStore = create<ServerState>((set, get) => ({
                 }
                 saveLastUpdateResult(result)
                 set({ lastUpdateResult: result })
+                // 更新成功后刷新版本显示
+                if (progress.step === 'done') {
+                  get().fetchSdkVersion()
+                }
               }
             } catch { /* ignore */ }
           }

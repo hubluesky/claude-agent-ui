@@ -23,6 +23,23 @@ function parseCommandXml(text: string): string | null {
   return args ? `${name} ${args}` : name
 }
 
+/** Parse <task-notification> XML block into structured data */
+interface TaskNotificationData {
+  taskId: string
+  status: string
+  summary: string
+  outputFile?: string
+}
+function parseTaskNotificationXml(text: string): TaskNotificationData | null {
+  if (!text.includes('<task-notification>')) return null
+  const taskId = text.match(/<task-id>\s*(.*?)\s*<\/task-id>/)?.[1] ?? ''
+  const status = text.match(/<status>\s*(.*?)\s*<\/status>/)?.[1] ?? 'completed'
+  const summary = text.match(/<summary>\s*(.*?)\s*<\/summary>/s)?.[1] ?? ''
+  const outputFile = text.match(/<output-file>\s*(.*?)\s*<\/output-file>/)?.[1]
+  if (!taskId && !summary) return null
+  return { taskId, status, summary, outputFile }
+}
+
 /** Strip SDK internal XML tags (local-command-stdout, etc.) and check if text is a compact summary */
 function classifyText(text: string): 'compact-summary' | 'internal-output' | 'normal' {
   if (!text) return 'normal'
@@ -69,7 +86,7 @@ export function isMessageVisible(message: AgentMessage): boolean {
     if (sub === 'api_retry') return true
     if (sub === 'status' && (message as any).status === 'compacting') return true
     if (sub === 'task_started') return true
-    if (sub === 'task_progress') return !!(message as any).content || !!(message as any).message
+    if (sub === 'task_progress') return !!(message as any).description || !!(message as any).summary || !!(message as any).content || !!(message as any).message
     if (sub === 'task_notification') return true
     if (sub === 'local_command_output') return !!((message as any).output ?? (message as any).content)
     return false
@@ -124,6 +141,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                     </details>
                   )
                 }
+                const assistantTaskNotif = parseTaskNotificationXml(block.text)
+                if (assistantTaskNotif) return <TaskNotificationCard key={i} data={assistantTaskNotif} />
                 return <div key={i} className="text-sm text-[var(--text-primary)] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
               }
               if (block.type === 'thinking' || block.type === 'redacted_thinking') {
@@ -232,27 +251,49 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       return <AgentCard agentId={taskId} agentName={agentName} />
     }
     if (sub === 'task_progress') {
-      const content = (message as any).content ?? (message as any).message ?? ''
+      // SDK sends: description, summary, last_tool_name, usage
+      const content = (message as any).description ?? (message as any).summary ?? (message as any).content ?? (message as any).message ?? ''
       if (!content) return null
+      const lastTool = (message as any).last_tool_name
+      const usage = (message as any).usage
       return (
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10 pl-5 border-l-2 border-[var(--purple-subtle-border)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--purple)]" />
-          <span className="truncate">{typeof content === 'string' ? content.slice(0, 120) : JSON.stringify(content).slice(0, 120)}</span>
+          <span className="truncate flex-1">{typeof content === 'string' ? content.slice(0, 150) : JSON.stringify(content).slice(0, 150)}</span>
+          {lastTool && <span className="text-[10px] text-[var(--purple)] bg-[#a855f71a] px-1.5 py-0.5 rounded shrink-0">{lastTool}</span>}
+          {usage?.duration_ms != null && <span className="text-[10px] text-[var(--text-dim)] tabular-nums shrink-0">{(usage.duration_ms / 1000).toFixed(1)}s</span>}
         </div>
       )
     }
     if (sub === 'task_notification') {
       const status = (message as any).status ?? 'completed'
       const isError = status === 'error' || status === 'failed'
+      const agentName = (message as any).agent_name ?? (message as any).task_id ?? 'subagent'
+      const summary = (message as any).summary ?? ''
+      const usage = (message as any).usage
+      const durationMs = usage?.duration_ms ?? (message as any).duration_ms
+      const toolCount = usage?.tool_uses ?? (message as any).tool_count
       return (
-        <div className={`flex items-center gap-2 text-xs ml-10 px-3 py-2 rounded-md ${
-          isError ? 'text-[var(--error)] bg-[var(--error-subtle-bg)] border border-[var(--error-subtle-border)]'
-            : 'text-[#a3e635] bg-[var(--success-subtle-bg)] border border-[var(--success-subtle-border)]'
+        <div className={`ml-10 rounded-md border overflow-hidden ${
+          isError ? 'border-[var(--error-subtle-border)]' : 'border-[var(--success-subtle-border)]'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isError ? 'bg-[var(--error)]' : 'bg-[#a3e635]'}`} />
-          {(message as any).agent_name ?? 'subagent'} {status}
-          {(message as any).duration_ms ? ` — ${((message as any).duration_ms / 1000).toFixed(1)}s` : ''}
-          {(message as any).tool_count ? `, ${(message as any).tool_count} tools` : ''}
+          {/* Status header */}
+          <div className={`flex items-center gap-2 text-xs px-3 py-2 ${
+            isError ? 'text-[var(--error)] bg-[var(--error-subtle-bg)]'
+              : 'text-[#a3e635] bg-[var(--success-subtle-bg)]'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isError ? 'bg-[var(--error)]' : 'bg-[#a3e635]'}`} />
+            <span className="font-semibold">{agentName}</span>
+            <span>{status}</span>
+            {durationMs != null && <span className="text-[10px] opacity-70 tabular-nums">— {(durationMs / 1000).toFixed(1)}s</span>}
+            {toolCount != null && <span className="text-[10px] opacity-70">{toolCount} tools</span>}
+          </div>
+          {/* Summary content */}
+          {summary && (
+            <div className="px-3 py-2 text-xs text-[var(--text-secondary)] leading-relaxed overflow-hidden border-t border-[var(--border)]">
+              <MarkdownRenderer content={summary} />
+            </div>
+          )}
         </div>
       )
     }
@@ -555,6 +596,45 @@ function StopTaskButton({ taskId }: { taskId: string }) {
   )
 }
 
+// ---- Task Notification Card ----
+
+function TaskNotificationCard({ data }: { data: TaskNotificationData }) {
+  const isError = data.status === 'failed' || data.status === 'error'
+  const isCompleted = data.status === 'completed'
+  const dotClass = isError ? 'bg-[var(--error)]'
+    : isCompleted ? 'bg-[#a3e635]'
+    : 'bg-[var(--warning)]'
+  const borderClass = isError ? 'border-[var(--error-subtle-border)]'
+    : isCompleted ? 'border-[var(--success-subtle-border)]'
+    : 'border-[var(--warning-subtle-border)]'
+  const headerBg = isError ? 'bg-[var(--error-subtle-bg)]'
+    : isCompleted ? 'bg-[var(--success-subtle-bg)]'
+    : 'bg-[var(--warning-subtle-bg)]'
+  const headerText = isError ? 'text-[var(--error)]'
+    : isCompleted ? 'text-[#a3e635]'
+    : 'text-[var(--warning)]'
+
+  return (
+    <div className={`rounded-md border overflow-hidden ${borderClass}`}>
+      <div className={`flex items-center gap-2 px-3 py-2 ${headerBg}`}>
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
+        <svg className={`w-3.5 h-3.5 shrink-0 ${headerText}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+        </svg>
+        <span className={`text-xs font-semibold ${headerText}`}>
+          {data.status === 'completed' ? '后台任务完成' : data.status === 'failed' ? '后台任务失败' : `后台任务 ${data.status}`}
+        </span>
+        {data.taskId && <span className={`text-[10px] ${headerText} opacity-60 ml-auto font-mono`}>{data.taskId}</span>}
+      </div>
+      {data.summary && (
+        <div className="px-3 py-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+          {data.summary}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- Prompt Suggestion Card ----
 
 function PromptSuggestionCard({ suggestion }: { suggestion: string }) {
@@ -612,6 +692,8 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
                   </details>
                 )
               }
+              const taskNotif = parseTaskNotificationXml(block.text)
+              if (taskNotif) return <TaskNotificationCard key={i} data={taskNotif} />
               const cmdText = parseCommandXml(block.text)
               if (cmdText) {
                 return (
@@ -649,6 +731,8 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
         </details>
       )
     }
+    const rawTaskNotif = parseTaskNotificationXml(rawText)
+    if (rawTaskNotif) return <TaskNotificationCard data={rawTaskNotif} />
     const cmdText = parseCommandXml(rawText)
     if (cmdText) {
       return (

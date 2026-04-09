@@ -5,9 +5,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import type { FastifyRequest } from 'fastify'
 
-// JWT secret：每次启动随机生成（重启后所有会话失效，对本地工具是合理的）
-const JWT_SECRET = crypto.randomUUID()
-const JWT_EXPIRES = '7d'
+const JWT_EXPIRES = '12h'
 const COOKIE_NAME = 'claude-admin-token'
 const BCRYPT_ROUNDS = 10
 
@@ -18,33 +16,43 @@ function getAuthFilePath(): string {
 }
 
 interface AuthData {
-  passwordHash: string
+  passwordHash?: string
+  jwtSecret?: string
 }
 
 export class AuthManager {
   private passwordHash: string | null = null
+  private jwtSecret: string
   private filePath: string
 
   constructor() {
     this.filePath = getAuthFilePath()
-    this.loadPassword()
+    this.jwtSecret = '' // will be set in load
+    this.load()
   }
 
-  private loadPassword(): void {
+  private load(): void {
     try {
       if (existsSync(this.filePath)) {
         const data: AuthData = JSON.parse(readFileSync(this.filePath, 'utf-8'))
         this.passwordHash = data.passwordHash ?? null
+        this.jwtSecret = data.jwtSecret ?? ''
       }
     } catch {
       this.passwordHash = null
     }
+    // 无 secret 时生成并持久化
+    if (!this.jwtSecret) {
+      this.jwtSecret = crypto.randomUUID()
+      this.save()
+    }
   }
 
-  private savePassword(): void {
-    if (this.passwordHash) {
-      writeFileSync(this.filePath, JSON.stringify({ passwordHash: this.passwordHash } satisfies AuthData), 'utf-8')
-    }
+  private save(): void {
+    const data: AuthData = {}
+    if (this.passwordHash) data.passwordHash = this.passwordHash
+    if (this.jwtSecret) data.jwtSecret = this.jwtSecret
+    writeFileSync(this.filePath, JSON.stringify(data), 'utf-8')
   }
 
   hasPassword(): boolean {
@@ -53,7 +61,7 @@ export class AuthManager {
 
   async setPassword(password: string): Promise<void> {
     this.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
-    this.savePassword()
+    this.save()
   }
 
   async verifyPassword(password: string): Promise<boolean> {
@@ -70,20 +78,16 @@ export class AuthManager {
 
   resetPassword(): void {
     this.passwordHash = null
-    try {
-      if (existsSync(this.filePath)) {
-        writeFileSync(this.filePath, '{}', 'utf-8')
-      }
-    } catch { /* ignore */ }
+    this.save()
   }
 
   signToken(): string {
-    return jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: JWT_EXPIRES })
+    return jwt.sign({ role: 'admin' }, this.jwtSecret, { expiresIn: JWT_EXPIRES })
   }
 
   verifyToken(token: string): boolean {
     try {
-      jwt.verify(token, JWT_SECRET)
+      jwt.verify(token, this.jwtSecret)
       return true
     } catch {
       return false

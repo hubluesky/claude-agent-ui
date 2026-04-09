@@ -20,6 +20,9 @@ export interface ConnectionInfo {
   sessionId: string | null
   connectedAt: string
   hasLock: boolean
+  userAgent: string | null
+  ip: string | null
+  projectName: string | null
 }
 
 /** GET /api/sdk/version 响应 */

@@ -29,30 +29,30 @@ export function ViewModeToggle() {
   }, [])
 
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="flex bg-[var(--bg-primary)] rounded-[5px] border border-[var(--border)] overflow-hidden">
-        <button
-          onClick={() => handleSwitch('single')}
-          className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
-            viewMode === 'single'
-              ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-          }`}
-        >
-          Single
-        </button>
-        <button
-          onClick={() => handleSwitch('multi')}
-          className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
-            viewMode === 'multi'
-              ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-          }`}
-        >
-          Multi
-        </button>
-      </div>
-      <span className="text-[8px] text-[var(--text-dim)] font-mono">{MOD_LABEL}+~</span>
+    <div
+      className="flex bg-[var(--bg-primary)] rounded-[5px] border border-[var(--border)] overflow-hidden"
+      title={`${MOD_LABEL}+~ 切换`}
+    >
+      <button
+        onClick={() => handleSwitch('single')}
+        className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
+          viewMode === 'single'
+            ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+        }`}
+      >
+        Single
+      </button>
+      <button
+        onClick={() => handleSwitch('multi')}
+        className={`px-2 py-0.5 text-[9px] border-none cursor-pointer font-inherit transition-colors ${
+          viewMode === 'multi'
+            ? 'bg-[var(--accent-subtle-bg)] text-[var(--accent)] font-semibold'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+        }`}
+      >
+        Multi
+      </button>
     </div>
   )
 }

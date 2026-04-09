@@ -62,15 +62,23 @@ export class WSHub {
   unregister(connectionId: string): void {
     const client = this.clients.get(connectionId)
     if (!client) return
-    if (client.sessionId) {
-      this.leaveSession(connectionId)
+    // Remove from ALL subscribed sessions (primary + multi-mode subscriptions)
+    for (const [sessionId, subs] of this.sessionSubscribers) {
+      if (subs.delete(connectionId) && subs.size === 0) {
+        this.sessionSubscribers.delete(sessionId)
+      }
     }
     this.clients.delete(connectionId)
   }
 
-  joinSession(connectionId: string, sessionId: string): void {
+  /** Returns true if client was already in this session (no-op). */
+  joinSession(connectionId: string, sessionId: string): boolean {
     const client = this.clients.get(connectionId)
-    if (!client) return
+    if (!client) return false
+    // Already subscribed to this exact session — skip the leave/rejoin cycle.
+    // Leaving then re-joining causes a brief gap where broadcasts are missed,
+    // and streaming events (broadcastRaw, not buffered) are permanently lost.
+    if (client.sessionId === sessionId) return true
     if (client.sessionId) {
       this.leaveSession(connectionId)
     }
@@ -79,6 +87,7 @@ export class WSHub {
       this.sessionSubscribers.set(sessionId, new Set())
     }
     this.sessionSubscribers.get(sessionId)!.add(connectionId)
+    return false
   }
 
   leaveSession(connectionId: string): void {
@@ -92,6 +101,28 @@ export class WSHub {
       }
     }
     client.sessionId = null
+  }
+
+  /** Subscribe to a session WITHOUT leaving other subscriptions.
+   *  Used by Multi mode panels to watch multiple sessions simultaneously. */
+  subscribeSession(connectionId: string, sessionId: string): void {
+    const client = this.clients.get(connectionId)
+    if (!client) return
+    if (!this.sessionSubscribers.has(sessionId)) {
+      this.sessionSubscribers.set(sessionId, new Set())
+    }
+    this.sessionSubscribers.get(sessionId)!.add(connectionId)
+  }
+
+  /** Unsubscribe from one session (Multi mode). Does NOT affect the primary sessionId. */
+  unsubscribeSession(connectionId: string, sessionId: string): void {
+    const subs = this.sessionSubscribers.get(sessionId)
+    if (subs) {
+      subs.delete(connectionId)
+      if (subs.size === 0) {
+        this.sessionSubscribers.delete(sessionId)
+      }
+    }
   }
 
   /** Broadcast to all session subscribers AND buffer the message. Returns assigned seq. */

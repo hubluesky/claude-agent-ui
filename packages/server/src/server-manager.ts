@@ -1,10 +1,16 @@
 import type { ServerStatus, ConnectionInfo } from '@claude-agent-ui/shared'
 import type { WSHub } from './ws/hub.js'
 import type { LockManager } from './ws/lock.js'
+import type { SessionManager } from './agent/manager.js'
 import type { AppConfig } from './config.js'
+import { basename } from 'path'
+import { getSessionInfo } from '@anthropic-ai/claude-agent-sdk'
 
 export class ServerManager {
   private startedAt = new Date()
+  private sessionManager: SessionManager | null = null
+  /** sessionId → projectName 缓存（避免重复读 JSONL） */
+  private sessionProjectCache = new Map<string, string>()
 
   constructor(
     private config: AppConfig,
@@ -12,14 +18,50 @@ export class ServerManager {
     private lockManager: LockManager,
   ) {}
 
-  getStatus(): ServerStatus {
+  setSessionManager(sm: SessionManager): void {
+    this.sessionManager = sm
+  }
+
+  private async resolveProjectName(sessionId: string): Promise<string | null> {
+    // 先查缓存
+    const cached = this.sessionProjectCache.get(sessionId)
+    if (cached) return cached
+    // 再查活跃会话
+    if (this.sessionManager) {
+      const active = this.sessionManager.getActive(sessionId)
+      if (active) {
+        const name = basename(active.projectCwd)
+        this.sessionProjectCache.set(sessionId, name)
+        return name
+      }
+    }
+    // 最后从 SDK 读取会话信息
+    try {
+      const info = await getSessionInfo(sessionId)
+      const cwd = (info as any).cwd ?? ''
+      if (cwd) {
+        const name = basename(cwd)
+        this.sessionProjectCache.set(sessionId, name)
+        return name
+      }
+    } catch { /* session not found */ }
+    return null
+  }
+
+  async getStatus(): Promise<ServerStatus> {
     const now = Date.now()
-    const connections: ConnectionInfo[] = this.wsHub.getAllConnections().map((c) => ({
-      connectionId: c.connectionId,
-      sessionId: c.sessionId,
-      connectedAt: c.connectedAt.toISOString(),
-      hasLock: c.sessionId ? this.lockManager.getHolder(c.sessionId) === c.connectionId : false,
-    }))
+    const rawConns = this.wsHub.getAllConnections()
+    const connections: ConnectionInfo[] = await Promise.all(
+      rawConns.map(async (c) => ({
+        connectionId: c.connectionId,
+        sessionId: c.sessionId,
+        connectedAt: c.connectedAt.toISOString(),
+        hasLock: c.sessionId ? this.lockManager.getHolder(c.sessionId) === c.connectionId : false,
+        userAgent: c.userAgent,
+        ip: c.ip,
+        projectName: c.sessionId ? await this.resolveProjectName(c.sessionId) : null,
+      }))
+    )
 
     return {
       status: 'running',
