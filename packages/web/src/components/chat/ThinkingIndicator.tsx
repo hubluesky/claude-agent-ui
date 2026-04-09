@@ -5,8 +5,13 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import type { SpinnerMode } from '../../stores/sessionContainerStore'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 
-const SHOW_TOKENS_AFTER_MS = 30_000
+const SHOW_TOKENS_AFTER_MS = 5_000
 const THINKING_DISPLAY_MIN_MS = 2_000
+const VERB_ROTATE_INTERVAL_MS = 4_000
+
+// Braille spinner frames for smooth rotation
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPINNER_INTERVAL_MS = 80
 
 interface SpinnerProps {
   spinnerMode: SpinnerMode
@@ -35,10 +40,12 @@ export function ThinkingIndicator({
   responseLength,
   messages,
 }: SpinnerProps) {
-  const [randomVerb] = useState(() => getRandomVerb())
+  const [verb, setVerb] = useState(() => getRandomVerb())
   const [now, setNow] = useState(() => Date.now())
   const [displayedTokens, setDisplayedTokens] = useState(0)
   const [thinkingStatus, setThinkingStatus] = useState<ThinkingStatus>(null)
+  const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const [verbOpacity, setVerbOpacity] = useState(1)
 
   const thinkingStartRef = useRef<number | null>(null)
   const thinkingStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -49,6 +56,26 @@ export function ThinkingIndicator({
   // Elapsed time ticker
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Braille spinner animation
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSpinnerFrame(f => (f + 1) % SPINNER_FRAMES.length)
+    }, SPINNER_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  // Verb rotation (only when no active task)
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVerbOpacity(0)
+      setTimeout(() => {
+        setVerb(getRandomVerb())
+        setVerbOpacity(1)
+      }, 200)
+    }, VERB_ROTATE_INTERVAL_MS)
     return () => clearInterval(id)
   }, [])
 
@@ -68,7 +95,6 @@ export function ThinkingIndicator({
         const elapsed = Date.now() - start
         const remaining = Math.max(0, THINKING_DISPLAY_MIN_MS - elapsed)
 
-        // Wait until at least THINKING_DISPLAY_MIN_MS has passed, then show "thought for Xs"
         thinkingStatusTimerRef.current = setTimeout(() => {
           const duration = thinkingEndTime != null
             ? thinkingEndTime - start
@@ -76,7 +102,6 @@ export function ThinkingIndicator({
           setThinkingStatus(duration)
           thinkingStartRef.current = null
 
-          // Show "thought for Xs" for 2 seconds then clear
           thinkingStatusTimerRef.current = setTimeout(() => {
             setThinkingStatus(null)
             thinkingStatusTimerRef.current = null
@@ -157,16 +182,17 @@ export function ThinkingIndicator({
   const nextTask = tasks.find(t => t.status === 'pending')
   const visibleTasks = tasks.filter(t => t.status !== 'done')
 
-  const verb = currentTask?.activeForm ?? currentTask?.subject ?? randomVerb
+  const displayVerb = currentTask?.activeForm ?? currentTask?.subject ?? verb
 
   // Build status parts
   const elapsedMs = requestStartTime != null ? now - requestStartTime : 0
   const statusParts: string[] = []
 
+  // Show elapsed time after a short delay
   if (elapsedMs >= SHOW_TOKENS_AFTER_MS) {
     statusParts.push(formatDuration(elapsedMs))
     if (displayedTokens > 0) {
-      statusParts.push(`↑ ${formatNumber(displayedTokens)} tokens`)
+      statusParts.push(`${formatNumber(displayedTokens)} tokens`)
     }
   }
 
@@ -195,9 +221,14 @@ export function ThinkingIndicator({
         <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
           <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
         </div>
-        <span className="text-sm text-[var(--purple)]">
-          <span className="mr-1">·</span>
-          {verb}…
+        <span className="text-sm text-[var(--purple)] font-mono w-3 text-center shrink-0">
+          {SPINNER_FRAMES[spinnerFrame]}
+        </span>
+        <span
+          className="text-sm text-[var(--purple)] transition-opacity duration-200"
+          style={{ opacity: currentTask ? 1 : verbOpacity }}
+        >
+          {displayVerb}…
         </span>
         {statusParts.length > 0 && (
           <span className="text-xs text-[var(--text-muted)]">

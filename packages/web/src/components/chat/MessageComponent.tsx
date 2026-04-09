@@ -216,6 +216,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const blockType = (message as any)._blockType
     const content = (message as any)._content ?? ''
     if (blockType === 'text') {
+      if (!content) return null
       return (
         <div className="flex gap-3 items-start">
           <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">

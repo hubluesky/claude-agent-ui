@@ -208,8 +208,19 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
         </div>
       ))}
 
-      {/* Footer */}
-      {sessionStatus === 'running' && (
+      {/* Footer — derive visibility from messages: show when the last
+          non-system message is a user message or streaming block (i.e., still
+          waiting for a complete assistant response). No flags needed. */}
+      {sessionStatus === 'running' && (() => {
+        // Walk backward to find the last non-system message
+        for (let i = rawMessages.length - 1; i >= 0; i--) {
+          const t = (rawMessages[i] as any).type
+          if (t === 'system' || t === 'result') continue
+          // If last substantive message is user, optimistic, or streaming → show indicator
+          return t === 'user' || t === '_streaming_block'
+        }
+        return true // no messages yet → show
+      })() && (
         <div className="px-4 py-2.5">
           <ThinkingIndicator
             spinnerMode={spinnerMode}
