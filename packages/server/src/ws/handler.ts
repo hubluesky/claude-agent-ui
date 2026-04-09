@@ -446,6 +446,7 @@ export function createWsHandler(deps: HandlerDeps) {
     let realSessionId = sessionId
     let pendingUserPrompt = sessionId.startsWith('pending-') ? prompt : undefined
     let pendingContentBlocks = sessionId.startsWith('pending-') ? contentBlocks : undefined
+    let titleGenTriggered = false
 
     session.on('message', (msg: any) => {
       if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
@@ -540,6 +541,21 @@ export function createWsHandler(deps: HandlerDeps) {
       // Clear stream snapshot when final assistant message arrives
       if (msg.type === 'assistant') {
         wsHub.clearStreamSnapshot(realSessionId)
+
+        // Auto-generate title on first assistant message (don't wait for session complete)
+        if (!titleGenTriggered && !realSessionId.startsWith('pending-')) {
+          titleGenTriggered = true
+          maybeGenerateTitle(realSessionId).then((title) => {
+            if (title) {
+              sessionManager.invalidateSessionsCache(session.projectCwd)
+              wsHub.broadcast(realSessionId, {
+                type: 'session-title-updated',
+                sessionId: realSessionId,
+                title,
+              })
+            }
+          }).catch(() => {})
+        }
       }
 
       // Broadcast and buffer all other messages to ALL clients
@@ -661,17 +677,20 @@ export function createWsHandler(deps: HandlerDeps) {
       // Invalidate sessions cache so list queries reflect the completed session
       sessionManager.invalidateSessionsCache(session.projectCwd)
 
-      // Auto-generate title if none exists (fire-and-forget, non-blocking)
-      maybeGenerateTitle(realSessionId).then((title) => {
-        if (title) {
-          sessionManager.invalidateSessionsCache(session.projectCwd)
-          wsHub.broadcast(realSessionId, {
-            type: 'session-title-updated',
-            sessionId: realSessionId,
-            title,
-          })
-        }
-      }).catch(() => {})
+      // Auto-generate title if not already triggered during streaming
+      if (!titleGenTriggered) {
+        titleGenTriggered = true
+        maybeGenerateTitle(realSessionId).then((title) => {
+          if (title) {
+            sessionManager.invalidateSessionsCache(session.projectCwd)
+            wsHub.broadcast(realSessionId, {
+              type: 'session-title-updated',
+              sessionId: realSessionId,
+              title,
+            })
+          }
+        }).catch(() => {})
+      }
     })
 
     session.on('error', (err) => {
@@ -1072,12 +1091,9 @@ export function createWsHandler(deps: HandlerDeps) {
   }
 
   function handleReconnect(connectionId: string, previousConnectionId: string) {
+    // Only migrate lock ownership — session join is handled by the client's
+    // resubscribeAll() to avoid duplicate buffer replays.
     lockManager.onReconnect(previousConnectionId, connectionId)
-
-    const oldClient = wsHub.getClient(previousConnectionId)
-    if (oldClient?.sessionId) {
-      wsHub.joinSession(connectionId, oldClient.sessionId)
-    }
   }
 
   /**

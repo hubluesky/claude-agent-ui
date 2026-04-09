@@ -275,24 +275,30 @@ class WebSocketManager {
     this.reconnectTimer = window.setTimeout(() => this.doConnect(), delay)
   }
 
-  /** On reconnect: resubscribe all active containers with their lastSeq */
+  /** On reconnect: resubscribe all active containers with their lastSeq.
+   *  Each session is only sent ONE request (join or subscribe, never both)
+   *  to prevent duplicate buffer replays from the server. */
   private resubscribeAll() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const { containers } = useSessionContainerStore.getState()
+    const activeId = useSessionStore.getState().currentSessionId
+
     for (const [sessionId, container] of containers) {
-      if (container.subscribed) {
-        const lastSeq = container.lastSeq
-        this.ws.send(JSON.stringify({ type: 'subscribe-session', sessionId, lastSeq } as any))
+      if (!container.subscribed) continue
+      const lastSeq = container.lastSeq
+
+      if (sessionId === activeId) {
+        // Active session: join (which also subscribes on server side)
+        this.ws.send(JSON.stringify({ type: 'join-session', sessionId, lastSeq }))
+      } else {
+        // Background session: subscribe only
+        this.ws.send(JSON.stringify({ type: 'subscribe-session', sessionId, lastSeq }))
       }
     }
 
-    // Also rejoin the active session
-    const sessState = useSessionStore.getState()
-    const activeId = sessState.currentSessionId
-    if (activeId && activeId !== '__new__') {
-      const container = containers.get(activeId)
-      const lastSeq = container?.lastSeq ?? 0
-      this.ws.send(JSON.stringify({ type: 'join-session', sessionId: activeId, lastSeq } as any))
+    // If active session wasn't in containers (edge case), still join it
+    if (activeId && activeId !== '__new__' && !containers.has(activeId)) {
+      this.ws.send(JSON.stringify({ type: 'join-session', sessionId: activeId, lastSeq: 0 }))
     }
   }
 
@@ -377,16 +383,13 @@ class WebSocketManager {
   // ════════════════════════════════════════════════════════════
 
   private handleMessage(msg: S2CMessage) {
-    // Track message sequence number for reconnection replay
+    // Track message sequence number for reconnection replay.
+    // The seq-based protocol guarantees no duplicates: server only sends
+    // seq > lastSeq, and resubscribeAll sends exactly one request per session.
     const seq = (msg as any)._seq as number | undefined
     if (seq != null) {
       const sessionId = (msg as any).sessionId as string | undefined
       if (sessionId) {
-        const container = store().containers.get(sessionId)
-        // Skip messages we've already processed (reconnection replay dedup)
-        if (container && seq <= container.lastSeq) {
-          return
-        }
         store().setLastSeq(sessionId, seq)
       }
     }
