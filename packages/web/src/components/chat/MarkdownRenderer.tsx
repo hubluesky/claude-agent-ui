@@ -26,6 +26,17 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
     }
   }, [children])
 
+  // Before measurement completes, always constrain maxHeight to prevent layout
+  // shift on mobile. Without this, a tall code block renders at full height on
+  // frame 1, then collapses to COLLAPSED_MAX_HEIGHT on frame 2 when useEffect
+  // fires — Virtuoso sees the item shrink and adjusts scrollPosition → flicker.
+  //
+  // By constraining from the start:
+  //   - Short blocks (< 240px): unaffected — natural height < maxHeight
+  //   - Tall blocks (> 240px): never exceed maxHeight, so no shrink on frame 2
+  const hasMeasured = fullHeight > 0
+  const shouldConstrain = !hasMeasured || isOverflowing
+
   const handleCopy = useCallback(() => {
     const text = codeRef.current?.textContent ?? ''
     navigator.clipboard.writeText(text).then(() => {
@@ -49,7 +60,7 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
         <pre
           ref={preRef}
           className="px-3 py-2.5 overflow-x-auto"
-          style={isOverflowing ? {
+          style={shouldConstrain ? {
             maxHeight: isCollapsed ? COLLAPSED_MAX_HEIGHT : fullHeight,
             overflow: isCollapsed ? 'hidden' : undefined,
             // Only animate after user clicks expand/collapse.
@@ -65,7 +76,7 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
             {children}
           </code>
         </pre>
-        {isCollapsed && isOverflowing && (
+        {isCollapsed && shouldConstrain && (
           <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[var(--bg-tertiary)] to-transparent pointer-events-none" />
         )}
       </div>

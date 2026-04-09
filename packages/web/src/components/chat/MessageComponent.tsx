@@ -161,8 +161,16 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                   </details>
                 )
               }
-              if (block.type === 'tool_use' || block.type === 'server_tool_use') return <ToolUseBlock key={i} block={block} />
-              if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return <ToolResultBlock key={i} block={block} />
+              if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+                if (block.name === 'TodoWrite') return <TodoWriteBlock key={i} block={block} />
+                return <ToolUseBlock key={i} block={block} />
+              }
+              if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') {
+                // Hide tool_result for TodoWrite — the checklist already shows all info
+                const prevBlock = contentBlocks[i - 1]
+                if (prevBlock && (prevBlock.type === 'tool_use' || prevBlock.type === 'server_tool_use') && prevBlock.name === 'TodoWrite') return null
+                return <ToolResultBlock key={i} block={block} />
+              }
               return null
             })}
           </div>
@@ -668,7 +676,13 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
       return (
         <>
           {content.map((block: any, i: number) => {
-            if (block.type === 'tool_result') return <ToolResultBlock key={i} block={block} />
+            if (block.type === 'tool_result') {
+              // Hide TodoWrite results — the checklist already shows all info
+              const text = typeof block.content === 'string' ? block.content
+                : Array.isArray(block.content) ? block.content.map((c: any) => c.text ?? '').join('') : ''
+              if (text.startsWith('Todos have been modified')) return null
+              return <ToolResultBlock key={i} block={block} />
+            }
             if (block.type === 'image' && block.source?.type === 'base64') {
               const src = `data:${block.source.media_type};base64,${block.source.data}`
               return (
@@ -767,6 +781,46 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
   )
 }
 
+
+// ---- TodoWrite Block (VSCode-style checklist) ----
+
+function TodoWriteBlock({ block }: { block: any }) {
+  const todos = (block.input?.todos as Array<{ content: string; status: string }>) ?? []
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-2 py-1">
+        <div className="w-2 h-2 rounded-full bg-[var(--success)] shrink-0" />
+        <span className="text-sm font-semibold text-[var(--text-primary)]">Update Todos</span>
+      </div>
+      <div className="pl-4 space-y-0.5">
+        {todos.map((todo, i) => (
+          <div key={i} className="flex items-start gap-2 py-0.5">
+            {todo.status === 'completed' ? (
+              <svg className="w-4 h-4 shrink-0 mt-0.5 text-[var(--success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : todo.status === 'in_progress' ? (
+              <span className="w-4 h-4 shrink-0 mt-0.5 flex items-center justify-center text-[var(--info)] font-bold text-sm leading-none">*</span>
+            ) : (
+              <svg className="w-4 h-4 shrink-0 mt-0.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+              </svg>
+            )}
+            <span className={`text-sm leading-relaxed ${
+              todo.status === 'completed'
+                ? 'line-through text-[var(--text-muted)]'
+                : todo.status === 'in_progress'
+                  ? 'font-semibold text-[var(--text-primary)]'
+                  : 'text-[var(--text-secondary)]'
+            }`}>
+              {todo.content}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ---- Tool Use Block ----
 

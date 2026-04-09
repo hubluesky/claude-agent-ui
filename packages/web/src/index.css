@@ -129,21 +129,22 @@ html, body, #root {
   isolation: isolate;
 }
 
-/* ---- Mobile scroll flicker prevention ---- */
+/* ---- Mobile scroll stability ---- */
 
-/* Virtuoso scroll container: GPU-accelerated compositing layer */
+/*
+ * Previous approach used will-change:transform + contain:layout style paint.
+ * On mobile, these CAUSE flicker rather than prevent it:
+ *   - will-change:transform forces a GPU compositing layer that must be
+ *     recomposited every time Virtuoso adds/removes items during scroll.
+ *   - contain:paint creates a paint boundary per item; when a new item first
+ *     enters the viewport the boundary initializes before content paints → flash.
+ *
+ * New approach: let the browser's default compositor handle scroll. Only use
+ * overflow-anchor to stabilize scroll position when items above the viewport
+ * change size (Chrome/Edge; Safari ignores this harmlessly).
+ */
 [data-virtuoso-scroller] {
-  -webkit-overflow-scrolling: touch;
-  will-change: transform;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
-
-/* Each Virtuoso list item: paint containment to isolate repaints */
-[data-virtuoso-scroller] [data-item-index] {
-  contain: layout style paint;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
+  overflow-anchor: auto;
 }
 
 /* Continuous animations: use transform/opacity only (compositor-friendly).
