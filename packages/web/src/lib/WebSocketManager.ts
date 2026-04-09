@@ -44,7 +44,7 @@ class WebSocketManager {
 
   // ── Heartbeat ────────────────────────────────────────────────
   private heartbeatTimer = 0
-  private readonly HEARTBEAT_TIMEOUT = 30_000
+  private readonly HEARTBEAT_TIMEOUT = 90_000 // 3x server ping interval (30s) to tolerate delays
 
   // ── Reconnection ─────────────────────────────────────────────
   private reconnectTimer = 0
@@ -143,10 +143,6 @@ class WebSocketManager {
 
   releaseLock(sessionId: string) {
     this.send({ type: 'release-lock', sessionId })
-  }
-
-  claimLock(sessionId: string) {
-    this.send({ type: 'claim-lock', sessionId })
   }
 
   setMode(sessionId: string, mode: string) {
@@ -662,7 +658,7 @@ class WebSocketManager {
   }
 
   private handleFinalAssistantMessage(sessionId: string, agentMsg: AgentMessage) {
-    const s = store()
+    let s = store()
     const container = s.containers.get(sessionId)
     if (!container) return
 
@@ -678,6 +674,10 @@ class WebSocketManager {
       streamState.pendingDeltaText = ''
       s.appendStreamingText(sessionId, text)
     }
+
+    // Re-read latest state after flush — the flush may have created a new
+    // containers Map, and we must read from that to avoid overwriting it.
+    s = store()
 
     const finalMsg = agentMsg as any
     const apiId = finalMsg.message?.id
@@ -780,6 +780,9 @@ class WebSocketManager {
       nextContainers.set(sessionId, { ...c, messages: [...cleaned, agentMsg] })
       useSessionContainerStore.setState({ containers: nextContainers })
     }
+
+    // Clear stream state so next turn starts fresh
+    streamState.clear()
   }
 
   private handleToolApprovalRequest(msg: any) {
@@ -879,17 +882,20 @@ class WebSocketManager {
       : amIHolder ? 'locked_self' : 'locked_other'
     s.setLockStatus(sessionId, lockStatus, msg.holderId ?? null)
 
-    // Sync readonly flag on pending requests when lock ownership changes
+    // idle → everyone can interact (readonly=false)
+    // locked_self → I can interact (readonly=false)
+    // locked_other → I cannot interact (readonly=true)
+    const readonly = lockStatus === 'locked_other'
     const container = s.containers.get(sessionId)
     if (!container) return
     if (container.pendingAskUser) {
-      s.setAskUser(sessionId, { ...container.pendingAskUser, readonly: !amIHolder })
+      s.setAskUser(sessionId, { ...container.pendingAskUser, readonly })
     }
     if (container.pendingApproval) {
-      s.setApproval(sessionId, { ...container.pendingApproval, readonly: !amIHolder })
+      s.setApproval(sessionId, { ...container.pendingApproval, readonly })
     }
     if (container.pendingPlanApproval) {
-      s.setPlanApproval(sessionId, { ...container.pendingPlanApproval, readonly: !amIHolder })
+      s.setPlanApproval(sessionId, { ...container.pendingPlanApproval, readonly })
     }
   }
 

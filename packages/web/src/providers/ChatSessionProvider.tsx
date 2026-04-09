@@ -160,10 +160,6 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
         if (sessionId && sessionId !== '__new__') wsManager.abort(sessionId)
       },
 
-      claimLock() {
-        if (sessionId && sessionId !== '__new__') wsManager.claimLock(sessionId)
-      },
-
       releaseLock() {
         if (sessionId && sessionId !== '__new__') wsManager.releaseLock(sessionId)
       },

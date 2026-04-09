@@ -72,7 +72,6 @@ export interface ChatSessionContextValue {
   respondAskUser(requestId: string, answers: Record<string, string>): void
   respondPlanApproval(requestId: string, decision: PlanApprovalDecisionType, feedback?: string): void
   abort(): void
-  claimLock(): void
   releaseLock(): void
   setPlanModalOpen(open: boolean): void
   getContextUsage(): void

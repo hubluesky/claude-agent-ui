@@ -86,11 +86,6 @@ export interface C2S_ReleaseLock {
   sessionId: string
 }
 
-export interface C2S_ClaimLock {
-  type: 'claim-lock'
-  sessionId: string
-}
-
 export interface C2S_StopTask {
   type: 'stop-task'
   sessionId: string
@@ -134,6 +129,7 @@ export interface S2C_AgentMessage {
 
 export interface S2C_ToolApprovalRequest {
   type: 'tool-approval-request'
+  sessionId: string
   requestId: string
   toolName: string
   toolInput: Record<string, unknown>
@@ -148,12 +144,14 @@ export interface S2C_ToolApprovalRequest {
 
 export interface S2C_ToolApprovalResolved {
   type: 'tool-approval-resolved'
+  sessionId: string
   requestId: string
   decision: { behavior: 'allow' | 'deny'; message?: string }
 }
 
 export interface S2C_AskUserRequest {
   type: 'ask-user-request'
+  sessionId: string
   requestId: string
   questions: AskUserQuestion[]
   readonly: boolean
@@ -161,6 +159,7 @@ export interface S2C_AskUserRequest {
 
 export interface S2C_AskUserResolved {
   type: 'ask-user-resolved'
+  sessionId: string
   requestId: string
   answers: Record<string, string>
 }
@@ -220,6 +219,7 @@ export interface S2C_PlanApproval {
 
 export interface S2C_PlanApprovalResolved {
   type: 'plan-approval-resolved'
+  sessionId: string
   requestId: string
   decision: string
 }
@@ -403,7 +403,6 @@ export type C2SMessage =
   | C2S_UnsubscribeSession
   | C2S_ResolvePlanApproval
   | C2S_ReleaseLock
-  | C2S_ClaimLock
   | C2S_StopTask
   | C2S_SetModel
   | C2S_ForkSession

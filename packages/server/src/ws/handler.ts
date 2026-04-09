@@ -103,9 +103,6 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'release-lock':
         handleReleaseLock(connectionId, msg.sessionId)
         break
-      case 'claim-lock':
-        // No-op: claim-lock is removed in session-lifecycle lock model
-        break
       case 'leave-session':
         wsHub.leaveSession(connectionId)
         break

@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
-import { useChatSession } from '../../providers/ChatSessionContext'
-import { useClaimLock } from '../../hooks/useClaimLock'
 
 export type ApprovalOptionColor = 'green' | 'amber' | 'purple' | 'gray' | 'red'
 
@@ -52,13 +50,7 @@ const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: stri
 }
 
 export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig; compact?: boolean }) {
-  const { lockStatus } = useChatSession()
-  const handleClaim = useClaimLock()
-
-  const readonly = config.readonly
-  const isIdle = lockStatus === 'idle'
-  const canClaim = readonly && isIdle
-  const canInteract = !readonly || canClaim
+  const canInteract = !config.readonly
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [feedback, setFeedback] = useState('')
@@ -77,9 +69,8 @@ export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig
 
   const fireDecision = useCallback((key: string, extra?: string) => {
     if (!canInteract) return
-    if (canClaim) handleClaim()
     config.onDecision(key, extra)
-  }, [canInteract, canClaim, handleClaim, config])
+  }, [canInteract, config])
 
   const handleOptionClick = useCallback((opt: ApprovalOption) => {
     if (!canInteract) return
@@ -253,7 +244,6 @@ export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig
             ) : (
               <button
                 onClick={() => {
-                  if (canClaim) handleClaim()
                   setShowOther(true)
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left border border-dashed border-[var(--border)] hover:bg-[var(--border-half)] transition-colors"
