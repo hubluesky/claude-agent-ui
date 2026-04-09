@@ -584,6 +584,26 @@ class WebSocketManager {
       if (evt.index === 0) {
         streamState.accumulator.clear()
       }
+
+      // ── Spinner timing ──
+      if (streamState.requestStartTime === null) {
+        streamState.requestStartTime = Date.now()
+      }
+      const blockType = evt.content_block?.type ?? 'text'
+      if (blockType === 'thinking') {
+        streamState.spinnerMode = 'thinking'
+        if (streamState.thinkingStartTime === null) {
+          streamState.thinkingStartTime = Date.now()
+        }
+      } else if (blockType === 'text') {
+        if (streamState.thinkingStartTime !== null && streamState.thinkingEndTime === null) {
+          streamState.thinkingEndTime = Date.now()
+        }
+        streamState.spinnerMode = 'responding'
+      } else if (blockType === 'tool_use' || blockType === 'server_tool_use') {
+        streamState.spinnerMode = 'tool-use'
+      }
+
       streamState.accumulator.set(evt.index, {
         blockType: evt.content_block?.type ?? 'text',
         content: '',
@@ -613,15 +633,16 @@ class WebSocketManager {
       }
     } else if (evt.type === 'content_block_delta') {
       const delta = evt.delta
+      const deltaText = delta?.type === 'text_delta' ? (delta.text ?? '')
+        : delta?.type === 'thinking_delta' ? (delta.thinking ?? '') : ''
       const acc = streamState.accumulator.get(evt.index)
       if (acc) {
-        acc.content += delta?.type === 'text_delta' ? (delta.text ?? '')
-          : delta?.type === 'thinking_delta' ? (delta.thinking ?? '') : ''
+        acc.content += deltaText
       }
+      streamState.responseLength += deltaText.length
 
       // Accumulate in pendingDeltaText for RAF batching
-      streamState.pendingDeltaText += delta?.type === 'text_delta' ? (delta.text ?? '')
-        : delta?.type === 'thinking_delta' ? (delta.thinking ?? '') : ''
+      streamState.pendingDeltaText += deltaText
 
       if (streamState.pendingDeltaRafId === null) {
         streamState.pendingDeltaRafId = requestAnimationFrame(() => {
