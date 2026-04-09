@@ -104,13 +104,13 @@ export function PlanModal() {
             <div className="flex gap-2 items-center flex-wrap">
               <button
                 onClick={() => handleDecision('clear-and-accept')}
-                className="px-3 py-1.5 text-[11px] font-semibold text-[#22c55e] bg-[#22c55e15] border border-[#22c55e30] rounded-md hover:bg-[#22c55e25] transition-colors"
+                className="px-3 py-1.5 text-[11px] font-semibold text-[var(--success)] bg-[var(--success-subtle-bg)] border border-[var(--success-subtle-border)] rounded-md hover:bg-[var(--success-subtle-border)] transition-colors"
               >
                 清除上下文并自动接受
               </button>
               <button
                 onClick={() => handleDecision('auto-accept')}
-                className="px-3 py-1.5 text-[11px] font-medium text-[var(--accent)] bg-[#d9770615] border border-[#d9770630] rounded-md hover:bg-[#d9770625] transition-colors"
+                className="px-3 py-1.5 text-[11px] font-medium text-[var(--accent)] bg-[var(--accent-subtle-bg)] border border-[var(--accent-subtle-border)] rounded-md hover:bg-[var(--accent-hover-bg)] transition-colors"
               >
                 自动接受编辑
               </button>

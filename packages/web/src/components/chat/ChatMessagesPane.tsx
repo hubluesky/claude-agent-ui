@@ -176,7 +176,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
 
   if (isLoadingHistory) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#7c7872] text-sm">
+      <div className="flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm">
         Loading messages...
       </div>
     )
@@ -193,7 +193,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
 
       {/* Loading indicator */}
       {isLoadingMore && (
-        <p className="text-center text-xs text-[#7c7872] py-2">
+        <p className="text-center text-xs text-[var(--text-muted)] py-2">
           Loading earlier messages...
         </p>
       )}

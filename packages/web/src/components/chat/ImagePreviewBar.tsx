@@ -24,7 +24,7 @@ export function ImagePreviewBar({ images, onRemove }: ImagePreviewBarProps) {
         {images.map((img) => (
           <div
             key={img.id}
-            className="inline-flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--border)] rounded-md px-2.5 py-1 text-xs text-[#c4c0b8] cursor-pointer hover:border-[var(--text-dim)] transition-colors"
+            className="inline-flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--border)] rounded-md px-2.5 py-1 text-xs text-[var(--text-secondary)] cursor-pointer hover:border-[var(--text-dim)] transition-colors"
             onClick={() => setPreviewImage(img)}
           >
             <svg className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

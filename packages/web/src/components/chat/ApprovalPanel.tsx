@@ -44,11 +44,11 @@ export interface ApprovalPanelConfig {
 }
 
 const COLOR_CLASSES: Record<ApprovalOptionColor, { border: string; hoverBg: string; numBorder: string; numText: string; activeBg: string; activeBorder: string }> = {
-  green:  { border: 'border-[#22c55e30]', hoverBg: 'hover:bg-[#22c55e0f]', numBorder: 'border-[#22c55e50]', numText: 'text-[var(--success)]', activeBg: 'bg-[#22c55e15]', activeBorder: 'border-[#22c55e60]' },
-  amber:  { border: 'border-[#d9770630]', hoverBg: 'hover:bg-[#d977060f]', numBorder: 'border-[#d9770650]', numText: 'text-[var(--accent)]',  activeBg: 'bg-[#d9770615]', activeBorder: 'border-[#d9770660]' },
-  purple: { border: 'border-[#a855f730]', hoverBg: 'hover:bg-[#a855f70f]', numBorder: 'border-[#a855f750]', numText: 'text-[var(--purple)]',  activeBg: 'bg-[#a855f715]', activeBorder: 'border-[#a855f760]' },
+  green:  { border: 'border-[var(--success-subtle-border)]', hoverBg: 'hover:bg-[var(--success-subtle-bg)]', numBorder: 'border-[var(--success-subtle-border)]', numText: 'text-[var(--success)]', activeBg: 'bg-[var(--success-subtle-bg)]', activeBorder: 'border-[var(--success)]' },
+  amber:  { border: 'border-[var(--accent-subtle-border)]', hoverBg: 'hover:bg-[var(--accent-subtle-bg)]', numBorder: 'border-[var(--accent-subtle-border)]', numText: 'text-[var(--accent)]',  activeBg: 'bg-[var(--accent-hover-bg)]', activeBorder: 'border-[var(--accent)]' },
+  purple: { border: 'border-[var(--purple-subtle-border)]', hoverBg: 'hover:bg-[var(--purple-subtle-bg)]', numBorder: 'border-[var(--purple-subtle-border)]', numText: 'text-[var(--purple)]',  activeBg: 'bg-[var(--purple-subtle-bg)]', activeBorder: 'border-[var(--purple)]' },
   gray:   { border: 'border-[var(--border)]',   hoverBg: 'hover:bg-[var(--border-half)]', numBorder: 'border-[var(--border)]',   numText: 'text-[var(--text-muted)]',  activeBg: 'bg-[var(--border-half)]', activeBorder: 'border-[var(--text-dim)]' },
-  red:    { border: 'border-[#ef444430]',  hoverBg: 'hover:bg-[#ef44440f]', numBorder: 'border-[#ef444450]', numText: 'text-[#ef4444]',  activeBg: 'bg-[#ef444415]', activeBorder: 'border-[#ef444460]' },
+  red:    { border: 'border-[var(--error-subtle-border)]',  hoverBg: 'hover:bg-[var(--error-subtle-bg)]', numBorder: 'border-[var(--error-subtle-border)]', numText: 'text-[var(--error)]',  activeBg: 'bg-[var(--error-subtle-bg)]', activeBorder: 'border-[var(--error)]' },
 }
 
 export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig; compact?: boolean }) {
@@ -234,7 +234,7 @@ export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig
           {/* Other field — hidden in compact mode */}
           {!compact && config.otherField && canInteract && (
             showOther ? (
-              <div className="border border-[#d977064d] rounded-md px-4 py-2.5 flex gap-2">
+              <div className="border border-[var(--accent-subtle-border)] rounded-md px-4 py-2.5 flex gap-2">
                 <input
                   type="text"
                   value={otherText}
@@ -247,7 +247,7 @@ export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig
                 <button
                   onClick={handleOtherSubmit}
                   disabled={!otherText.trim()}
-                  className="px-3 py-1 text-xs font-semibold text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[#b45309] disabled:opacity-40 transition-colors"
+                  className="px-3 py-1 text-xs font-semibold text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[var(--accent-hover)] disabled:opacity-40 transition-colors"
                 >发送</button>
               </div>
             ) : (
@@ -269,7 +269,7 @@ export function ApprovalPanel({ config, compact }: { config: ApprovalPanelConfig
           <div className="mx-4 mb-3">
             <button
               onClick={handleMultiSubmit}
-              className="w-full py-2 text-[13px] font-semibold text-[var(--bg-primary)] bg-[var(--accent)] rounded-md hover:bg-[#b45309] transition-colors"
+              className="w-full py-2 text-[13px] font-semibold text-[var(--bg-primary)] bg-[var(--accent)] rounded-md hover:bg-[var(--accent-hover)] transition-colors"
             >
               确认选择 ({selectedKeys.size})
             </button>

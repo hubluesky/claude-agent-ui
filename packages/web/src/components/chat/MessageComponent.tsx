@@ -229,7 +229,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       if (!content) return null
       return (
         <div className="ml-10 border-l-2 border-[var(--purple-subtle-border)] pl-3 py-1">
-          <p className="text-xs text-[#a78bfa] whitespace-pre-wrap leading-relaxed">
+          <p className="text-xs text-[var(--purple)] whitespace-pre-wrap leading-relaxed">
             {content}
             <span className="inline-block w-1.5 h-3 bg-[var(--purple)] rounded-sm ml-0.5 animate-pulse" />
           </p>
@@ -245,7 +245,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     if (sub === 'api_retry') {
       return (
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--warning-subtle-bg)] border border-[var(--warning-subtle-border)] rounded-md px-3 py-2">
-          <svg className="w-3.5 h-3.5 text-[#eab308] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-3.5 h-3.5 text-[var(--warning)] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
           </svg>
           API retry (attempt {(message as any).attempt}/{(message as any).max_retries}) — waiting {(message as any).wait_seconds}s...
@@ -297,9 +297,9 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
           {/* Status header */}
           <div className={`flex items-center gap-2 text-xs px-3 py-2 ${
             isError ? 'text-[var(--error)] bg-[var(--error-subtle-bg)]'
-              : 'text-[#a3e635] bg-[var(--success-subtle-bg)]'
+              : 'text-[var(--success)] bg-[var(--success-subtle-bg)]'
           }`}>
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isError ? 'bg-[var(--error)]' : 'bg-[#a3e635]'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isError ? 'bg-[var(--error)]' : 'bg-[var(--success)]'}`} />
             <span className="font-semibold">{agentName}</span>
             <span>{status}</span>
             {durationMs != null && <span className="text-[10px] opacity-70 tabular-nums">— {(durationMs / 1000).toFixed(1)}s</span>}
@@ -338,8 +338,8 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     return (
       <div className="border border-[var(--border)] rounded-md overflow-hidden ml-10">
         <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)]">
-          <div className="w-0.5 h-4 rounded-full bg-[#6b7280]" />
-          <span className="text-xs font-mono font-semibold text-[#6b7280]">{toolName}</span>
+          <div className="w-0.5 h-4 rounded-full bg-[var(--text-muted)]" />
+          <span className="text-xs font-mono font-semibold text-[var(--text-muted)]">{toolName}</span>
           {summary && <span className="text-xs font-mono text-[var(--text-muted)] truncate flex-1">{typeof summary === 'string' ? summary.slice(0, 200) : JSON.stringify(summary).slice(0, 200)}</span>}
         </div>
       </div>
@@ -355,11 +355,11 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const elapsedStr = elapsed != null ? `${elapsed.toFixed(1)}s` : null
     return (
       <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10">
-        <svg className="w-3 h-3 text-[#059669] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-3 h-3 text-[var(--success)] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
         </svg>
         <span className="truncate">{typeof content === 'string' ? content : JSON.stringify(content).slice(0, 150)}</span>
-        {elapsedStr && <span className="text-[#5c5954] tabular-nums shrink-0">{elapsedStr}</span>}
+        {elapsedStr && <span className="text-[var(--text-dim)] tabular-nums shrink-0">{elapsedStr}</span>}
       </div>
     )
   }
@@ -503,7 +503,7 @@ function MessageActions({ messageId }: { messageId: string }) {
                 <div className="flex gap-2">
                   <button
                     onClick={handleRewindConfirm}
-                    className="flex-1 px-2 py-1.5 text-xs text-[var(--text-primary)] bg-[var(--info)] rounded hover:bg-[#3b82f6] cursor-pointer"
+                    className="flex-1 px-2 py-1.5 text-xs text-[var(--text-primary)] bg-[var(--info)] rounded hover:bg-[var(--info-hover)] cursor-pointer"
                   >
                     Confirm Rewind
                   </button>
@@ -621,7 +621,7 @@ function TaskNotificationCard({ data }: { data: TaskNotificationData }) {
   const isError = data.status === 'failed' || data.status === 'error'
   const isCompleted = data.status === 'completed'
   const dotClass = isError ? 'bg-[var(--error)]'
-    : isCompleted ? 'bg-[#a3e635]'
+    : isCompleted ? 'bg-[var(--success)]'
     : 'bg-[var(--warning)]'
   const borderClass = isError ? 'border-[var(--error-subtle-border)]'
     : isCompleted ? 'border-[var(--success-subtle-border)]'
@@ -630,7 +630,7 @@ function TaskNotificationCard({ data }: { data: TaskNotificationData }) {
     : isCompleted ? 'bg-[var(--success-subtle-bg)]'
     : 'bg-[var(--warning-subtle-bg)]'
   const headerText = isError ? 'text-[var(--error)]'
-    : isCompleted ? 'text-[#a3e635]'
+    : isCompleted ? 'text-[var(--success)]'
     : 'text-[var(--warning)]'
 
   return (
@@ -855,7 +855,7 @@ function ToolUseBlock({ block }: { block: any }) {
   return (
     <div className="border border-[var(--border)] rounded-md overflow-hidden">
       <div
-        className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)] cursor-pointer hover:bg-[#2b2a2780]"
+        className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)] cursor-pointer hover:bg-[var(--bg-hover)]"
         onClick={() => detail && setExpanded(!expanded)}
       >
         <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: color }} />
@@ -901,10 +901,10 @@ function ToolResultBlock({ block }: { block: any }) {
         : 'border-[var(--border)] bg-[var(--bg-secondary)]'
     }`}>
       <div
-        className={`flex items-center gap-2 px-3 py-1.5 ${isLong ? 'cursor-pointer hover:bg-[#2b2a2780]' : ''}`}
+        className={`flex items-center gap-2 px-3 py-1.5 ${isLong ? 'cursor-pointer hover:bg-[var(--bg-hover)]' : ''}`}
         onClick={() => isLong && setExpanded(!expanded)}
       >
-        <div className={`w-0.5 h-3 rounded-full ${isDenial ? 'bg-[var(--accent)]' : isError ? 'bg-[var(--error)]' : 'bg-[#6b7280]'}`} />
+        <div className={`w-0.5 h-3 rounded-full ${isDenial ? 'bg-[var(--accent)]' : isError ? 'bg-[var(--error)]' : 'bg-[var(--text-muted)]'}`} />
         <span className={`text-[10px] font-mono ${isDenial ? 'text-[var(--accent)]' : isError ? 'text-[var(--error)]' : 'text-[var(--text-muted)]'}`}>
           {isDenial ? '拒绝' : isError ? '错误' : '结果'}
         </span>
@@ -961,7 +961,7 @@ function getToolDetail(toolName: string, input: any): React.ReactNode | null {
     case 'Bash':
       return input.command ? (
         <div>
-          <div className="text-[#059669] mb-1">$ {input.command}</div>
+          <div className="text-[var(--success)] mb-1">$ {input.command}</div>
           {input.description && <div className="text-[var(--text-muted)] text-[10px] mb-1">{input.description}</div>}
         </div>
       ) : null
@@ -979,9 +979,9 @@ function getToolDetail(toolName: string, input: any): React.ReactNode | null {
     case 'Grep':
       return (
         <div>
-          <span className="text-[#059669]">pattern: </span>{input.pattern}
-          {input.path && <><br /><span className="text-[#059669]">path: </span>{input.path}</>}
-          {input.glob && <><br /><span className="text-[#059669]">glob: </span>{input.glob}</>}
+          <span className="text-[var(--success)]">pattern: </span>{input.pattern}
+          {input.path && <><br /><span className="text-[var(--success)]">path: </span>{input.path}</>}
+          {input.glob && <><br /><span className="text-[var(--success)]">glob: </span>{input.glob}</>}
         </div>
       )
     case 'Agent':

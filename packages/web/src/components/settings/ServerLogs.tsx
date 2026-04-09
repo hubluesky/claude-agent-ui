@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useServerStore } from '../../stores/serverStore'
 
-const LEVEL_COLORS: Record<string, string> = { info: '#22c55e', warn: '#eab308', error: '#ef4444', debug: '#6b7280' }
-const CATEGORY_COLORS: Record<string, string> = { server: '#22c55e', connection: '#3b82f6', session: '#a855f7', sdk: '#f59e0b' }
+const LEVEL_COLORS: Record<string, string> = { info: 'var(--success)', warn: 'var(--warning)', error: 'var(--error)', debug: 'var(--text-muted)' }
+const CATEGORY_COLORS: Record<string, string> = { server: 'var(--success)', connection: 'var(--info)', session: 'var(--purple)', sdk: 'var(--warning)' }
 
 export function ServerLogs({ fullHeight }: { fullHeight?: boolean } = {}) {
   const logs = useServerStore((s) => s.logs)

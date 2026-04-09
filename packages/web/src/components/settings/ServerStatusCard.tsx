@@ -45,7 +45,7 @@ export function ServerStatusCard() {
       </div>
       <button onClick={restart} disabled={restarting}
         className="px-3 py-1 text-[11px] rounded border cursor-pointer transition-colors hover:opacity-80 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: restarting ? 'rgba(245,158,11,0.15)' : pendingMode ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.08)', borderColor: restarting ? 'rgba(245,158,11,0.4)' : pendingMode ? 'rgba(245,158,11,0.3)' : 'rgba(59,130,246,0.2)', color: restarting ? 'var(--accent)' : pendingMode ? 'var(--accent)' : '#60a5fa' }}>
+        style={{ background: restarting ? 'rgba(245,158,11,0.15)' : pendingMode ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.08)', borderColor: restarting ? 'rgba(245,158,11,0.4)' : pendingMode ? 'rgba(245,158,11,0.3)' : 'rgba(59,130,246,0.2)', color: restarting ? 'var(--accent)' : pendingMode ? 'var(--accent)' : 'var(--info)' }}>
         {restarting ? '重启中...' : pendingMode ? '重启以生效' : '重启'}
       </button>
     </div>

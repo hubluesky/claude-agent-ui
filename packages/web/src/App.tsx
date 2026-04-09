@@ -56,11 +56,11 @@ export function App() {
             </ChatSessionProvider>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center">
-                <span className="text-[28px] font-bold font-mono text-[#d97706]">C</span>
+              <div className="w-16 h-16 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center">
+                <span className="text-[28px] font-bold font-mono text-[var(--accent)]">C</span>
               </div>
-              <h1 className="text-xl font-semibold text-[#e5e2db]">Claude Agent UI</h1>
-              <p className="text-sm text-[#7c7872]">Select a session from the sidebar to start</p>
+              <h1 className="text-xl font-semibold text-[var(--text-primary)]">Claude Agent UI</h1>
+              <p className="text-sm text-[var(--text-muted)]">Select a session from the sidebar to start</p>
             </div>
           )}
         </div>

@@ -93,19 +93,19 @@ code.hljs {
   font-weight: 700;
 }
 
-/* ===== Light theme (GitHub Light) ===== */
+/* ===== Light theme (Warm Cream — Claude Code inspired) ===== */
 [data-theme="light"] .hljs-keyword,
 [data-theme="light"] .hljs-doctag,
 [data-theme="light"] .hljs-type,
 [data-theme="light"] .hljs-template-tag,
 [data-theme="light"] .hljs-variable.language_ {
-  color: #d73a49;
+  color: #c4503a;
 }
 
 [data-theme="light"] .hljs-title,
 [data-theme="light"] .hljs-title.function_,
 [data-theme="light"] .hljs-title.class_ {
-  color: #6f42c1;
+  color: #6a5090;
 }
 
 [data-theme="light"] .hljs-attr,
@@ -118,52 +118,52 @@ code.hljs {
 [data-theme="light"] .hljs-selector-class,
 [data-theme="light"] .hljs-selector-attr,
 [data-theme="light"] .hljs-selector-pseudo {
-  color: #005cc5;
+  color: #3d6a8c;
 }
 
 [data-theme="light"] .hljs-string,
 [data-theme="light"] .hljs-regexp {
-  color: #032f62;
+  color: #2c7a39;
 }
 
 [data-theme="light"] .hljs-built_in,
 [data-theme="light"] .hljs-symbol {
-  color: #e36209;
+  color: #d77757;
 }
 
 [data-theme="light"] .hljs-comment,
 [data-theme="light"] .hljs-code,
 [data-theme="light"] .hljs-formula {
-  color: #6a737d;
+  color: #9b8e7e;
 }
 
 [data-theme="light"] .hljs-name,
 [data-theme="light"] .hljs-quote,
 [data-theme="light"] .hljs-selector-tag {
-  color: #22863a;
+  color: #2c7a39;
 }
 
 [data-theme="light"] .hljs-meta,
 [data-theme="light"] .hljs-meta .hljs-keyword {
-  color: #e36209;
+  color: #d77757;
 }
 
 [data-theme="light"] .hljs-params {
-  color: #24292e;
+  color: #3a3028;
 }
 
 [data-theme="light"] .hljs-property {
-  color: #005cc5;
+  color: #3d6a8c;
 }
 
 [data-theme="light"] .hljs-addition {
-  color: #22863a;
-  background-color: #f0fff4;
+  color: #2c7a39;
+  background-color: #edf5ee;
 }
 
 [data-theme="light"] .hljs-deletion {
-  color: #b31d28;
-  background-color: #ffeef0;
+  color: #ab2b3f;
+  background-color: #f8eced;
 }
 
 [data-theme="light"] .hljs-emphasis {

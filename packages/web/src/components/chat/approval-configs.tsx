@@ -12,23 +12,23 @@ function ToolInputContent({ toolName, toolInput }: { toolName: string; toolInput
   const fullInput = expanded ? JSON.stringify(toolInput, null, 2) : ''
 
   return (
-    <div className="bg-[#1e1d1a] border border-[#3d3b37] rounded-md overflow-hidden">
+    <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md overflow-hidden">
       <div
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-[#2b2a2780]"
+        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-[var(--bg-hover)]"
         onClick={() => setExpanded(!expanded)}
       >
         <ToolIcon category={category} />
         <span className="text-xs font-mono font-semibold" style={{ color }}>{toolName}</span>
-        <span className="text-xs font-mono text-[#a8a29e] truncate flex-1">{summary}</span>
+        <span className="text-xs font-mono text-[var(--text-dim)] truncate flex-1">{summary}</span>
         <svg
-          className={`w-3.5 h-3.5 text-[#7c7872] transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform ${expanded ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </div>
       {expanded && (
-        <div className="border-t border-[#3d3b37] px-3 py-2.5 text-xs font-mono text-[#a8a29e] whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+        <div className="border-t border-[var(--border)] px-3 py-2.5 text-xs font-mono text-[var(--text-dim)] whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
           {fullInput}
         </div>
       )}

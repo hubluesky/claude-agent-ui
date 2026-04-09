@@ -22,6 +22,10 @@
   --info: #60a5fa;
   --purple: #a855f7;
   --cyan: #0ea5e9;
+  /* Solid hover variants for buttons */
+  --accent-hover: #b45309;
+  --error-hover: #dc2626;
+  --info-hover: #3b82f6;
   /* Semi-transparent variants */
   --border-half: #3d3b3780;
   --accent-subtle-bg: #d977061a;
@@ -42,42 +46,47 @@
 }
 
 [data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f4;
-  --bg-tertiary: #fafaf9;
-  --bg-hover: #e7e5e4;
-  --bg-input: #ffffff;
-  --border: #d6d3d1;
-  --border-active: #d97706;
-  --text-primary: #1c1917;
-  --text-secondary: #57534e;
-  --text-muted: #78716c;
-  --text-dim: #a8a29e;
-  --accent: #d97706;
-  --accent-bg: #fef3c7;
-  --success: #16a34a;
-  --error: #dc2626;
-  --warning: #d97706;
-  --info: #2563eb;
-  --purple: #7c3aed;
-  --cyan: #0284c7;
-  /* Semi-transparent variants (lighter for light theme) */
-  --border-half: #d6d3d180;
-  --accent-subtle-bg: #d9770610;
-  --accent-subtle-border: #d9770630;
-  --accent-hover-bg: #d9770618;
-  --error-subtle-bg: #dc262608;
-  --error-subtle-border: #dc262620;
-  --info-subtle-bg: #2563eb08;
-  --info-subtle-border: #2563eb20;
-  --purple-subtle-bg: #7c3aed08;
-  --purple-subtle-border: #7c3aed20;
-  --warning-subtle-bg: #d9770608;
-  --warning-subtle-border: #d9770620;
-  --success-subtle-bg: #16a34a08;
-  --success-subtle-border: #16a34a20;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  /* Warm cream palette — colors from claude-code/src/utils/theme.ts lightTheme */
+  --bg-primary: #faf7f3;
+  --bg-secondary: #f5f2ed;
+  --bg-tertiary: #fdfbf8;
+  --bg-hover: #f0ede7;
+  --bg-input: #fdfbf8;
+  --border: #ddd6cb;
+  --border-active: #d77757;
+  --text-primary: #2a2118;
+  --text-secondary: #5c4f42;
+  --text-muted: #8c7e6f;
+  --text-dim: #b5a898;
+  --accent: #d77757;            /* rgb(215,119,87) — Claude brand orange */
+  --accent-bg: #faeae3;
+  --success: #2c7a39;           /* rgb(44,122,57) */
+  --error: #ab2b3f;             /* rgb(171,43,63) */
+  --warning: #966c1e;           /* rgb(150,108,30) */
+  --info: #4a7a9b;
+  --purple: #7a5f94;
+  --cyan: #3a7a7a;
+  /* Solid hover variants for buttons */
+  --accent-hover: #c06647;
+  --error-hover: #8f2235;
+  --info-hover: #3d6a8b;
+  /* Semi-transparent variants (warm-tinted for cream background) */
+  --border-half: #ddd6cb80;
+  --accent-subtle-bg: #d7775710;
+  --accent-subtle-border: #d7775730;
+  --accent-hover-bg: #d7775718;
+  --error-subtle-bg: #ab2b3f08;
+  --error-subtle-border: #ab2b3f20;
+  --info-subtle-bg: #4a7a9b08;
+  --info-subtle-border: #4a7a9b20;
+  --purple-subtle-bg: #7a5f9408;
+  --purple-subtle-border: #7a5f9420;
+  --warning-subtle-bg: #966c1e08;
+  --warning-subtle-border: #966c1e20;
+  --success-subtle-bg: #2c7a3908;
+  --success-subtle-border: #2c7a3920;
+  --scrollbar-thumb: rgba(42, 33, 24, 0.12);
+  --scrollbar-thumb-hover: rgba(42, 33, 24, 0.22);
 }
 
 /* ---- Base Styles ---- */
@@ -118,8 +127,8 @@ html, body, #root {
 }
 
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 0 1px #d97706; }
-  50% { box-shadow: 0 0 8px 1px rgba(217, 119, 6, 0.4); }
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent); }
+  50% { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 40%, transparent); }
 }
 
 /* Isolate the composer glow animation so it doesn't trigger full-page repaints.

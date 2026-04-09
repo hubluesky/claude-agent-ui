@@ -387,7 +387,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const borderClass = isRunning
     ? 'border-[var(--accent)] animate-[glow_2s_ease-in-out_infinite]'
     : isLocked
-      ? 'border-[#b91c1c]'
+      ? 'border-[var(--error)]'
       : 'border-[var(--border)]'
 
   return (
@@ -466,9 +466,9 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
               disabled={!isRunning && !canSend}
               className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
                 isRunning
-                  ? 'bg-[var(--error)] text-white hover:bg-[#dc2626] cursor-pointer'
+                  ? 'bg-[var(--error)] text-white hover:bg-[var(--error-hover)] cursor-pointer'
                   : canSend
-                    ? 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[#b45309] cursor-pointer'
+                    ? 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] cursor-pointer'
                     : 'bg-[var(--border)] text-[var(--text-dim)] cursor-default'
               }`}
             >

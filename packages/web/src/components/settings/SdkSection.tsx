@@ -34,7 +34,7 @@ export function SdkSection() {
           <div className="flex items-center gap-2">
             {sdkVersion?.updateAvailable && (
               <>
-                <span className="px-2 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)', color: '#eab308' }}>
+                <span className="px-2 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)', color: 'var(--warning)' }}>
                   {sdkVersion.latest}
                 </span>
                 <button onClick={() => setShowUpdate(true)} className="px-2.5 py-1 text-[11px] rounded border cursor-pointer transition-colors" style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.3)', color: 'var(--accent)' }}>

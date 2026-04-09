@@ -32,12 +32,12 @@ export function FileReferencePopup({ files, selectedIndex, onSelect }: FileRefer
             ref={i === selectedIndex ? selectedRef : undefined}
             onMouseDown={(e) => { e.preventDefault(); onSelect(file) }}
             className={`w-full px-4 py-1.5 text-left flex items-center gap-2 transition-colors ${
-              i === selectedIndex ? 'bg-[#2563eb]' : 'hover:bg-[#2a2925]'
+              i === selectedIndex ? 'bg-[#2563eb]' : 'hover:bg-[var(--bg-hover)]'
             }`}
           >
             <span className="text-[13px] shrink-0">{file.type === 'directory' ? '📁' : '📄'}</span>
             <span className={`text-[13px] font-mono truncate ${
-              i === selectedIndex ? 'text-white' : 'text-[#c4c0b8]'
+              i === selectedIndex ? 'text-white' : 'text-[var(--text-secondary)]'
             }`}>
               {file.path}
             </span>

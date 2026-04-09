@@ -54,7 +54,7 @@ export function ConnectionsList() {
               <div className="flex items-center gap-2">
                 <span style={{ color: 'var(--text-primary)' }}>{client}</span>
                 {conn.projectName && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa' }}>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--info)' }}>
                     {conn.projectName}
                   </span>
                 )}

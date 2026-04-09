@@ -29,7 +29,7 @@ export function SdkUpdateDialog({ onClose }: { onClose: () => void }) {
               <div className="text-[var(--text-muted)] mt-1 font-mono text-sm">{sdkVersion?.current} → {sdkVersion?.latest}</div>
             </div>
             <div className="p-3 rounded-lg mb-4 text-xs" style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.15)' }}>
-              <div className="font-semibold" style={{ color: '#eab308' }}>更新将暂停服务器</div>
+              <div className="font-semibold" style={{ color: 'var(--warning)' }}>更新将暂停服务器</div>
               <div className="text-[var(--text-muted)] mt-1">所有连接的客户端会短暂断开。</div>
             </div>
             <div className="flex justify-end gap-2">

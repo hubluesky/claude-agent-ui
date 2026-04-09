@@ -169,8 +169,8 @@ export function ChatInterface({
       {!compact && searchOpen && <SearchBar onClose={() => setSearchOpen(false)} />}
       {isNewSession && !hasMessages ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className={`${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full bg-[#242320] border border-[#3d3b37] flex items-center justify-center`}>
-            <span className={`${compact ? 'text-sm' : 'text-xl'} font-bold font-mono text-[#d97706]`}>C</span>
+          <div className={`${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center`}>
+            <span className={`${compact ? 'text-sm' : 'text-xl'} font-bold font-mono text-[var(--accent)]`}>C</span>
           </div>
           <div className="flex flex-col items-center gap-1 max-w-[90%]">
             <p className={`${compact ? 'text-xs' : 'text-sm'} text-[var(--text-secondary)]`}>New conversation in {currentProjectCwd?.split(/[/\\]/).pop()}</p>

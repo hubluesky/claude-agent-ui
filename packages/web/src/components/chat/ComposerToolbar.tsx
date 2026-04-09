@@ -24,10 +24,10 @@ interface ComposerToolbarProps {
 // modeColorClass is module-level so it's not recreated on every render
 const modeColorClass: Record<string, { text: string; hover: string; hoverBg: string }> = {
   default: { text: 'text-[var(--text-secondary)]', hover: 'hover:text-[var(--text-primary)]', hoverBg: 'hover:bg-[var(--border-half)]' },
-  acceptEdits: { text: 'text-[var(--info)]', hover: 'hover:text-[#93bbfd]', hoverBg: 'hover:bg-[#60a5fa1a]' },
+  acceptEdits: { text: 'text-[var(--info)]', hover: 'hover:text-[var(--info-hover)]', hoverBg: 'hover:bg-[var(--info-subtle-bg)]' },
   auto: { text: 'text-[var(--accent)]', hover: 'hover:text-[var(--warning)]', hoverBg: 'hover:bg-[var(--accent-subtle-bg)]' },
-  plan: { text: 'text-[#a78bfa]', hover: 'hover:text-[#c4b5fd]', hoverBg: 'hover:bg-[#a78bfa1a]' },
-  bypassPermissions: { text: 'text-[var(--error)]', hover: 'hover:text-[#fca5a5]', hoverBg: 'hover:bg-[#f871711a]' },
+  plan: { text: 'text-[var(--purple)]', hover: 'hover:text-[var(--purple)]', hoverBg: 'hover:bg-[var(--purple-subtle-bg)]' },
+  bypassPermissions: { text: 'text-[var(--error)]', hover: 'hover:text-[var(--error)]', hoverBg: 'hover:bg-[var(--error-subtle-bg)]' },
 }
 
 export function ComposerToolbar({
@@ -45,10 +45,10 @@ export function ComposerToolbar({
 
   // Status config (migrated from StatusBar)
   const statusConfig: Record<string, { color: string; text: string; pulse: boolean }> = {
-    idle: { color: 'bg-[#a3e635]', text: 'idle', pulse: false },
+    idle: { color: 'bg-[var(--success)]', text: 'idle', pulse: false },
     running: { color: 'bg-[var(--accent)]', text: 'running', pulse: true },
-    awaiting_approval: { color: 'bg-[#eab308]', text: 'awaiting approval', pulse: true },
-    awaiting_user_input: { color: 'bg-[#eab308]', text: 'awaiting input', pulse: true },
+    awaiting_approval: { color: 'bg-[var(--warning)]', text: 'awaiting approval', pulse: true },
+    awaiting_user_input: { color: 'bg-[var(--warning)]', text: 'awaiting input', pulse: true },
   }
 
   const statusInfo = isLocked
