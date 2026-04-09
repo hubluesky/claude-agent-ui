@@ -381,6 +381,14 @@ export interface S2C_SessionTitleUpdated {
   title: string
 }
 
+export interface S2C_SyncResult {
+  type: 'sync-result'
+  sessionId: string
+  replayed: number
+  hasGap: boolean
+  gapRange?: [number, number]
+}
+
 export type C2SMessage =
   | C2S_JoinSession
   | C2S_SendMessage
@@ -433,4 +441,5 @@ export type S2CMessage =
   | S2C_Ping
   | S2C_StreamSnapshot
   | S2C_SessionTitleUpdated
+  | S2C_SyncResult
   | S2C_Error
