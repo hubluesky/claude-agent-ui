@@ -48,7 +48,7 @@ export function MultiPanelGrid() {
             const summary = summaries.get(sid)
             return (
               <div key={sid} className="flex flex-col min-h-0 min-w-0 overflow-hidden bg-[var(--bg-primary)]">
-                <ChatSessionProvider sessionId={sid} independent>
+                <ChatSessionProvider sessionId={sid}>
                   <ChatInterface
                     compact
                     panelTitle={summary?.title}
