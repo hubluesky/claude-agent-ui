@@ -73,10 +73,19 @@ export interface SessionContainer {
 
 // ─── StreamState (mutable, per-container, NOT in Zustand) ───
 
+export type SpinnerMode = 'requesting' | 'thinking' | 'responding' | 'tool-use'
+
 export class StreamState {
   accumulator = new Map<number, { blockType: string; content: string }>()
   pendingDeltaText = ''
   pendingDeltaRafId: number | null = null
+
+  // Spinner state tracking
+  requestStartTime: number | null = null
+  thinkingStartTime: number | null = null
+  thinkingEndTime: number | null = null
+  responseLength = 0
+  spinnerMode: SpinnerMode = 'requesting'
 
   clear() {
     this.accumulator.clear()
@@ -85,6 +94,11 @@ export class StreamState {
       cancelAnimationFrame(this.pendingDeltaRafId)
       this.pendingDeltaRafId = null
     }
+    this.requestStartTime = null
+    this.thinkingStartTime = null
+    this.thinkingEndTime = null
+    this.responseLength = 0
+    this.spinnerMode = 'requesting'
   }
 }
 
