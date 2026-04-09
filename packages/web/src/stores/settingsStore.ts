@@ -5,8 +5,6 @@ interface SettingsState {
   permissionMode: PermissionMode
   effort: EffortLevel
   thinkingMode: 'adaptive' | 'enabled' | 'disabled'
-  sidebarWidth: number
-  sidebarOpen: boolean
   maxBudgetUsd: number | null
   maxTurns: number | null
   theme: 'dark' | 'light'
@@ -17,8 +15,6 @@ interface SettingsActions {
   setPermissionMode(mode: PermissionMode): void
   setEffort(effort: EffortLevel): void
   setThinkingMode(mode: SettingsState['thinkingMode']): void
-  setSidebarWidth(width: number): void
-  setSidebarOpen(open: boolean): void
   setMaxBudgetUsd(value: number | null): void
   setMaxTurns(value: number | null): void
   setTheme(theme: 'dark' | 'light'): void
@@ -43,7 +39,6 @@ function saveToLocal(state: SettingsState) {
     permissionMode: state.permissionMode,
     effort: state.effort,
     thinkingMode: state.thinkingMode,
-    sidebarWidth: state.sidebarWidth,
     maxBudgetUsd: state.maxBudgetUsd,
     maxTurns: state.maxTurns,
     theme: state.theme,
@@ -57,8 +52,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     permissionMode: (saved.permissionMode as PermissionMode) ?? 'default',
     effort: (saved.effort as EffortLevel) ?? 'high',
     thinkingMode: (saved.thinkingMode as SettingsState['thinkingMode']) ?? 'adaptive',
-    sidebarWidth: saved.sidebarWidth ?? 280,
-    sidebarOpen: true,
     maxBudgetUsd: (saved as any).maxBudgetUsd ?? null,
     maxTurns: (saved as any).maxTurns ?? null,
     theme: ((saved as any).theme as 'dark' | 'light') ?? 'dark',
@@ -74,13 +67,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set, ge
     setThinkingMode(mode) {
       set({ thinkingMode: mode })
       saveToLocal(get())
-    },
-    setSidebarWidth(width) {
-      set({ sidebarWidth: Math.max(200, Math.min(500, width)) })
-      saveToLocal(get())
-    },
-    setSidebarOpen(open) {
-      set({ sidebarOpen: open })
     },
     setMaxBudgetUsd(value) {
       set({ maxBudgetUsd: value })

@@ -41,3 +41,20 @@ export async function exportSession(sessionId: string, format: 'md' | 'json' = '
   a.click()
   URL.revokeObjectURL(url)
 }
+
+export interface BrowseDirectoryResult {
+  currentPath: string
+  parentPath: string | null
+  dirs: { name: string; path: string }[]
+}
+
+export async function browseDirectory(path?: string): Promise<BrowseDirectoryResult> {
+  const params = new URLSearchParams()
+  if (path) params.set('path', path)
+  const res = await fetch(`${BASE}/api/browse-directory?${params}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(err.error)
+  }
+  return await res.json()
+}
