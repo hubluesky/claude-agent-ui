@@ -24,7 +24,7 @@ export function ProjectPanel({ onClose, onNewProject }: ProjectPanelProps) {
   const filtered = useMemo(() => {
     const lowerSearch = search.toLowerCase()
     return projects.filter((p) =>
-      p.name.toLowerCase().includes(lowerSearch)
+      !p.name.startsWith('.') && p.name.toLowerCase().includes(lowerSearch)
     )
   }, [projects, search])
 
