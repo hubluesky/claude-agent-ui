@@ -69,6 +69,7 @@ export interface SessionContainer {
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
+  streamingVersion: number
 }
 
 // ─── StreamState (mutable, per-container, NOT in Zustand) ───
@@ -77,6 +78,8 @@ export type SpinnerMode = 'requesting' | 'thinking' | 'responding' | 'tool-use'
 
 export class StreamState {
   accumulator = new Map<number, { blockType: string; content: string }>()
+  pendingDeltas = new Map<number, string>()
+  /** @deprecated Will be removed in Task 2 — use pendingDeltas instead */
   pendingDeltaText = ''
   pendingDeltaRafId: number | null = null
 
@@ -89,6 +92,7 @@ export class StreamState {
 
   clear() {
     this.accumulator.clear()
+    this.pendingDeltas.clear()
     this.pendingDeltaText = ''
     if (this.pendingDeltaRafId !== null) {
       cancelAnimationFrame(this.pendingDeltaRafId)
@@ -138,6 +142,7 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
+    streamingVersion: 0,
   }
 }
 
@@ -177,8 +182,14 @@ interface SessionContainerActions {
   setLoadingHistory(sessionId: string, loading: boolean): void
   setLoadingMore(sessionId: string, loading: boolean): void
   setHasMore(sessionId: string, hasMore: boolean): void
-  /** Appends text to the last assistant message's last text block */
+  /** @deprecated Will be removed in Task 2 — use updateStreamingBlock instead */
   appendStreamingText(sessionId: string, text: string): void
+  /** Updates a specific content block inside the _streaming assistant message */
+  updateStreamingBlock(sessionId: string, blockIndex: number, text: string): void
+  /** Removes _streaming flag from all messages in a session (for abort/complete) */
+  clearStreamingFlag(sessionId: string): void
+  /** Increments streamingVersion (for scroll trigger on new content blocks) */
+  incrementStreamingVersion(sessionId: string): void
   clearMessages(sessionId: string): void
   setApproval(sessionId: string, req: (ToolApprovalRequest & { readonly: boolean }) | null): void
   setAskUser(sessionId: string, req: (AskUserRequest & { readonly: boolean }) | null): void
@@ -391,6 +402,62 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
+  updateStreamingBlock(sessionId, blockIndex, text) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c) return
+    // Find the _streaming assistant message (search from end)
+    for (let i = c.messages.length - 1; i >= 0; i--) {
+      const msg = c.messages[i] as any
+      if (msg._streaming && msg.type === 'assistant') {
+        const content = msg.message?.content
+        if (!Array.isArray(content) || !content[blockIndex]) return
+        const blocks = [...content]
+        const block = blocks[blockIndex]
+        // Create new block object (triggers React memo)
+        if (block.type === 'thinking') {
+          blocks[blockIndex] = { ...block, thinking: (block.thinking ?? '') + text }
+        } else {
+          blocks[blockIndex] = { ...block, text: (block.text ?? '') + text }
+        }
+        const updated = [...c.messages]
+        updated[i] = { ...msg, message: { ...msg.message, content: blocks } }
+        const next = new Map(containers)
+        next.set(sessionId, { ...c, messages: updated })
+        set({ containers: next })
+        return
+      }
+    }
+  },
+
+  clearStreamingFlag(sessionId) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c) return
+    const hasStreaming = c.messages.some((m: any) => m._streaming)
+    if (!hasStreaming) return
+    const updated = c.messages.map((m: any) => {
+      if (m._streaming) {
+        const clean = { ...m }
+        delete clean._streaming
+        return clean
+      }
+      return m
+    })
+    const next = new Map(containers)
+    next.set(sessionId, { ...c, messages: updated })
+    set({ containers: next })
+  },
+
+  incrementStreamingVersion(sessionId) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c) return
+    const next = new Map(containers)
+    next.set(sessionId, { ...c, streamingVersion: c.streamingVersion + 1 })
+    set({ containers: next })
+  },
+
   clearMessages(sessionId) {
     const { containers } = get()
     const c = containers.get(sessionId)
@@ -400,7 +467,7 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     const stream = streamStates.get(sessionId)
     if (stream) stream.clear()
     const next = new Map(containers)
-    next.set(sessionId, { ...c, messages: [], hasMore: false })
+    next.set(sessionId, { ...c, messages: [], hasMore: false, streamingVersion: 0 })
     set({ containers: next })
   },
 
