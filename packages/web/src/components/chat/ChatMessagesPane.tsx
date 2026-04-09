@@ -43,6 +43,11 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const sessionStatus = ctx.sessionStatus
   const pendingPlanApproval = ctx.pendingPlanApproval
 
+  // Get streamingVersion from the container for scroll trigger
+  const streamingVersion = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.streamingVersion ?? 0
+  )
+
   // ── Spinner state from mutable StreamState (polled every 500ms) ──
   const [spinnerMode, setSpinnerMode] = useState<SpinnerMode>('requesting')
   const [requestStartTime, setRequestStartTime] = useState<number | null>(null)
@@ -147,7 +152,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
     if (isAtBottomRef.current && messages.length > 0 && !didPrepend.current) {
       requestAnimationFrame(() => scrollToBottom('smooth'))
     }
-  }, [messages.length, scrollToBottom])
+  }, [messages.length, streamingVersion, scrollToBottom])
 
   // ── Scroll to bottom when Footer content changes ──
   useEffect(() => {
@@ -217,7 +222,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
           const t = (rawMessages[i] as any).type
           if (t === 'system' || t === 'result') continue
           // If last substantive message is user, optimistic, or streaming → show indicator
-          return t === 'user' || t === '_streaming_block'
+          return t === 'user' || (t === 'assistant' && (rawMessages[i] as any)._streaming)
         }
         return true // no messages yet → show
       })() && (
