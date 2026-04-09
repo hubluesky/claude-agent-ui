@@ -267,7 +267,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       return (
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10 pl-5 border-l-2 border-[var(--purple-subtle-border)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--purple)]" />
-          <span className="truncate flex-1">{typeof content === 'string' ? content.slice(0, 150) : JSON.stringify(content).slice(0, 150)}</span>
+          <span className="min-w-0 truncate">{typeof content === 'string' ? content.slice(0, 150) : JSON.stringify(content).slice(0, 150)}</span>
           {lastTool && <span className="text-[10px] text-[var(--purple)] bg-[#a855f71a] px-1.5 py-0.5 rounded shrink-0">{lastTool}</span>}
           {usage?.duration_ms != null && <span className="text-[10px] text-[var(--text-dim)] tabular-nums shrink-0">{(usage.duration_ms / 1000).toFixed(1)}s</span>}
         </div>
@@ -784,31 +784,40 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
 
 // ---- TodoWrite Block (VSCode-style checklist) ----
 
+function TodoCheckbox({ status }: { status: string }) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = status === 'in_progress'
+    }
+  }, [status])
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="todo-checkbox"
+      checked={status === 'completed'}
+      readOnly
+      tabIndex={-1}
+    />
+  )
+}
+
 function TodoWriteBlock({ block }: { block: any }) {
   const todos = (block.input?.todos as Array<{ content: string; status: string }>) ?? []
   return (
-    <div className="space-y-0.5">
+    <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 py-1">
         <div className="w-2 h-2 rounded-full bg-[var(--success)] shrink-0" />
         <span className="text-sm font-semibold text-[var(--text-primary)]">Update Todos</span>
       </div>
-      <div className="pl-4 space-y-0.5">
+      <div className="pl-4 flex flex-col gap-1">
         {todos.map((todo, i) => (
-          <div key={i} className="flex items-start gap-2 py-0.5">
-            {todo.status === 'completed' ? (
-              <svg className="w-4 h-4 shrink-0 mt-0.5 text-[var(--success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            ) : todo.status === 'in_progress' ? (
-              <span className="w-4 h-4 shrink-0 mt-0.5 flex items-center justify-center text-[var(--info)] font-bold text-sm leading-none">*</span>
-            ) : (
-              <svg className="w-4 h-4 shrink-0 mt-0.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-              </svg>
-            )}
+          <div key={i} className="flex items-start gap-2">
+            <TodoCheckbox status={todo.status} />
             <span className={`text-sm leading-relaxed ${
               todo.status === 'completed'
-                ? 'line-through text-[var(--text-muted)]'
+                ? 'line-through text-[var(--text-secondary)] opacity-70'
                 : todo.status === 'in_progress'
                   ? 'font-semibold text-[var(--text-primary)]'
                   : 'text-[var(--text-secondary)]'
