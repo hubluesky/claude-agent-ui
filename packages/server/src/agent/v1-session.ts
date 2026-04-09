@@ -138,6 +138,9 @@ export class V1QuerySession extends AgentSession {
   }
 
   send(prompt: string, options?: SendOptions): void {
+    // Stop previous query if still running (e.g., user sends new message while awaiting approval)
+    this.stopCurrentQuery('New message sent')
+
     this.abortController = new AbortController()
     this.setStatus('running')
 
@@ -532,15 +535,27 @@ export class V1QuerySession extends AgentSession {
   }
 
   async abort(): Promise<void> {
-    this.abortController?.abort()
+    this.stopCurrentQuery('Session aborted')
     try {
       await this.queryInstance?.interrupt?.()
     } catch {
       // Ignore interrupt errors
     }
-    // Clear all pending
+    this.setStatus('idle')
+  }
+
+  /** Stop the current query: abort signal + resolve all pending Promises so they don't leak. */
+  private stopCurrentQuery(reason: string): void {
+    this.abortController?.abort()
+    // interrupt() is best-effort (fire-and-forget) — the abort signal already stops iteration
+    this.queryInstance?.interrupt?.().catch(() => {})
+    this.resolveAllPending(reason)
+  }
+
+  /** Resolve and clear all pending approval/ask-user/plan Promises. */
+  private resolveAllPending(reason: string): void {
     for (const [, pending] of this.pendingApprovals) {
-      pending.resolve({ behavior: 'deny', message: 'Session aborted' })
+      pending.resolve({ behavior: 'deny', message: reason })
     }
     this.pendingApprovals.clear()
     for (const [, pending] of this.pendingAskUser) {
@@ -548,10 +563,9 @@ export class V1QuerySession extends AgentSession {
     }
     this.pendingAskUser.clear()
     for (const [, pending] of this.pendingPlanApprovals) {
-      pending.resolve({ decision: 'feedback', feedback: 'Session aborted' })
+      pending.resolve({ decision: 'feedback', feedback: reason })
     }
     this.pendingPlanApprovals.clear()
-    this.setStatus('idle')
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
@@ -631,19 +645,7 @@ export class V1QuerySession extends AgentSession {
   }
 
   close(): void {
-    // Reject all pending approvals
-    for (const [, pending] of this.pendingApprovals) {
-      pending.resolve({ behavior: 'deny', message: 'Session closed' })
-    }
-    this.pendingApprovals.clear()
-    for (const [, pending] of this.pendingAskUser) {
-      pending.resolve({ answers: {} })
-    }
-    this.pendingAskUser.clear()
-    for (const [, pending] of this.pendingPlanApprovals) {
-      pending.resolve({ decision: 'feedback', feedback: 'Session closed' })
-    }
-    this.pendingPlanApprovals.clear()
+    this.resolveAllPending('Session closed')
     this.queryInstance?.close?.()
     this.queryInstance = null
   }

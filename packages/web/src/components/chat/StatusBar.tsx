@@ -85,11 +85,11 @@ export function StatusBar() {
       {/* Session ID */}
       {currentSessionId && currentSessionId !== '__new__' && (
         <span
-          className="font-mono text-[10px] text-[var(--text-dim)] cursor-pointer hover:text-[var(--text-muted)] truncate max-w-[180px]"
+          className="font-mono text-[10px] text-[var(--text-dim)] cursor-pointer hover:text-[var(--text-muted)]"
           title={`Session ID: ${currentSessionId}\n点击复制`}
           onClick={() => navigator.clipboard.writeText(currentSessionId)}
         >
-          {currentSessionId.slice(0, 8)}
+          {currentSessionId}
         </span>
       )}
 

@@ -92,11 +92,23 @@ function CodeBlock({ language, className, children, ...props }: { language?: str
   )
 }
 
+// Pre-process markdown to fix remark-gfm autolink literals conflicting with
+// emphasis markers. `**https://example.com**` fails to parse bold because
+// autolink literals consume the URL before emphasis delimiters are matched.
+// Convert `**URL**` → `**[URL](URL)**` so both bold and link render correctly.
+function preprocessMarkdown(content: string): string {
+  return content.replace(
+    /(\*{1,2}|_{1,2})(https?:\/\/[^\s*_\])<>]+)\1/g,
+    (_, delim, url) => `${delim}[${url}](${url})${delim}`
+  )
+}
+
 interface MarkdownRendererProps {
   content: string
 }
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
+  const processed = preprocessMarkdown(content)
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -186,7 +198,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
         },
       }}
     >
-      {content}
+      {processed}
     </ReactMarkdown>
   )
 })

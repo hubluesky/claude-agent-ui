@@ -93,6 +93,8 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   selectSession(sessionId: string, cwd: string) {
     set({ currentSessionId: sessionId, currentProjectCwd: cwd })
+    // Ensure sessions list is loaded so TopBar can find the title
+    get().loadProjectSessions(cwd)
   },
 
   async renameSession(sessionId: string, title: string) {
