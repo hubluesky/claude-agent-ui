@@ -152,10 +152,6 @@ export function createWsHandler(deps: HandlerDeps) {
         await handleReconnectMcpServer(connectionId, msg.sessionId, msg.serverName)
         break
       }
-      case 'rewind-files': {
-        await handleRewindFiles(connectionId, msg.sessionId, msg.messageId, msg.dryRun)
-        break
-      }
       case 'get-subagent-messages': {
         await handleGetSubagentMessages(connectionId, msg.sessionId, msg.agentId, msg.limit, msg.offset)
         break
@@ -516,11 +512,22 @@ export function createWsHandler(deps: HandlerDeps) {
         return
       }
 
-      // Clear stream snapshot when final assistant message arrives
+      // Handle assistant messages — partial vs final
       if (msg.type === 'assistant') {
+        if (msg._partial) {
+          // Partial assistant — don't buffer, broadcast raw (transient mid-stream state)
+          // Used by frontend to extract tool_use blocks and model info during streaming
+          wsHub.broadcastRaw(realSessionId, {
+            type: 'agent-message',
+            sessionId: realSessionId,
+            message: msg,
+          })
+          return
+        }
+        // Final assistant — clear stream snapshot, buffer with seq for replay
         wsHub.clearStreamSnapshot(realSessionId)
 
-        // Auto-generate title on first assistant message (don't wait for session complete)
+        // Auto-generate title on first assistant message
         if (!titleGenTriggered && !realSessionId.startsWith('pending-')) {
           titleGenTriggered = true
           maybeGenerateTitle(realSessionId).then((title) => {
@@ -536,7 +543,7 @@ export function createWsHandler(deps: HandlerDeps) {
         }
       }
 
-      // Broadcast and buffer all other messages to ALL clients
+      // Broadcast and buffer all other messages (including final assistant) to ALL clients
       wsHub.broadcast(realSessionId, {
         type: 'agent-message',
         sessionId: realSessionId,
@@ -1050,26 +1057,6 @@ export function createWsHandler(deps: HandlerDeps) {
       await handleGetMcpStatus(connectionId, sessionId)
     } catch (err: any) {
       wsHub.sendTo(connectionId, { type: 'error', message: `MCP reconnect failed: ${err.message}`, code: 'internal' })
-    }
-  }
-
-  async function handleRewindFiles(connectionId: string, sessionId: string, messageId: string, dryRun?: boolean) {
-    const session = sessionManager.getActive(sessionId)
-    if (!session || !('rewindFiles' in session)) return
-    try {
-      const result = await (session as any).rewindFiles(messageId, { dryRun: dryRun ?? false })
-      wsHub.sendTo(connectionId, {
-        type: 'rewind-result',
-        sessionId,
-        canRewind: result.canRewind,
-        error: result.error,
-        filesChanged: result.filesChanged,
-        insertions: result.insertions,
-        deletions: result.deletions,
-        dryRun: dryRun ?? false,
-      })
-    } catch (err: any) {
-      wsHub.sendTo(connectionId, { type: 'error', message: `Rewind failed: ${err.message}`, code: 'internal' })
     }
   }
 
