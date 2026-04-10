@@ -38,9 +38,9 @@ export function StatusBar() {
   const isConnected = connectionStatus === 'connected'
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1 border-t text-[11px] shrink-0 select-none" style={{ background: 'var(--bg-tertiary)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+    <div className="flex items-center gap-3 px-3 py-1 border-t text-[11px] shrink-0 select-none overflow-hidden" style={{ background: 'var(--bg-tertiary)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
       {/* Connection indicator + model selector */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 shrink-0">
         <span
           className="w-1.5 h-1.5 rounded-full shrink-0"
           style={{ background: isConnected ? 'var(--success)' : 'var(--error)' }}
@@ -49,24 +49,24 @@ export function StatusBar() {
       </div>
 
       {/* Separator */}
-      <span className="w-px h-3 bg-[var(--border)]" />
+      <span className="w-px h-3 shrink-0 bg-[var(--border)]" />
 
       {/* Account info */}
       {accountInfo?.email && (
         <>
-          <span>{accountInfo.email}</span>
+          <span className="truncate min-w-0">{accountInfo.email}</span>
           {accountInfo.organization && (
             <>
-              <span className="text-[var(--border)]">/</span>
-              <span>{accountInfo.organization}</span>
+              <span className="shrink-0 text-[var(--border)]">/</span>
+              <span className="truncate min-w-0">{accountInfo.organization}</span>
             </>
           )}
           {accountInfo.subscriptionType && (
-            <span className="px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[10px]">
+            <span className="shrink-0 px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[10px] whitespace-nowrap">
               {accountInfo.subscriptionType}
             </span>
           )}
-          <span className="w-px h-3 bg-[var(--border)]" />
+          <span className="w-px h-3 shrink-0 bg-[var(--border)]" />
         </>
       )}
 
@@ -74,18 +74,18 @@ export function StatusBar() {
       <ContextUsageIndicator />
       <McpIndicator />
       {effort !== 'high' && (
-        <span className="text-[10px] text-[var(--text-muted)]" title={`Effort: ${effort}`}>
+        <span className="shrink-0 text-[10px] text-[var(--text-muted)] whitespace-nowrap" title={`Effort: ${effort}`}>
           {EFFORT_DISPLAY[effort] ?? effort}
         </span>
       )}
 
       {/* Spacer */}
-      <span className="flex-1" />
+      <span className="flex-1 min-w-0" />
 
       {/* Session ID */}
       {currentSessionId && currentSessionId !== '__new__' && (
         <span
-          className="font-mono text-[10px] text-[var(--text-dim)] cursor-pointer hover:text-[var(--text-muted)]"
+          className="font-mono text-[10px] text-[var(--text-dim)] cursor-pointer hover:text-[var(--text-muted)] truncate min-w-0"
           title={`Session ID: ${currentSessionId}\n点击复制`}
           onClick={() => navigator.clipboard.writeText(currentSessionId)}
         >

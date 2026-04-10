@@ -335,26 +335,6 @@ export interface S2C_McpStatus {
   servers: McpServerStatusInfo[]
 }
 
-// ---- File Rewind ----
-
-export interface C2S_RewindFiles {
-  type: 'rewind-files'
-  sessionId: string
-  messageId: string
-  dryRun?: boolean
-}
-
-export interface S2C_RewindResult {
-  type: 'rewind-result'
-  sessionId: string
-  canRewind: boolean
-  error?: string
-  filesChanged?: string[]
-  insertions?: number
-  deletions?: number
-  dryRun: boolean
-}
-
 // ---- Sub-agent Messages ----
 
 export interface C2S_GetSubagentMessages {
@@ -429,7 +409,6 @@ export type C2SMessage =
   | C2S_GetMcpStatus
   | C2S_ToggleMcpServer
   | C2S_ReconnectMcpServer
-  | C2S_RewindFiles
   | C2S_GetSubagentMessages
   | C2S_Pong
 
@@ -454,7 +433,6 @@ export type S2CMessage =
   | S2C_SessionForked
   | S2C_ContextUsage
   | S2C_McpStatus
-  | S2C_RewindResult
   | S2C_SubagentMessages
   | S2C_Ping
   | S2C_StreamSnapshot

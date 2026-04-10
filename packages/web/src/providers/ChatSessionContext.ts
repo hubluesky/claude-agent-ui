@@ -63,7 +63,6 @@ export interface ChatSessionContextValue {
   planModalOpen: boolean
   contextUsage: ContextUsage | null
   mcpServers: McpServerStatusInfo[]
-  rewindPreview: { filesChanged?: string[]; insertions?: number; deletions?: number; canRewind?: boolean; error?: string } | null
   subagentMessages: { agentId: string; messages: any[] } | null
 
   // Actions
@@ -78,7 +77,6 @@ export interface ChatSessionContextValue {
   getMcpStatus(): void
   toggleMcpServer(serverName: string, enabled: boolean): void
   reconnectMcpServer(serverName: string): void
-  rewindFiles(messageId: string, dryRun?: boolean): void
   getSubagentMessages(agentId: string): void
   forkSession(atMessageId?: string): void
 }

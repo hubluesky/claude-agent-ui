@@ -62,7 +62,7 @@ export function ModelSelector() {
         onClick={() => hasModels && setOpen(!open)}
         className={`flex items-center gap-1.5 transition-colors ${hasModels ? 'hover:text-[var(--text-primary)] cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="text-[var(--text-secondary)]">{displayName ?? 'Model'}</span>
+        <span className="text-[var(--text-secondary)] whitespace-nowrap">{displayName ?? 'Model'}</span>
         {hasModels && <span className="text-[8px] text-[var(--text-muted)]">&#9660;</span>}
       </button>
 

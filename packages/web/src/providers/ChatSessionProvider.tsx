@@ -103,7 +103,6 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
     const planModalOpen = container?.planModalOpen ?? false
     const contextUsage = container?.contextUsage ?? null
     const mcpServers = container?.mcpServers ?? []
-    const rewindPreview = container?.rewindPreview ?? null
     const subagentMessages = container?.subagentMessages ?? null
 
     return {
@@ -126,7 +125,6 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
       planModalOpen,
       contextUsage,
       mcpServers,
-      rewindPreview,
       subagentMessages,
 
       send(prompt, options) {
@@ -184,10 +182,6 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
 
       reconnectMcpServer(serverName) {
         if (sessionId && sessionId !== '__new__') wsManager.reconnectMcpServer(sessionId, serverName)
-      },
-
-      rewindFiles(messageId, dryRun) {
-        if (sessionId && sessionId !== '__new__') wsManager.rewindFiles(sessionId, messageId, dryRun)
       },
 
       getSubagentMessages(agentId) {
