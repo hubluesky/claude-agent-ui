@@ -603,15 +603,16 @@ class WebSocketManager {
         s.setSpinnerMode(sessionId, 'tool-use')
         // Add new streaming tool use
         const toolBlock = evt.content_block
+        // Calculate the target index BEFORE adding (addStreamingToolUse creates a new Map,
+        // so the stale `s` reference would give us the old length)
+        const currentContainer = s.containers.get(sessionId)
+        const nextToolIndex = currentContainer ? currentContainer.streaming.toolUses.length : 0
         s.addStreamingToolUse(sessionId, {
           id: toolBlock.id ?? `tool-${evt.index}`,
           name: toolBlock.name ?? '',
           input: '',
         })
-        const container = s.containers.get(sessionId)
-        if (container) {
-          this.currentToolBlockIndex.set(sessionId, container.streaming.toolUses.length - 1)
-        }
+        this.currentToolBlockIndex.set(sessionId, nextToolIndex)
       }
     } else if (evt.type === 'content_block_delta') {
       const delta = evt.delta
