@@ -91,6 +91,9 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'abort':
         await handleAbort(connectionId, msg.sessionId)
         break
+      case 'clear-queue':
+        handleClearQueue(connectionId, (msg as any).sessionId)
+        break
       case 'set-mode':
         await handleSetMode(connectionId, msg.sessionId, msg.mode)
         break
@@ -178,6 +181,15 @@ export function createWsHandler(deps: HandlerDeps) {
       isLockHolder: lockHolder === connectionId,
       permissionMode: activeSession?.permissionMode,
     })
+
+    // Send current queue state if session has queued messages
+    if (activeSession instanceof V1QuerySession && activeSession.queueLength > 0) {
+      wsHub.sendTo(connectionId, {
+        type: 'queue-updated',
+        sessionId,
+        queue: activeSession.getQueue(),
+      } as any)
+    }
 
     // Skip snapshot + replay if client was already subscribed to this session.
     if (!alreadyInSession) {
@@ -376,6 +388,15 @@ export function createWsHandler(deps: HandlerDeps) {
       effort: options?.effort as any,
       thinkingMode: options?.thinkingMode as any,
     })
+
+    // If the message was enqueued (session still running), broadcast queue state
+    if (session instanceof V1QuerySession && session.queueLength > 0) {
+      wsHub.broadcast(effectiveSessionId, {
+        type: 'queue-updated',
+        sessionId: effectiveSessionId,
+        queue: session.getQueue(),
+      } as any)
+    }
   }
 
   function bindSessionEvents(session: AgentSession, sessionId: string, connectionId: string, prompt?: string, contentBlocks?: any[]) {
@@ -666,6 +687,14 @@ export function createWsHandler(deps: HandlerDeps) {
         code: 'internal',
       })
     })
+
+    session.on('queue-updated', (queue) => {
+      wsHub.broadcast(realSessionId, {
+        type: 'queue-updated',
+        sessionId: realSessionId,
+        queue,
+      } as any)
+    })
   }
 
   function handleToolApprovalResponse(connectionId: string, requestId: string, decision: ToolApprovalDecision) {
@@ -710,19 +739,25 @@ export function createWsHandler(deps: HandlerDeps) {
       holderId: connectionId,
     })
 
-    if (session) {
-      // Active session — resolve directly
-      session.resolveAskUser(requestId, { answers })
+    // Check if the active session actually has this pending ask-user request.
+    // A warm-up session (from handleJoinSession) is active but has no running query,
+    // so resolveAskUser would silently fail. In that case, fall through to the
+    // resume-with-cache path which starts a new query.
+    const canResolveDirectly = session instanceof V1QuerySession && session.hasPendingAskUser(requestId)
+
+    if (canResolveDirectly) {
+      session!.resolveAskUser(requestId, { answers })
     } else {
-      // No active session (e.g., after server restart).
+      // No running query with this pending request (e.g., after server restart or warm-up only).
       // Resume the session with the cached answer — SDK will re-trigger canUseTool
       // for the pending AskUserQuestion, and the cached answer auto-resolves it.
       try {
-        session = await sessionManager.resumeSession(entry.sessionId)
+        if (!session) {
+          session = await sessionManager.resumeSession(entry.sessionId)
+        }
         if (session instanceof V1QuerySession) {
           session.cacheAskUserAnswer(answers)
           bindSessionEvents(session, entry.sessionId, connectionId)
-          // Resume with empty prompt — SDK picks up pending tool_use from history
           session.send('', { cwd: session.projectCwd })
         }
       } catch {
@@ -799,6 +834,18 @@ export function createWsHandler(deps: HandlerDeps) {
     if (decision === 'clear-and-accept' && session instanceof V1QuerySession) {
       session.markStartFresh()
     }
+  }
+
+  function handleClearQueue(connectionId: string, sessionId: string) {
+    if (!lockManager.isHolder(sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+
+    const session = sessionManager.getActive(sessionId)
+    if (!session || !(session instanceof V1QuerySession)) return
+
+    session.clearQueue()
   }
 
   async function handleAbort(connectionId: string, sessionId: string) {
@@ -1056,9 +1103,16 @@ export function createWsHandler(deps: HandlerDeps) {
     }
   }
 
-  function handleReconnect(_connectionId: string, _previousConnectionId: string) {
-    // Lock no longer tracks connections — nothing to migrate.
-    // Session join is handled by the client's resubscribeAll().
+  function handleReconnect(connectionId: string, previousConnectionId: string) {
+    if (connectionId === previousConnectionId) return
+
+    // Restore lock ownership: the reconnecting client is the same user,
+    // just with a new connectionId. Transfer any locks it previously held.
+    const lockedSessions = lockManager.getLockedSessions(previousConnectionId)
+    for (const sessionId of lockedSessions) {
+      lockManager.release(sessionId)
+      lockManager.acquire(sessionId, connectionId)
+    }
   }
 
   /**
