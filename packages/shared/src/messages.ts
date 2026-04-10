@@ -8,7 +8,6 @@ export type AgentMessageType =
   | 'tool_use_summary'
   | 'auth_status'
   | 'rate_limit_event'
-  | 'prompt_suggestion'
 
 export type SystemSubtype =
   | 'init'
@@ -49,5 +48,6 @@ export interface AgentMessage {
   subtype?: string
   session_id?: string
   uuid?: string
+  _partial?: boolean  // Marks partial assistant messages (mid-stream state from SDK)
   [key: string]: unknown
 }
