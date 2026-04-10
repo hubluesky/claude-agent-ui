@@ -4,7 +4,6 @@ import type { LockManager } from './ws/lock.js'
 import type { SessionManager } from './agent/manager.js'
 import type { AppConfig } from './config.js'
 import { basename } from 'path'
-import { getSessionInfo } from '@anthropic-ai/claude-agent-sdk'
 
 export class ServerManager {
   private startedAt = new Date()
@@ -35,16 +34,18 @@ export class ServerManager {
         return name
       }
     }
-    // 最后从 SDK 读取会话信息
-    try {
-      const info = await getSessionInfo(sessionId)
-      const cwd = (info as any).cwd ?? ''
-      if (cwd) {
-        const name = basename(cwd)
-        this.sessionProjectCache.set(sessionId, name)
-        return name
-      }
-    } catch { /* session not found */ }
+    // 最后从 SessionStorage 读取会话信息
+    if (this.sessionManager) {
+      try {
+        const info = await this.sessionManager.getSessionInfo(sessionId)
+        const cwd = info?.cwd ?? ''
+        if (cwd) {
+          const name = basename(cwd)
+          this.sessionProjectCache.set(sessionId, name)
+          return name
+        }
+      } catch { /* session not found */ }
+    }
     return null
   }
 

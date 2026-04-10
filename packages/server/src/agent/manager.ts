@@ -1,29 +1,36 @@
-import { listSessions, getSessionInfo, getSessionMessages, query } from '@anthropic-ai/claude-agent-sdk'
 import type { ProjectInfo, SessionSummary, SlashCommandInfo } from '@claude-agent-ui/shared'
-import { V1QuerySession } from './v1-session.js'
-import { AgentSession } from './session.js'
+import { CliSession } from './cli-session.js'
+import type { AgentSession } from './session.js'
+import { ProcessManager } from './process-manager.js'
+import { SessionStorage } from './session-storage.js'
 import { basename } from 'path'
-import { scanSkills } from './skills.js'
 
 interface CacheEntry<T> {
   data: T
   expiry: number
 }
 
-const CACHE_TTL_MS = 30_000 // 30 seconds
+const CACHE_TTL_MS = 30_000
 
 export class SessionManager {
   private activeSessions = new Map<string, AgentSession>()
   private _cachedCommands: SlashCommandInfo[] | null = null
-  private _fetchingCommands = false
   private _projectsCache: CacheEntry<ProjectInfo[]> | null = null
   private _sessionsCache = new Map<string, CacheEntry<{ sessions: SessionSummary[]; total: number; hasMore: boolean }>>()
+
+  readonly processManager: ProcessManager
+  readonly sessionStorage: SessionStorage
+
+  constructor(cliBin?: string) {
+    this.processManager = new ProcessManager(cliBin)
+    this.sessionStorage = new SessionStorage()
+  }
 
   async listProjects(): Promise<ProjectInfo[]> {
     if (this._projectsCache && Date.now() < this._projectsCache.expiry) {
       return this._projectsCache.data
     }
-    const sessions = await listSessions()
+    const sessions = await this.sessionStorage.listSessions()
     const projectMap = new Map<string, { lastActiveAt: string; count: number }>()
 
     for (const s of sessions) {
@@ -69,8 +76,8 @@ export class SessionManager {
     if (cached && Date.now() < cached.expiry) {
       return cached.data
     }
-    const allSessions = await listSessions({ dir: cwd })
-    const sorted = allSessions.sort((a, b) => (b.lastModified ?? 0) - (a.lastModified ?? 0))
+    const allSessions = await this.sessionStorage.listSessions(cwd)
+    const sorted = allSessions.sort((a, b) => b.lastModified - a.lastModified)
 
     const limit = options?.limit ?? 20
     const offset = options?.offset ?? 0
@@ -93,22 +100,18 @@ export class SessionManager {
   }
 
   async getSessionInfo(sessionId: string) {
-    return await getSessionInfo(sessionId)
+    return await this.sessionStorage.getSessionInfo(sessionId)
   }
 
   async getSessionMessages(
     sessionId: string,
     options?: { limit?: number; offset?: number }
   ): Promise<{ messages: unknown[]; total: number; hasMore: boolean }> {
-    // SDK offset counts "from the start", but the UI needs the LATEST messages.
-    // Fetch all messages, then paginate from the end.
-    const allMessages = await getSessionMessages(sessionId)
+    const allMessages = await this.sessionStorage.getSessionMessages(sessionId)
     const total = allMessages.length
     const limit = options?.limit ?? 50
     const offset = options?.offset ?? 0
 
-    // offset=0 → last `limit` messages (newest)
-    // offset=N → messages before the last N (older)
     const endIndex = total - offset
     const startIndex = Math.max(0, endIndex - limit)
     const sliced = endIndex > 0 ? allMessages.slice(startIndex, endIndex) : []
@@ -120,37 +123,32 @@ export class SessionManager {
     }
   }
 
-  createSession(cwd: string): AgentSession {
-    const session = new V1QuerySession(cwd)
-    return session
+  createSession(cwd: string, options?: { model?: string; effort?: string; thinking?: string; permissionMode?: any }): CliSession {
+    return new CliSession(this.processManager, cwd, options)
   }
 
-  async resumeSession(sessionId: string): Promise<AgentSession> {
+  async resumeSession(sessionId: string): Promise<CliSession> {
     const existing = this.activeSessions.get(sessionId)
-    if (existing) return existing
+    if (existing) return existing as CliSession
 
-    const info = await getSessionInfo(sessionId)
+    const info = await this.sessionStorage.getSessionInfo(sessionId)
     if (!info) throw new Error(`Session ${sessionId} not found`)
 
-    const session = new V1QuerySession(info.cwd ?? '.', { resumeSessionId: sessionId })
+    const session = new CliSession(this.processManager, info.cwd ?? '.', { resumeSessionId: sessionId })
     this.activeSessions.set(sessionId, session)
     return session
   }
 
   registerActive(sessionId: string, session: AgentSession): void {
     this.activeSessions.set(sessionId, session)
-    // Invalidate caches so the new session appears in subsequent list queries
     this.invalidateSessionsCache(session.projectCwd)
   }
 
-  /** Clear sessions & projects cache for a project so the next list query is fresh.
-   *  If no cwd is provided, clear ALL caches. */
   invalidateSessionsCache(cwd?: string): void {
     this._projectsCache = null
     if (!cwd) {
       this._sessionsCache.clear()
     } else {
-      // Remove all cache entries whose key starts with this cwd
       for (const key of this._sessionsCache.keys()) {
         if (key.startsWith(cwd + ':')) {
           this._sessionsCache.delete(key)
@@ -171,49 +169,12 @@ export class SessionManager {
     this.activeSessions.delete(sessionId)
   }
 
-  /** Cache commands pushed by an active session */
   cacheCommands(commands: SlashCommandInfo[]): void {
     this._cachedCommands = commands
   }
 
-  /** Get cached commands, or fetch from a temporary query if not yet cached */
-  async getCommands(cwd?: string): Promise<SlashCommandInfo[]> {
+  async getCommands(): Promise<SlashCommandInfo[]> {
     if (this._cachedCommands) return this._cachedCommands
-    if (this._fetchingCommands) return []
-
-    this._fetchingCommands = true
-    try {
-      const effectiveCwd = cwd ?? process.cwd()
-      const q = query({ prompt: '', options: { cwd: effectiveCwd } as any })
-      // Wait for initialization to complete so plugins/skills are loaded
-      const initResult = await q.initializationResult()
-      const sdkCommands = (initResult.commands ?? await q.supportedCommands()).map((c: any) => ({
-        name: c.name,
-        description: c.description ?? '',
-        argumentHint: c.argumentHint,
-      }))
-      q.close?.()
-
-      // Scan filesystem for skills from enabled plugins
-      const skills = scanSkills()
-
-      // Merge: SDK commands first, then skills (deduplicate by name)
-      const seen = new Set(sdkCommands.map((c: SlashCommandInfo) => c.name))
-      const merged = [...sdkCommands, ...skills.filter((s) => !seen.has(s.name))]
-      this._cachedCommands = merged
-      return this._cachedCommands
-    } catch {
-      // If SDK fails, still try to return skills from filesystem
-      try {
-        const skills = scanSkills()
-        if (skills.length) {
-          this._cachedCommands = skills
-          return skills
-        }
-      } catch { /* ignore */ }
-      return []
-    } finally {
-      this._fetchingCommands = false
-    }
+    return []
   }
 }

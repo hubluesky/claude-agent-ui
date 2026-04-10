@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { renameSession, tagSession } from '@anthropic-ai/claude-agent-sdk'
 import type { SessionManager } from '../agent/manager.js'
 
 export function sessionRoutes(sessionManager: SessionManager) {
@@ -56,7 +55,7 @@ export function sessionRoutes(sessionManager: SessionManager) {
     app.post<{ Params: { id: string }; Body: { title: string } }>(
       '/api/sessions/:id/rename',
       async (request) => {
-        await renameSession(request.params.id, request.body.title)
+        await sessionManager.sessionStorage.renameSession(request.params.id, request.body.title)
         return { status: 'ok' }
       }
     )
@@ -120,7 +119,7 @@ export function sessionRoutes(sessionManager: SessionManager) {
     app.post<{ Params: { id: string }; Body: { tag: string | null } }>(
       '/api/sessions/:id/tag',
       async (request) => {
-        await tagSession(request.params.id, request.body.tag)
+        await sessionManager.sessionStorage.tagSession(request.params.id, request.body.tag)
         return { status: 'ok' }
       }
     )

@@ -4,7 +4,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { pipeline } from 'stream/promises'
 import type { SdkUpdateProgress, SdkFeatureStatus } from '@claude-agent-ui/shared'
-import { SDK_FEATURES } from '@claude-agent-ui/shared'
+// SDK_FEATURES removed — no longer using Agent SDK
 import type { LogCollector } from './log-collector.js'
 
 type ProgressCallback = (progress: SdkUpdateProgress) => void
@@ -77,7 +77,7 @@ export class SdkUpdater {
   }
 
   getFeatures(): SdkFeatureStatus[] {
-    return SDK_FEATURES
+    return []
   }
 
   async updateDev(onProgress: ProgressCallback): Promise<void> {

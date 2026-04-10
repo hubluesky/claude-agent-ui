@@ -11,6 +11,8 @@ export interface AgentSessionEvents {
   'complete': (result: SessionResult) => void
   'error': (err: Error) => void
   'state-change': (state: SessionStatus) => void
+  'session-id-changed': (oldId: string | null, newId: string) => void
+  'clear-and-accept-requested': (decision: PlanApprovalDecision) => void
 }
 
 export abstract class AgentSession extends EventEmitter {
@@ -28,4 +30,14 @@ export abstract class AgentSession extends EventEmitter {
   abstract resolveAskUser(requestId: string, response: AskUserResponse): void
 
   abstract setPermissionMode(mode: PermissionMode): Promise<void>
+
+  setModel?(model: string): Promise<void>
+  stopTask?(taskId: string): Promise<void>
+  getContextUsage?(): Promise<unknown>
+  getMcpStatus?(): Promise<unknown[]>
+  toggleMcpServer?(serverName: string, enabled: boolean): Promise<void>
+  reconnectMcpServer?(serverName: string): Promise<void>
+  rewindFiles?(messageId: string): Promise<unknown>
+  setThinking?(tokens: number | null): void
+  setEffort?(level: string): void
 }
