@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useServerStore } from '../../stores/serverStore'
 import { ServerStatusCard } from './ServerStatusCard'
-import { SdkSection } from './SdkSection'
 import { ConnectionsList } from './ConnectionsList'
 import { ServerLogs } from './ServerLogs'
 
@@ -19,7 +18,6 @@ export function ServerManagement() {
   return (
     <div className="h-full flex flex-col p-5 gap-3">
       <ServerStatusCard />
-      <SdkSection />
       <ConnectionsList />
       <div className="flex-1 min-h-0">
         <ServerLogs fullHeight />

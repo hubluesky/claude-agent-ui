@@ -41,7 +41,7 @@ export function ConnectionsList() {
           连接 <span style={{ color: 'var(--accent)' }}>{connections.length}</span>
         </span>
       </div>
-      <div className="text-[11px]">
+      <div className="text-[11px] max-h-[200px] overflow-auto">
         {connections.length === 0 ? (
           <div className="px-3 py-3 text-center" style={{ color: 'var(--text-muted)' }}>无连接</div>
         ) : connections.map((conn, i) => {

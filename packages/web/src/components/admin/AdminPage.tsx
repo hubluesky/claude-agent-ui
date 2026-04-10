@@ -207,7 +207,7 @@ function SettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <span style={{ color: 'var(--text-muted)' }}>技术栈</span>
-            <span style={{ color: 'var(--text-primary)' }}>Fastify + React + Claude SDK</span>
+            <span style={{ color: 'var(--text-primary)' }}>Fastify + React + Claude CLI</span>
           </div>
         </div>
       </div>
