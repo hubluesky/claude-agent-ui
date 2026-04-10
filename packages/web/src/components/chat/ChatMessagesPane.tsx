@@ -48,6 +48,11 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
     (state) => state.containers.get(sessionId)?.streamingVersion ?? 0
   )
 
+  // Get queue from the container
+  const queue = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.queue ?? []
+  )
+
   // ── Spinner state from mutable StreamState (polled every 500ms) ──
   const [spinnerMode, setSpinnerMode] = useState<SpinnerMode>('requesting')
   const [requestStartTime, setRequestStartTime] = useState<number | null>(null)
@@ -237,6 +242,22 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
           />
         </div>
       )}
+      {/* Queued messages */}
+      {queue.length > 0 && queue.map((item) => (
+        <div key={item.id} className="px-4 py-2.5">
+          <div className="flex items-start gap-3 opacity-50">
+            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--accent)]/20 flex items-center justify-center">
+              <span className="text-xs text-[var(--accent)]">Q</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-[var(--text-tertiary)] mb-0.5">Queued</div>
+              <div className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap break-words line-clamp-3">
+                {item.prompt}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
       <PlanApprovalCard />
     </div>
   )
