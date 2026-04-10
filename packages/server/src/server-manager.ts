@@ -8,8 +8,7 @@ import { basename } from 'path'
 export class ServerManager {
   private startedAt = new Date()
   private sessionManager: SessionManager | null = null
-  /** sessionId → projectName 缓存（避免重复读 JSONL） */
-  private sessionProjectCache = new Map<string, string>()
+  private sessionInfoCache = new Map<string, { projectName: string; sessionTitle: string | null }>()
 
   constructor(
     private config: AppConfig,
@@ -21,47 +20,53 @@ export class ServerManager {
     this.sessionManager = sm
   }
 
-  private async resolveProjectName(sessionId: string): Promise<string | null> {
-    // 先查缓存
-    const cached = this.sessionProjectCache.get(sessionId)
+  private async resolveSessionInfo(sessionId: string): Promise<{ projectName: string | null; sessionTitle: string | null }> {
+    const cached = this.sessionInfoCache.get(sessionId)
     if (cached) return cached
-    // 再查活跃会话
-    if (this.sessionManager) {
-      const active = this.sessionManager.getActive(sessionId)
-      if (active) {
-        const name = basename(active.projectCwd)
-        this.sessionProjectCache.set(sessionId, name)
-        return name
+
+    if (!this.sessionManager) return { projectName: null, sessionTitle: null }
+
+    // Check active sessions first
+    const active = this.sessionManager.getActive(sessionId)
+    if (active) {
+      const name = basename(active.projectCwd)
+      const entry = { projectName: name, sessionTitle: null as string | null }
+      this.sessionInfoCache.set(sessionId, entry)
+      return entry
+    }
+
+    // Fall back to SessionStorage
+    try {
+      const info = await this.sessionManager.getSessionInfo(sessionId)
+      if (info) {
+        const name = info.cwd ? basename(info.cwd) : null
+        const title = info.customTitle ?? info.summary ?? null
+        const entry = { projectName: name ?? '', sessionTitle: title }
+        if (name) this.sessionInfoCache.set(sessionId, entry)
+        return entry
       }
-    }
-    // 最后从 SessionStorage 读取会话信息
-    if (this.sessionManager) {
-      try {
-        const info = await this.sessionManager.getSessionInfo(sessionId)
-        const cwd = info?.cwd ?? ''
-        if (cwd) {
-          const name = basename(cwd)
-          this.sessionProjectCache.set(sessionId, name)
-          return name
-        }
-      } catch { /* session not found */ }
-    }
-    return null
+    } catch { /* session not found */ }
+
+    return { projectName: null, sessionTitle: null }
   }
 
   async getStatus(): Promise<ServerStatus> {
     const now = Date.now()
     const rawConns = this.wsHub.getAllConnections()
     const connections: ConnectionInfo[] = await Promise.all(
-      rawConns.map(async (c) => ({
-        connectionId: c.connectionId,
-        sessionId: c.sessionId,
-        connectedAt: c.connectedAt.toISOString(),
-        hasLock: c.sessionId ? this.lockManager.getHolder(c.sessionId) === c.connectionId : false,
-        userAgent: c.userAgent,
-        ip: c.ip,
-        projectName: c.sessionId ? await this.resolveProjectName(c.sessionId) : null,
-      }))
+      rawConns.map(async (c) => {
+        const info = c.sessionId ? await this.resolveSessionInfo(c.sessionId) : { projectName: null, sessionTitle: null }
+        return {
+          connectionId: c.connectionId,
+          sessionId: c.sessionId,
+          connectedAt: c.connectedAt.toISOString(),
+          hasLock: c.sessionId ? this.lockManager.getHolder(c.sessionId) === c.connectionId : false,
+          userAgent: c.userAgent,
+          ip: c.ip,
+          projectName: info.projectName,
+          sessionTitle: info.sessionTitle,
+        }
+      })
     )
 
     return {

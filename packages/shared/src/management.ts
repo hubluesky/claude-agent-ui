@@ -23,6 +23,7 @@ export interface ConnectionInfo {
   userAgent: string | null
   ip: string | null
   projectName: string | null
+  sessionTitle: string | null
 }
 
 /** GET /api/sdk/version 响应 */

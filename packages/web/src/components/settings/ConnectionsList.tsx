@@ -1,6 +1,5 @@
 import { useServerStore } from '../../stores/serverStore'
 
-/** 从 userAgent 字符串解析出浏览器简称 */
 function parseBrowser(ua: string | null): string {
   if (!ua) return '未知'
   if (ua.includes('Edg/')) return 'Edge'
@@ -11,7 +10,6 @@ function parseBrowser(ua: string | null): string {
   return '浏览器'
 }
 
-/** 从 userAgent 解析出操作系统简称 */
 function parseOS(ua: string | null): string {
   if (!ua) return ''
   if (ua.includes('Windows')) return 'Win'
@@ -22,7 +20,6 @@ function parseOS(ua: string | null): string {
   return ''
 }
 
-/** 格式化连接时间为相对时间 */
 function formatConnTime(connectedAt: string): string {
   const diff = Math.floor((Date.now() - new Date(connectedAt).getTime()) / 1000)
   if (diff < 60) return `${diff}s`
@@ -51,21 +48,29 @@ export function ConnectionsList() {
 
           return (
             <div key={conn.connectionId} className="flex items-center justify-between px-3 py-1.5" style={{ borderBottom: i < connections.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div className="flex items-center gap-2">
-                <span style={{ color: 'var(--text-primary)' }}>{client}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="shrink-0" style={{ color: 'var(--text-primary)' }}>{client}</span>
                 {conn.projectName && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--info)' }}>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--info)' }}>
                     {conn.projectName}
                   </span>
                 )}
+                {conn.sessionTitle && (
+                  <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+                    {conn.sessionTitle}
+                  </span>
+                )}
+                {!conn.sessionId && (
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>未加入会话</span>
+                )}
                 {conn.ip && conn.ip !== '127.0.0.1' && conn.ip !== '::1' && (
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{conn.ip}</span>
+                  <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>{conn.ip}</span>
                 )}
                 {conn.hasLock && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--accent)' }}>锁定中</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded shrink-0" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--accent)' }}>锁定中</span>
                 )}
               </div>
-              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              <span className="text-[10px] shrink-0 ml-2" style={{ color: 'var(--text-muted)' }}>
                 {formatConnTime(conn.connectedAt)}
               </span>
             </div>
