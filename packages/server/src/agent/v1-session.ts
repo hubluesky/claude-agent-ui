@@ -155,10 +155,9 @@ export class V1QuerySession extends AgentSession {
             this.fetchAccountInfo()
             this.fetchModels()
             this.fetchContextUsage()
-            // MCP connections take time to establish after init — fetch with retries
+            // MCP connections take time to establish after init — single delayed retry
             this.fetchMcpStatus()
-            setTimeout(() => this.fetchMcpStatus(), 3000)
-            setTimeout(() => this.fetchMcpStatus(), 8000)
+            setTimeout(() => this.fetchMcpStatus(), 5000)
           }
         }
       } catch {
@@ -199,9 +198,10 @@ export class V1QuerySession extends AgentSession {
       canUseTool: this.handleCanUseTool.bind(this),
       allowDangerouslySkipPermissions: true,
       env: { ...process.env, ...claudeEnv },
-      promptSuggestions: true,
-      enableFileCheckpointing: true,
-      agentProgressSummaries: true,
+      // Disabled for performance — CLI interactive mode doesn't enable these either.
+      // promptSuggestions: generates suggestions after each turn (extra processing)
+      // enableFileCheckpointing: file backup I/O per tool use (needed for rewindFiles)
+      // agentProgressSummaries: subagent progress events (not used in UI)
     }
 
     // Resume existing session or use previously captured ID
@@ -299,8 +299,19 @@ export class V1QuerySession extends AgentSession {
           return
         }
 
-        // Forward all messages
-        this.emit('message', msg)
+        // Forward all messages — mark partial vs final assistant
+        if ((msg as any).type === 'assistant') {
+          // partial: stop_reason 为 null（流式中间态，SDK 的 includePartialMessages）
+          // final: stop_reason 有值（'end_turn', 'tool_use', 'max_tokens' 等）
+          const stopReason = (msg as any).message?.stop_reason
+          if (!stopReason) {
+            this.emit('message', { ...msg, _partial: true })
+          } else {
+            this.emit('message', msg)
+          }
+        } else {
+          this.emit('message', msg)
+        }
 
         // Handle result
         if ((msg as any).type === 'result') {
@@ -402,10 +413,6 @@ export class V1QuerySession extends AgentSession {
   async reconnectMcpServer(serverName: string): Promise<void> {
     const q = this.queryInstance ?? this.lastQueryInstance
     await q?.reconnectMcpServer?.(serverName)
-  }
-
-  async rewindFiles(messageId: string, options?: { dryRun?: boolean }): Promise<any> {
-    return this.queryInstance?.rewindFiles?.(messageId, options)
   }
 
   private fetchAccountInfo(): void {
