@@ -8,6 +8,7 @@ import type {
   PlanApprovalRequest,
   ContextUsageCategory,
   McpServerStatusInfo,
+  QueueItem,
 } from '@claude-agent-ui/shared'
 
 // ─── Types migrated from connectionStore ───
@@ -66,6 +67,7 @@ export interface SessionContainer {
   mcpServers: McpServerInfo[]
   rewindPreview: { filesChanged?: string[]; insertions?: number; deletions?: number; canRewind?: boolean; error?: string } | null
   subagentMessages: { agentId: string; messages: any[] } | null
+  queue: QueueItem[]
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
@@ -136,6 +138,7 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     mcpServers: [],
     rewindPreview: null,
     subagentMessages: null,
+    queue: [],
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
@@ -197,6 +200,7 @@ interface SessionContainerActions {
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
   setRewindPreview(sessionId: string, preview: SessionContainer['rewindPreview']): void
   setSubagentMessages(sessionId: string, data: SessionContainer['subagentMessages']): void
+  setQueue(sessionId: string, queue: QueueItem[]): void
   setSubscribed(sessionId: string, subscribed: boolean): void
   setLastSeq(sessionId: string, seq: number): void
   setNeedsFullSync(sessionId: string, needs: boolean): void
@@ -537,6 +541,15 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     if (!c) return
     const next = new Map(containers)
     next.set(sessionId, { ...c, subagentMessages: data })
+    set({ containers: next })
+  },
+
+  setQueue(sessionId, queue) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c) return
+    const next = new Map(containers)
+    next.set(sessionId, { ...c, queue })
     set({ containers: next })
   },
 

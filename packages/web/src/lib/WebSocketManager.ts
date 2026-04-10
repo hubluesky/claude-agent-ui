@@ -189,6 +189,10 @@ class WebSocketManager {
     this.send({ type: 'abort', sessionId })
   }
 
+  clearQueue(sessionId: string) {
+    this.send({ type: 'clear-queue', sessionId } as any)
+  }
+
   getConnectionId(): string | null {
     return this.connectionId
   }
@@ -469,6 +473,9 @@ class WebSocketManager {
         break
       case 'sync-result':
         this.handleSyncResult(msg)
+        break
+      case 'queue-updated':
+        this.handleQueueUpdated(msg)
         break
       case 'ping':
         this.handlePing()
@@ -1002,6 +1009,7 @@ class WebSocketManager {
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
+    s.setQueue(sessionId, [])
     // Finalize any in-progress streaming message (with accumulated content)
     this.finalizeStreamingMessage(sessionId)
     // Safety net: clear any remaining _streaming flags
@@ -1156,6 +1164,12 @@ class WebSocketManager {
       sessions.set(cwd, updated)
     }
     useSessionStore.setState({ sessions })
+  }
+
+  private handleQueueUpdated(msg: any) {
+    const sessionId = msg.sessionId as string | undefined
+    if (!sessionId) return
+    store().setQueue(sessionId, msg.queue ?? [])
   }
 
   private handleSyncResult(msg: any) {
