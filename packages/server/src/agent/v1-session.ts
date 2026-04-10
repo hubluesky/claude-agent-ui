@@ -65,6 +65,8 @@ export class V1QuerySession extends AgentSession {
   /** Kept alive after query ends for informational methods (mcpServerStatus, etc.) */
   private lastQueryInstance: ReturnType<typeof query> | null = null
   private abortController: AbortController | null = null
+  private _bufferedAssistant: any = null
+  private _lastAssistantMsgId: string | null = null
   private _status: SessionStatus = 'idle'
   private pendingApprovals = new Map<string, PendingApproval>()
   private pendingAskUser = new Map<string, PendingAskUser>()
@@ -300,16 +302,31 @@ export class V1QuerySession extends AgentSession {
         }
 
         // Forward all messages — mark partial vs final assistant
+        // SDK with includePartialMessages yields multiple assistant messages with the SAME message.id.
+        // Earlier ones are partial (subset of content blocks), the last one is final.
+        // We track the last-seen id to mark all-but-last as _partial.
         if ((msg as any).type === 'assistant') {
-          // partial: stop_reason 为 null（流式中间态，SDK 的 includePartialMessages）
-          // final: stop_reason 有值（'end_turn', 'tool_use', 'max_tokens' 等）
-          const stopReason = (msg as any).message?.stop_reason
-          if (!stopReason) {
-            this.emit('message', { ...msg, _partial: true })
-          } else {
-            this.emit('message', msg)
+          const msgId = (msg as any).message?.id
+          if (msgId && msgId === this._lastAssistantMsgId) {
+            // Same id as previous → the previous was partial, this might be final
+            // Mark it as _partial for now; the NEXT message will reveal if this is truly final
+            // Actually: we already emitted the previous one. So we use a deferred approach:
+            // Buffer the current assistant msg. When the next msg arrives (any type), flush the buffer.
           }
+          // Simpler approach: emit previous buffered assistant as _partial, buffer current one.
+          // When a non-assistant msg arrives or query ends, flush buffer as final.
+          if (this._bufferedAssistant) {
+            this.emit('message', { ...this._bufferedAssistant, _partial: true })
+          }
+          this._bufferedAssistant = msg
+          this._lastAssistantMsgId = msgId
         } else {
+          // Non-assistant msg: flush any buffered assistant as final first
+          if (this._bufferedAssistant) {
+            this.emit('message', this._bufferedAssistant)
+            this._bufferedAssistant = null
+            this._lastAssistantMsgId = null
+          }
           this.emit('message', msg)
         }
 
@@ -334,7 +351,19 @@ export class V1QuerySession extends AgentSession {
           setImmediate(() => this.dequeueNext())
         }
       }
+      // Flush any remaining buffered assistant as final when loop ends
+      if (this._bufferedAssistant) {
+        this.emit('message', this._bufferedAssistant)
+        this._bufferedAssistant = null
+        this._lastAssistantMsgId = null
+      }
     } catch (err: any) {
+      // Flush buffer on error too
+      if (this._bufferedAssistant) {
+        this.emit('message', this._bufferedAssistant)
+        this._bufferedAssistant = null
+        this._lastAssistantMsgId = null
+      }
       if (err.name === 'AbortError' || this.abortController?.signal.aborted) {
         this.setStatus('idle')
         return
