@@ -65,13 +65,44 @@ export interface SessionContainer {
   lockHolder: string | null
   contextUsage: ContextUsage | null
   mcpServers: McpServerInfo[]
-  rewindPreview: { filesChanged?: string[]; insertions?: number; deletions?: number; canRewind?: boolean; error?: string } | null
   subagentMessages: { agentId: string; messages: any[] } | null
   queue: QueueItem[]
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
   streamingVersion: number
+  // New: separated streaming state
+  streaming: StreamingState
+  spinnerMode: SpinnerMode | null
+  requestStartTime: number | null
+  thinkingStartTime: number | null
+  thinkingEndTime: number | null
+  responseLength: number
+}
+
+// ─── Streaming State (new: separated from messages) ───
+
+export interface StreamingToolUse {
+  id: string
+  name: string
+  input: string  // accumulated JSON string
+}
+
+export interface CompletedStreamingBlock {
+  type: 'thinking' | 'text'
+  content: string
+}
+
+export interface StreamingState {
+  text: string | null
+  thinking: string | null
+  toolUses: StreamingToolUse[]
+  completedBlocks: CompletedStreamingBlock[]
+  model: string | null
+}
+
+function createStreamingState(): StreamingState {
+  return { text: null, thinking: null, toolUses: [], completedBlocks: [], model: null }
 }
 
 // ─── StreamState (mutable, per-container, NOT in Zustand) ───
@@ -93,10 +124,7 @@ export class StreamState {
   clear() {
     this.accumulator.clear()
     this.pendingDeltas.clear()
-    if (this.pendingDeltaRafId !== null) {
-      cancelAnimationFrame(this.pendingDeltaRafId)
-      this.pendingDeltaRafId = null
-    }
+    this.pendingDeltaRafId = null
     this.requestStartTime = null
     this.thinkingStartTime = null
     this.thinkingEndTime = null
@@ -136,13 +164,19 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     lockHolder: null,
     contextUsage: null,
     mcpServers: [],
-    rewindPreview: null,
     subagentMessages: null,
     queue: [],
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
     streamingVersion: 0,
+    // New
+    streaming: createStreamingState(),
+    spinnerMode: null,
+    requestStartTime: null,
+    thinkingStartTime: null,
+    thinkingEndTime: null,
+    responseLength: 0,
   }
 }
 
@@ -198,7 +232,6 @@ interface SessionContainerActions {
   setLockStatus(sessionId: string, status: ClientLockStatus, holder?: string | null): void
   setContextUsage(sessionId: string, usage: ContextUsage | null): void
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
-  setRewindPreview(sessionId: string, preview: SessionContainer['rewindPreview']): void
   setSubagentMessages(sessionId: string, data: SessionContainer['subagentMessages']): void
   setQueue(sessionId: string, queue: QueueItem[]): void
   setSubscribed(sessionId: string, subscribed: boolean): void
@@ -210,6 +243,15 @@ interface SessionContainerActions {
   resetSessionInteraction(sessionId: string): void
   /** Returns mutable StreamState, creates if needed */
   getStreamState(sessionId: string): StreamState
+  // New streaming methods
+  updateStreamingText(sessionId: string, deltaText: string): void
+  updateStreamingThinking(sessionId: string, deltaThinking: string): void
+  addStreamingToolUse(sessionId: string, tool: StreamingToolUse): void
+  updateStreamingToolInput(sessionId: string, toolIndex: number, deltaJson: string): void
+  graduateStreamingBlock(sessionId: string, blockType: string): void
+  clearStreaming(sessionId: string): void
+  setStreamingModel(sessionId: string, model: string): void
+  setSpinnerMode(sessionId: string, mode: SpinnerMode): void
 }
 
 export const useSessionContainerStore = create<SessionContainerState & SessionContainerActions>((set, get) => ({
@@ -526,14 +568,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
-  setRewindPreview(sessionId, preview) {
-    const { containers } = get()
-    const c = containers.get(sessionId)
-    if (!c) return
-    const next = new Map(containers)
-    next.set(sessionId, { ...c, rewindPreview: preview })
-    set({ containers: next })
-  },
 
   setSubagentMessages(sessionId, data) {
     const { containers } = get()
@@ -610,5 +644,134 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     next.set(sessionId, stream)
     set({ streamStates: next })
     return stream
+  },
+
+  updateStreamingText(sessionId: string, deltaText: string) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    containers.set(sessionId, {
+      ...c,
+      streaming: { ...c.streaming, text: (c.streaming.text ?? '') + deltaText },
+      responseLength: c.responseLength + deltaText.length,
+      streamingVersion: c.streamingVersion + 1,
+    })
+    set({ containers })
+  },
+
+  updateStreamingThinking(sessionId: string, deltaThinking: string) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    containers.set(sessionId, {
+      ...c,
+      streaming: { ...c.streaming, thinking: (c.streaming.thinking ?? '') + deltaThinking },
+      streamingVersion: c.streamingVersion + 1,
+    })
+    set({ containers })
+  },
+
+  addStreamingToolUse(sessionId: string, tool: StreamingToolUse) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    const existing = c.streaming.toolUses.findIndex(t => t.id === tool.id)
+    const toolUses = [...c.streaming.toolUses]
+    if (existing >= 0) {
+      toolUses[existing] = tool
+    } else {
+      toolUses.push(tool)
+    }
+    containers.set(sessionId, {
+      ...c,
+      streaming: { ...c.streaming, toolUses },
+      streamingVersion: c.streamingVersion + 1,
+    })
+    set({ containers })
+  },
+
+  updateStreamingToolInput(sessionId: string, toolIndex: number, deltaJson: string) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    const toolUses = [...c.streaming.toolUses]
+    const tool = toolUses[toolIndex]
+    if (!tool) return
+    toolUses[toolIndex] = { ...tool, input: tool.input + deltaJson }
+    containers.set(sessionId, {
+      ...c,
+      streaming: { ...c.streaming, toolUses },
+      streamingVersion: c.streamingVersion + 1,
+    })
+    set({ containers })
+  },
+
+  graduateStreamingBlock(sessionId: string, blockType: string) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    const completedBlocks = [...c.streaming.completedBlocks]
+    if (blockType === 'thinking' && c.streaming.thinking !== null) {
+      completedBlocks.push({ type: 'thinking', content: c.streaming.thinking })
+    } else if (blockType === 'text' && c.streaming.text !== null) {
+      completedBlocks.push({ type: 'text', content: c.streaming.text })
+    }
+    containers.set(sessionId, {
+      ...c,
+      streaming: {
+        ...c.streaming,
+        thinking: blockType === 'thinking' ? null : c.streaming.thinking,
+        text: blockType === 'text' ? null : c.streaming.text,
+        completedBlocks,
+      },
+      streamingVersion: c.streamingVersion + 1,
+    })
+    set({ containers })
+  },
+
+  clearStreaming(sessionId: string) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    containers.set(sessionId, {
+      ...c,
+      streaming: createStreamingState(),
+      spinnerMode: null,
+      requestStartTime: null,
+      thinkingStartTime: null,
+      thinkingEndTime: null,
+      responseLength: 0,
+      streamingVersion: c.streamingVersion + 1,
+    })
+    set({ containers })
+  },
+
+  setStreamingModel(sessionId: string, model: string) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    containers.set(sessionId, {
+      ...c,
+      streaming: { ...c.streaming, model },
+    })
+    set({ containers })
+  },
+
+  setSpinnerMode(sessionId: string, mode: SpinnerMode) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    const updates: Partial<SessionContainer> = { spinnerMode: mode }
+    if (mode === 'requesting' && c.requestStartTime === null) {
+      updates.requestStartTime = Date.now()
+    }
+    if (mode === 'thinking' && c.thinkingStartTime === null) {
+      updates.thinkingStartTime = Date.now()
+    }
+    if (mode === 'responding' && c.thinkingStartTime !== null && c.thinkingEndTime === null) {
+      updates.thinkingEndTime = Date.now()
+    }
+    containers.set(sessionId, { ...c, ...updates })
+    set({ containers })
   },
 }))
