@@ -40,6 +40,7 @@ export class ProcessManager {
       '--input-format', 'stream-json',
       '--output-format', 'stream-json',
       '--include-partial-messages',
+      '--verbose',
     ]
     if (options.resumeSessionId) {
       args.push('--resume', options.resumeSessionId)
@@ -71,6 +72,12 @@ export class ProcessManager {
         ...process.env,
         CLAUDE_CODE_SESSION_ACCESS_TOKEN: sessionAccessToken,
       },
+    })
+
+    // Prevent EPIPE crash when CLI exits before we finish writing
+    child.stdin!.on('error', () => {})
+    child.on('error', (err) => {
+      console.error(`[CLI:${sessionId.slice(0, 8)}] spawn error:`, err.message)
     })
 
     const cliProcess: CliProcess = Object.assign(new EventEmitter(), {
