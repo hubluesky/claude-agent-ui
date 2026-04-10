@@ -51,6 +51,14 @@ interface PendingPlanApproval {
   resolve: (decision: PlanApprovalDecision) => void
 }
 
+interface QueuedMessage {
+  id: string
+  prompt: string
+  options?: SendOptions
+  images?: { data: string; mediaType: string }[]
+  addedAt: number
+}
+
 export class V1QuerySession extends AgentSession {
   private sessionId: string | null = null
   private queryInstance: ReturnType<typeof query> | null = null
@@ -69,6 +77,7 @@ export class V1QuerySession extends AgentSession {
   private _lastInputTokens = 0
   /** Pre-cached AskUser answers — auto-resolved when SDK re-triggers canUseTool on resume */
   private _cachedAskUserAnswer: Record<string, string> | null = null
+  private _messageQueue: QueuedMessage[] = []
 
   constructor(cwd: string, options?: { resumeSessionId?: string }) {
     super()
@@ -87,6 +96,27 @@ export class V1QuerySession extends AgentSession {
   /** Pre-cache an AskUser answer so the next resume auto-resolves it */
   cacheAskUserAnswer(answers: Record<string, string>): void {
     this._cachedAskUserAnswer = answers
+  }
+
+  /** Get current queue for broadcasting to clients */
+  getQueue(): { id: string; prompt: string; addedAt: number; images?: { data: string; mediaType: string }[] }[] {
+    return this._messageQueue.map(q => ({
+      id: q.id,
+      prompt: q.prompt,
+      addedAt: q.addedAt,
+      images: q.images,
+    }))
+  }
+
+  /** Clear all queued messages */
+  clearQueue(): void {
+    this._messageQueue = []
+    this.emit('queue-updated', this.getQueue())
+  }
+
+  /** Get queue length */
+  get queueLength(): number {
+    return this._messageQueue.length
   }
 
   private setStatus(status: SessionStatus): void {
@@ -138,6 +168,24 @@ export class V1QuerySession extends AgentSession {
   }
 
   send(prompt: string, options?: SendOptions): void {
+    // If a query is currently running, enqueue instead of interrupting
+    if (this._status === 'running' || this._status === 'awaiting_approval' || this._status === 'awaiting_user_input') {
+      const item: QueuedMessage = {
+        id: randomUUID(),
+        prompt,
+        options,
+        images: options?.images,
+        addedAt: Date.now(),
+      }
+      this._messageQueue.push(item)
+      this.emit('queue-updated', this.getQueue())
+      return
+    }
+
+    this.executeQuery(prompt, options)
+  }
+
+  private executeQuery(prompt: string, options?: SendOptions): void {
     // Stop previous query if still running (e.g., user sends new message while awaiting approval)
     this.stopCurrentQuery('New message sent')
 
@@ -191,6 +239,16 @@ export class V1QuerySession extends AgentSession {
 
     // Start the query in background
     this.runQuery(prompt, queryOptions, options?.images)
+  }
+
+  /** Process next queued message after current query completes */
+  private dequeueNext(): void {
+    if (this._messageQueue.length === 0) return
+    if (this._status !== 'idle') return
+
+    const next = this._messageQueue.shift()!
+    this.emit('queue-updated', this.getQueue())
+    this.executeQuery(next.prompt, next.options)
   }
 
   private async runQuery(
@@ -261,6 +319,8 @@ export class V1QuerySession extends AgentSession {
           }
           this.setStatus('idle')
           this.emit('complete', result)
+          // Auto-dequeue next message after query completes
+          setImmediate(() => this.dequeueNext())
         }
       }
     } catch (err: any) {
@@ -270,6 +330,8 @@ export class V1QuerySession extends AgentSession {
       }
       this.setStatus('idle')
       this.emit('error', err instanceof Error ? err : new Error(String(err)))
+      // On error, also try to dequeue next
+      setImmediate(() => this.dequeueNext())
     } finally {
       this.queryInstance = null
       this.abortController = null
@@ -526,6 +588,10 @@ export class V1QuerySession extends AgentSession {
     }
   }
 
+  hasPendingAskUser(requestId: string): boolean {
+    return this.pendingAskUser.has(requestId)
+  }
+
   resolvePlanApproval(requestId: string, decision: PlanApprovalDecision): void {
     const pending = this.pendingPlanApprovals.get(requestId)
     if (pending) {
@@ -535,6 +601,10 @@ export class V1QuerySession extends AgentSession {
   }
 
   async abort(): Promise<void> {
+    // Clear the queue first — abort means "stop everything"
+    this._messageQueue = []
+    this.emit('queue-updated', this.getQueue())
+
     this.stopCurrentQuery('Session aborted')
     try {
       await this.queryInstance?.interrupt?.()
