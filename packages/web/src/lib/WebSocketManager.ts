@@ -249,6 +249,12 @@ class WebSocketManager {
     }
 
     socket.onclose = () => {
+      // Only handle close for the CURRENT socket. When the visibility handler
+      // creates a new socket (e.g., after mobile screen unlock), the old socket's
+      // close event fires later — it must not wipe the new socket's reference
+      // or trigger a redundant reconnect, which would break the lock chain.
+      if (this.ws !== socket) return
+
       this.ws = null
       this.stopHeartbeat()
 
@@ -600,7 +606,6 @@ class WebSocketManager {
 
     if (evt.type === 'content_block_start') {
       const blockType = evt.content_block?.type ?? 'text'
-
       // ── Spinner timing ──
       if (streamState.requestStartTime === null) {
         streamState.requestStartTime = Date.now()
