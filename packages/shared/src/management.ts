@@ -10,6 +10,7 @@ export interface ServerStatus {
   pid: number
   uptime: number
   mode: ServerMode
+  totalConnections: number
   connections: ConnectionInfo[]
   startedAt: string
 }

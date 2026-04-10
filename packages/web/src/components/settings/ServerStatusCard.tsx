@@ -41,7 +41,7 @@ export function ServerStatusCard() {
             </span>
           )}
         </span>
-        <span className="text-[var(--text-muted)]">连接 <b className="text-[var(--text-primary)]">{status.connections.length}</b></span>
+        <span className="text-[var(--text-muted)]">连接 <b className="text-[var(--text-primary)]">{(status as any).totalConnections ?? status.connections.length}</b></span>
       </div>
       <button onClick={restart} disabled={restarting}
         className="px-3 py-1 text-[11px] rounded border cursor-pointer transition-colors hover:opacity-80 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"

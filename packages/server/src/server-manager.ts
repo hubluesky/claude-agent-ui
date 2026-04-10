@@ -53,14 +53,16 @@ export class ServerManager {
   async getStatus(): Promise<ServerStatus> {
     const now = Date.now()
     const rawConns = this.wsHub.getAllConnections()
+    // Only include connections that have joined a session
+    const activeConns = rawConns.filter(c => c.sessionId)
     const connections: ConnectionInfo[] = await Promise.all(
-      rawConns.map(async (c) => {
-        const info = c.sessionId ? await this.resolveSessionInfo(c.sessionId) : { projectName: null, sessionTitle: null }
+      activeConns.map(async (c) => {
+        const info = await this.resolveSessionInfo(c.sessionId!)
         return {
           connectionId: c.connectionId,
           sessionId: c.sessionId,
           connectedAt: c.connectedAt.toISOString(),
-          hasLock: c.sessionId ? this.lockManager.getHolder(c.sessionId) === c.connectionId : false,
+          hasLock: this.lockManager.getHolder(c.sessionId!) === c.connectionId,
           userAgent: c.userAgent,
           ip: c.ip,
           projectName: info.projectName,
@@ -75,6 +77,7 @@ export class ServerManager {
       pid: process.pid,
       uptime: Math.floor((now - this.startedAt.getTime()) / 1000),
       mode: this.config.mode,
+      totalConnections: rawConns.length,
       connections,
       startedAt: this.startedAt.toISOString(),
     }

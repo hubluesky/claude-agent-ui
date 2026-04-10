@@ -60,9 +60,6 @@ export function ConnectionsList() {
                     {conn.sessionTitle}
                   </span>
                 )}
-                {!conn.sessionId && (
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>未加入会话</span>
-                )}
                 {conn.ip && conn.ip !== '127.0.0.1' && conn.ip !== '::1' && (
                   <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>{conn.ip}</span>
                 )}
