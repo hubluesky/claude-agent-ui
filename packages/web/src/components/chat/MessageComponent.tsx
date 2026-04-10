@@ -76,8 +76,6 @@ export function isMessageVisible(message: AgentMessage): boolean {
     return subtype.startsWith('error')
   }
 
-  if ((message as any)._streaming) return true
-
   if (message.type === 'system') {
     const sub = (message as any).subtype
     if (sub === 'api_retry') return true
@@ -117,7 +115,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       if (block.type === 'thinking') return !!(block.thinking || block.text)
       return false
     })
-    if (!hasVisibleContent && !(message as any)._streaming) return null
+    if (!hasVisibleContent) return null
     const msgUuid = (message as any).uuid as string | undefined
     return (
       <div className="flex items-start">
@@ -128,7 +126,6 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
           <div className="flex-1 min-w-0 space-y-2">
             {contentBlocks.map((block: any, i: number) => {
               if (block.type === 'text') {
-                const isStreaming = (message as any)._streaming === true
                 const textClass = classifyText(block.text)
                 if (textClass === 'internal-output') return null
                 if (textClass === 'compact-summary') {
@@ -141,38 +138,13 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
                 }
                 const assistantTaskNotif = parseTaskNotificationXml(block.text)
                 if (assistantTaskNotif) return <TaskNotificationCard key={i} data={assistantTaskNotif} />
-                if (isStreaming) {
-                  // Streaming: plain text with cursor animation (no markdown — too expensive mid-stream)
-                  if (!block.text) return null
-                  return (
-                    <div key={i} className="flex gap-3 items-start">
-                      <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed flex-1">
-                        {block.text}
-                        <span className="inline-block w-2 h-4 bg-[var(--accent)] rounded-sm ml-0.5 animate-pulse" />
-                      </p>
-                    </div>
-                  )
-                }
+                if (!block.text) return null
                 return <div key={i} className="text-sm text-[var(--text-primary)] leading-relaxed overflow-hidden"><MarkdownRenderer content={block.text} /></div>
               }
               if (block.type === 'thinking' || block.type === 'redacted_thinking') {
-                const isStreaming = (message as any)._streaming === true
                 const thinkingText = block.thinking || block.text || ''
 
-                if (isStreaming) {
-                  // Streaming: open display with cursor animation
-                  if (!thinkingText) return null
-                  return (
-                    <div key={i} className="border-l-2 border-[var(--purple-subtle-border)] pl-3 py-1">
-                      <p className="text-xs text-[var(--purple)] whitespace-pre-wrap leading-relaxed">
-                        {thinkingText}
-                        <span className="inline-block w-1.5 h-3 bg-[var(--purple)] rounded-sm ml-0.5 animate-pulse" />
-                      </p>
-                    </div>
-                  )
-                }
-
-                // Final: existing collapsible rendering
+                // Completed thinking: collapsible rendering
                 if (!thinkingText) {
                   return block.type === 'redacted_thinking' ? (
                     <div key={i} className="bg-[var(--purple-subtle-bg)] rounded-md px-3 py-2">
@@ -386,34 +358,18 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     )
   }
 
-  // Prompt suggestion
-  if (message.type === 'prompt_suggestion') {
-    const suggestion = (message as any).suggestion as string
-    if (!suggestion) return null
-    return <PromptSuggestionCard suggestion={suggestion} />
-  }
 
   return null
 })
 
 // ---- Stop Task Button ----
 
-// ---- Message Actions (⋯ menu with Fork + Rewind) ----
+// ---- Message Actions (⋯ menu with Fork) ----
 
 function MessageActions({ messageId }: { messageId: string }) {
-  const { forkSession, rewindFiles, rewindPreview: ctxRewindPreview } = useChatSession()
-  const sessionId = useSessionStore((s) => s.currentSessionId)
-  const [rewindPreview, setLocalRewindPreview] = useState<typeof ctxRewindPreview>(null)
+  const { forkSession } = useChatSession()
   const [open, setOpen] = useState(false)
-  const [showRewindPreview, setShowRewindPreview] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  // Sync rewindPreview from context when it changes
-  useEffect(() => {
-    if (showRewindPreview) {
-      setLocalRewindPreview(ctxRewindPreview)
-    }
-  }, [ctxRewindPreview, showRewindPreview])
 
   useEffect(() => {
     if (!open) return
@@ -429,95 +385,26 @@ function MessageActions({ messageId }: { messageId: string }) {
     setOpen(false)
   }
 
-  const handleRewindDryRun = () => {
-    if (!sessionId || sessionId === '__new__') return
-    setLocalRewindPreview(null)
-    rewindFiles(messageId, true)
-    setShowRewindPreview(true)
-    setOpen(false)
-  }
-
-  const handleRewindConfirm = () => {
-    if (!sessionId || sessionId === '__new__') return
-    rewindFiles(messageId, false)
-    setShowRewindPreview(false)
-    setLocalRewindPreview(null)
-  }
-
-  const handleRewindClose = () => {
-    setShowRewindPreview(false)
-    setLocalRewindPreview(null)
-  }
-
-  const preview = showRewindPreview ? rewindPreview : null
-
   return (
-    <>
-      <div ref={ref} className="relative shrink-0 ml-1">
-        <button
-          onClick={() => setOpen(!open)}
-          className="px-1 py-0.5 text-[11px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer transition-colors"
-          title="操作"
-        >
-          ⋯
-        </button>
-        {open && (
-          <div className="absolute top-full right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md shadow-lg z-10 py-1 min-w-[100px]">
-            <button
-              onClick={handleFork}
-              className="w-full text-left px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
-            >
-              Fork
-            </button>
-            <button
-              onClick={handleRewindDryRun}
-              className="w-full text-left px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:text-[var(--info)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
-            >
-              Rewind
-            </button>
-          </div>
-        )}
-      </div>
-      {showRewindPreview && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/30" onClick={handleRewindClose} />
-          <div className="absolute right-0 top-full mt-1 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50 p-3">
-            <p className="text-xs text-[var(--text-secondary)] mb-2 font-medium">Rewind Preview</p>
-            {!preview ? (
-              <p className="text-[10px] text-[var(--text-muted)]">Loading...</p>
-            ) : !preview.filesChanged?.length ? (
-              <p className="text-[10px] text-[var(--text-muted)]">No files to rewind</p>
-            ) : (
-              <>
-                <div className="space-y-1 max-h-40 overflow-y-auto mb-2">
-                  {preview.filesChanged.map((f: string) => (
-                    <div key={f} className="text-[10px] font-mono text-[var(--text-secondary)] truncate">{f}</div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] mb-2">
-                  <span className="text-[var(--success)]">+{preview.insertions ?? 0}</span>
-                  <span className="text-[var(--error)]">-{preview.deletions ?? 0}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleRewindConfirm}
-                    className="flex-1 px-2 py-1.5 text-xs text-[var(--text-primary)] bg-[var(--info)] rounded hover:bg-[var(--info-hover)] cursor-pointer"
-                  >
-                    Confirm Rewind
-                  </button>
-                  <button
-                    onClick={handleRewindClose}
-                    className="px-2 py-1.5 text-xs text-[var(--text-muted)] border border-[var(--border)] rounded hover:bg-[var(--bg-tertiary)] cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
+    <div ref={ref} className="relative shrink-0 ml-1">
+      <button
+        onClick={() => setOpen(!open)}
+        className="px-1 py-0.5 text-[11px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer transition-colors"
+        title="操作"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md shadow-lg z-10 py-1 min-w-[100px]">
+          <button
+            onClick={handleFork}
+            className="w-full text-left px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
+          >
+            Fork
+          </button>
+        </div>
       )}
-    </>
+    </div>
   )
 }
 
@@ -648,26 +535,6 @@ function TaskNotificationCard({ data }: { data: TaskNotificationData }) {
           {data.summary}
         </div>
       )}
-    </div>
-  )
-}
-
-// ---- Prompt Suggestion Card ----
-
-function PromptSuggestionCard({ suggestion }: { suggestion: string }) {
-  const handleClick = () => {
-    useSessionStore.getState().setComposerDraft(suggestion)
-  }
-
-  return (
-    <div className="ml-10 mt-1">
-      <button
-        onClick={handleClick}
-        className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] hover:border-[var(--accent)] hover:bg-[#d977060a] transition-colors text-left cursor-pointer"
-      >
-        <span className="text-[var(--accent)] text-xs shrink-0">&#10148;</span>
-        <span className="text-xs text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{suggestion}</span>
-      </button>
     </div>
   )
 }
