@@ -19,7 +19,7 @@ import type {
   PlanApprovalDecisionType,
   AgentMessage,
 } from '@claude-agent-ui/shared'
-import { useSessionContainerStore, StreamState } from '../stores/sessionContainerStore'
+import { useSessionContainerStore } from '../stores/sessionContainerStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { fetchSessionMessages } from './api'
@@ -55,6 +55,9 @@ class WebSocketManager {
   // ── Page visibility ──────────────────────────────────────────
   private visibilityHandler: (() => void) | null = null
   private lastBackgroundTime = 0
+
+  // ── Streaming ────────────────────────────────────────────────
+  private currentToolBlockIndex = new Map<string, number>()
 
   constructor() {
     this.setupVisibilityListener()
@@ -175,10 +178,6 @@ class WebSocketManager {
 
   reconnectMcpServer(sessionId: string, serverName: string) {
     this.send({ type: 'reconnect-mcp-server', sessionId, serverName })
-  }
-
-  rewindFiles(sessionId: string, messageId: string, dryRun?: boolean) {
-    this.send({ type: 'rewind-files', sessionId, messageId, dryRun })
   }
 
   getSubagentMessages(sessionId: string, agentId: string) {
@@ -459,9 +458,6 @@ class WebSocketManager {
       case 'mcp-status':
         this.handleMcpStatus(msg)
         break
-      case 'rewind-result':
-        this.handleRewindResult(msg)
-        break
       case 'subagent-messages':
         this.handleSubagentMessages(msg)
         break
@@ -575,33 +571,18 @@ class WebSocketManager {
     } else if (agentMsg.type === 'user') {
       s.replaceOptimistic(targetSessionId, agentMsg)
     } else if (agentMsg.type === 'assistant') {
-      this.handleFinalAssistantMessage(targetSessionId, agentMsg)
+      if ((agentMsg as any)._partial) {
+        // Partial assistant — extract tool_use blocks and model info, don't push to messages
+        this.handlePartialAssistant(targetSessionId, agentMsg)
+      } else {
+        // Final assistant — clear streaming state, push to messages
+        s.clearStreaming(targetSessionId)
+        this.currentToolBlockIndex.delete(targetSessionId)
+        s.pushMessage(targetSessionId, agentMsg)
+      }
     } else {
       s.pushMessage(targetSessionId, agentMsg)
     }
-  }
-
-  /** Build content blocks from the stream accumulator.
-   *  Only produces text/thinking blocks — tool_use comes from the final SDK message. */
-  private buildContentFromAccumulator(
-    accumulator: Map<number, { blockType: string; content: string }>
-  ): any[] {
-    const blocks: any[] = []
-    const sorted = [...accumulator.entries()].sort((a, b) => a[0] - b[0])
-    for (const [, entry] of sorted) {
-      if (entry.blockType === 'thinking') {
-        blocks.push({ type: 'thinking', thinking: entry.content })
-      } else if (entry.blockType === 'text') {
-        blocks.push({ type: 'text', text: entry.content })
-      }
-    }
-    return blocks
-  }
-
-  /** Create an empty content block for the given type */
-  private createEmptyBlock(blockType: string): any {
-    if (blockType === 'thinking') return { type: 'thinking', thinking: '' }
-    return { type: 'text', text: '' }
   }
 
   private handleStreamEvent(sessionId: string, agentMsg: AgentMessage) {
@@ -609,270 +590,73 @@ class WebSocketManager {
     if (!evt) return
 
     const s = store()
-    const streamState = s.getStreamState(sessionId)
 
     if (evt.type === 'content_block_start') {
       const blockType = evt.content_block?.type ?? 'text'
-      // ── Spinner timing ──
-      if (streamState.requestStartTime === null) {
-        streamState.requestStartTime = Date.now()
-      }
+
+      // Set spinner mode based on block type
       if (blockType === 'thinking') {
-        streamState.spinnerMode = 'thinking'
-        if (streamState.thinkingStartTime === null) {
-          streamState.thinkingStartTime = Date.now()
-        }
+        s.setSpinnerMode(sessionId, 'thinking')
       } else if (blockType === 'text') {
-        if (streamState.thinkingStartTime !== null && streamState.thinkingEndTime === null) {
-          streamState.thinkingEndTime = Date.now()
-        }
-        streamState.spinnerMode = 'responding'
+        s.setSpinnerMode(sessionId, 'responding')
       } else if (blockType === 'tool_use' || blockType === 'server_tool_use') {
-        streamState.spinnerMode = 'tool-use'
-      }
-
-      // Flush pending deltas before modifying the message structure
-      this.flushStreamState(sessionId, streamState)
-
-      const container = s.containers.get(sessionId)
-      if (!container) return
-
-      if (evt.index === 0) {
-        // New response starting — finalize any previous streaming message first
-        this.finalizeStreamingMessage(sessionId)
-
-        // Clear stale accumulator entries and create streaming assistant message
-        streamState.accumulator.clear()
-        streamState.accumulator.set(0, { blockType, content: '' })
-
-        const streamingMsg: any = {
-          ...agentMsg,
-          type: 'assistant',
-          _streaming: true,
-          message: {
-            role: 'assistant',
-            content: [this.createEmptyBlock(blockType)],
-          },
-        }
-        const next = new Map(s.containers)
-        next.set(sessionId, {
-          ...container,
-          messages: [...container.messages, streamingMsg],
-          streamingVersion: container.streamingVersion + 1,
+        s.setSpinnerMode(sessionId, 'tool-use')
+        // Add new streaming tool use
+        const toolBlock = evt.content_block
+        s.addStreamingToolUse(sessionId, {
+          id: toolBlock.id ?? `tool-${evt.index}`,
+          name: toolBlock.name ?? '',
+          input: '',
         })
-        useSessionContainerStore.setState({ containers: next })
-      } else {
-        // Subsequent block in same response — append empty block to streaming message
-        streamState.accumulator.set(evt.index, { blockType, content: '' })
-        const messages = container.messages
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const msg = messages[i] as any
-          if (msg._streaming && msg.type === 'assistant') {
-            const updatedContent = [...(msg.message?.content ?? []), this.createEmptyBlock(blockType)]
-            const updated = [...messages]
-            updated[i] = { ...msg, message: { ...msg.message, content: updatedContent } }
-            const next = new Map(s.containers)
-            next.set(sessionId, {
-              ...container,
-              messages: updated,
-              streamingVersion: container.streamingVersion + 1,
-            })
-            useSessionContainerStore.setState({ containers: next })
-            break
-          }
+        const container = s.containers.get(sessionId)
+        if (container) {
+          this.currentToolBlockIndex.set(sessionId, container.streaming.toolUses.length - 1)
         }
       }
     } else if (evt.type === 'content_block_delta') {
       const delta = evt.delta
-      const deltaText = delta?.type === 'text_delta' ? (delta.text ?? '')
-        : delta?.type === 'thinking_delta' ? (delta.thinking ?? '') : ''
-      const acc = streamState.accumulator.get(evt.index)
-      if (acc) {
-        acc.content += deltaText
+      if (delta?.type === 'text_delta' && delta.text) {
+        s.updateStreamingText(sessionId, delta.text)
+      } else if (delta?.type === 'thinking_delta' && delta.thinking) {
+        s.updateStreamingThinking(sessionId, delta.thinking)
+      } else if (delta?.type === 'input_json_delta' && delta.partial_json) {
+        const toolIdx = this.currentToolBlockIndex.get(sessionId) ?? 0
+        s.updateStreamingToolInput(sessionId, toolIdx, delta.partial_json)
       }
-      streamState.responseLength += deltaText.length
+    } else if (evt.type === 'content_block_stop') {
+      // Graduate completed block (e.g., thinking done → text starting next)
+      const container = s.containers.get(sessionId)
+      if (container) {
+        if (container.streaming.thinking !== null) {
+          s.graduateStreamingBlock(sessionId, 'thinking')
+        } else if (container.streaming.text !== null) {
+          s.graduateStreamingBlock(sessionId, 'text')
+        }
+      }
+    }
+    // message_start, message_stop — no action needed
+  }
 
-      // Accumulate in pendingDeltas for RAF batching (per block index)
-      const prev = streamState.pendingDeltas.get(evt.index) ?? ''
-      streamState.pendingDeltas.set(evt.index, prev + deltaText)
+  private handlePartialAssistant(sessionId: string, agentMsg: AgentMessage) {
+    const s = store()
+    const msg = agentMsg as any
 
-      if (streamState.pendingDeltaRafId === null) {
-        streamState.pendingDeltaRafId = requestAnimationFrame(() => {
-          this.flushStreamState(sessionId, streamState)
+    // Extract model info
+    if (msg.message?.model) {
+      s.setStreamingModel(sessionId, msg.message.model)
+    }
+
+    // Extract complete tool_use blocks (partial assistant has full structure
+    // vs stream_event's input_json_delta fragments)
+    for (const block of msg.message?.content ?? []) {
+      if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+        s.addStreamingToolUse(sessionId, {
+          id: block.id,
+          name: block.name,
+          input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? {}),
         })
       }
     }
-  }
-
-  /** Flush all accumulated pending deltas to the store */
-  private flushStreamState(sessionId: string, streamState: StreamState) {
-    streamState.pendingDeltaRafId = null
-    if (streamState.pendingDeltas.size === 0) return
-    const s = store()
-    for (const [blockIndex, text] of streamState.pendingDeltas) {
-      if (text) s.updateStreamingBlock(sessionId, blockIndex, text)
-    }
-    streamState.pendingDeltas.clear()
-  }
-
-  /**
-   * Finalize the current streaming assistant message:
-   * - Build final content from accumulator (text/thinking) + provided tool/metadata blocks
-   * - Remove _streaming flag
-   * - Clear stream state
-   * Called by: content_block_start index=0 (new response) and handleSessionComplete
-   */
-  private finalizeStreamingMessage(sessionId: string, sdkMsg?: any) {
-    const s = store()
-    const streamState = s.getStreamState(sessionId)
-    const container = s.containers.get(sessionId)
-    if (!container) return
-
-    const messages = container.messages
-    const streamIdx = messages.findIndex(
-      (m: any) => m._streaming && m.type === 'assistant'
-    )
-    if (streamIdx < 0) return
-
-    // Build final content from accumulator
-    const accumulatedContent = this.buildContentFromAccumulator(streamState.accumulator)
-
-    // Extract tool/structural blocks from the SDK message (if provided)
-    const sdkContent: any[] = sdkMsg?.message?.content ?? []
-    const toolBlocks = sdkContent.filter(
-      (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
-        || b.type === 'tool_result' || b.type === 'web_search_tool_result'
-        || b.type === 'code_execution_tool_result'
-    )
-    const redactedBlocks = sdkContent.filter(
-      (b: any) => b.type === 'redacted_thinking'
-    )
-
-    // If accumulator has content, use it; otherwise fall back to the streaming message's own content
-    const streamingMsg = messages[streamIdx] as any
-    const finalContent = accumulatedContent.length > 0
-      ? [...accumulatedContent, ...redactedBlocks, ...toolBlocks]
-      : [...(streamingMsg.message?.content ?? []), ...toolBlocks]
-
-    // Build finalized message: merge SDK metadata if available
-    const finalized: any = sdkMsg
-      ? { ...sdkMsg, message: { ...sdkMsg.message, content: finalContent } }
-      : { ...streamingMsg, message: { ...streamingMsg.message, content: finalContent } }
-    delete finalized._streaming
-
-    const updated = [...messages]
-    updated[streamIdx] = finalized
-
-    const next = new Map(s.containers)
-    next.set(sessionId, { ...container, messages: updated })
-    useSessionContainerStore.setState({ containers: next })
-
-    streamState.clear()
-  }
-
-  private handleFinalAssistantMessage(sessionId: string, agentMsg: AgentMessage) {
-    let s = store()
-    const streamState = s.getStreamState(sessionId)
-
-    // 1. Flush any buffered streaming text
-    if (streamState.pendingDeltaRafId !== null) {
-      cancelAnimationFrame(streamState.pendingDeltaRafId)
-      streamState.pendingDeltaRafId = null
-    }
-    if (streamState.pendingDeltas.size > 0) {
-      for (const [blockIndex, text] of streamState.pendingDeltas) {
-        if (text) s.updateStreamingBlock(sessionId, blockIndex, text)
-      }
-      streamState.pendingDeltas.clear()
-    }
-
-    // 2. Re-read store after flush
-    s = store()
-    const container = s.containers.get(sessionId)
-    if (!container) return
-
-    const finalMsg = agentMsg as any
-    const apiId = finalMsg.message?.id
-    const messages = container.messages
-
-    // 3. Find the streaming message
-    const streamIdx = messages.findIndex(
-      (m: any) => m._streaming && m.type === 'assistant'
-    )
-
-    // ── CASE A: Streaming is active — SDK sent a partial/final mid-stream ──
-    // DON'T finalize. Only merge tool_use blocks and metadata into the streaming message.
-    // The streaming message keeps _streaming:true and the accumulator stays intact.
-    // True finalization happens at: content_block_start index=0 (next response) or session complete.
-    if (streamIdx >= 0) {
-      const sdkContent: any[] = finalMsg.message?.content ?? []
-      const toolBlocks = sdkContent.filter(
-        (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
-          || b.type === 'tool_result' || b.type === 'web_search_tool_result'
-          || b.type === 'code_execution_tool_result'
-      )
-      // Only merge if there are tool blocks to add (most partials won't have any)
-      if (toolBlocks.length > 0) {
-        const streamingMsg = messages[streamIdx] as any
-        const existingContent = streamingMsg.message?.content ?? []
-        const updatedContent = [...existingContent, ...toolBlocks]
-        const updated = [...messages]
-        updated[streamIdx] = {
-          ...streamingMsg,
-          message: { ...streamingMsg.message, content: updatedContent },
-          // Preserve metadata from SDK message (uuid, message.id, model)
-          uuid: finalMsg.uuid ?? streamingMsg.uuid,
-        }
-        // Store the SDK message reference for later finalization
-        if (apiId) {
-          (updated[streamIdx] as any)._sdkMsgId = apiId
-          if (finalMsg.message?.model) {
-            updated[streamIdx] = {
-              ...updated[streamIdx],
-              message: { ...(updated[streamIdx] as any).message, id: apiId, model: finalMsg.message.model },
-            }
-          }
-        }
-        const next = new Map(s.containers)
-        next.set(sessionId, { ...container, messages: updated })
-        useSessionContainerStore.setState({ containers: next })
-      } else if (apiId) {
-        // No tool blocks but update metadata (API id, model) on the streaming message
-        const streamingMsg = messages[streamIdx] as any
-        const updated = [...messages]
-        updated[streamIdx] = {
-          ...streamingMsg,
-          uuid: finalMsg.uuid ?? streamingMsg.uuid,
-          message: {
-            ...streamingMsg.message,
-            id: apiId,
-            model: finalMsg.message?.model ?? streamingMsg.message?.model,
-          },
-        }
-        const next = new Map(s.containers)
-        next.set(sessionId, { ...container, messages: updated })
-        useSessionContainerStore.setState({ containers: next })
-      }
-      // DON'T clear streamState — streaming is still active
-      return
-    }
-
-    // ── CASE B: No streaming message — fallback for history/no-stream-events ──
-    // Deduplicate by API id, then push the SDK message directly.
-    let base = messages
-    if (apiId) {
-      base = messages.filter((m: any) => {
-        if (m.type === 'assistant' && (m as any).message?.id === apiId) return false
-        return true
-      })
-    }
-
-    const merged: any = { ...finalMsg }
-    delete merged._streaming
-
-    const nextContainers = new Map(s.containers)
-    nextContainers.set(sessionId, { ...container, messages: [...base, merged] })
-    useSessionContainerStore.setState({ containers: nextContainers })
   }
 
   private handleToolApprovalRequest(msg: any) {
@@ -1004,17 +788,16 @@ class WebSocketManager {
     if (!sessionId) return
     const s = store()
     s.setSessionStatus(sessionId, 'idle')
-    // Clear pending requests but preserve lock status — lock persists across queries
+    // Clear pending requests but preserve lock status
     s.setApproval(sessionId, null)
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
     s.setQueue(sessionId, [])
-    // Finalize any in-progress streaming message (with accumulated content)
-    this.finalizeStreamingMessage(sessionId)
-    // Safety net: clear any remaining _streaming flags
-    s.clearStreamingFlag(sessionId)
-    // Refresh session list in sidebar (force — session just completed, title may have changed)
+    // Clear all streaming state (replaces old finalizeStreamingMessage + clearStreamingFlag)
+    s.clearStreaming(sessionId)
+    this.currentToolBlockIndex.delete(sessionId)
+    // Refresh session list in sidebar
     const sessStore = useSessionStore.getState()
     if (sessStore.currentProjectCwd) {
       sessStore.invalidateProjectSessions(sessStore.currentProjectCwd)
@@ -1077,28 +860,6 @@ class WebSocketManager {
     store().setMcpServers(sessionId, msg.servers ?? [])
   }
 
-  private handleRewindResult(msg: any) {
-    const sessionId = msg.sessionId as string | undefined
-    if (!sessionId) return
-
-    if (msg.dryRun) {
-      store().setRewindPreview(sessionId, {
-        canRewind: msg.canRewind,
-        error: msg.error,
-        filesChanged: msg.filesChanged,
-        insertions: msg.insertions,
-        deletions: msg.deletions,
-      })
-    } else if (msg.canRewind) {
-      useToastStore.getState().add(
-        `Rewound ${msg.filesChanged?.length ?? 0} files (+${msg.insertions ?? 0}/-${msg.deletions ?? 0})`,
-        'info'
-      )
-    } else {
-      useToastStore.getState().add(msg.error ?? 'Cannot rewind', 'error')
-    }
-  }
-
   private handleSubagentMessages(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
@@ -1117,40 +878,15 @@ class WebSocketManager {
     const container = s.containers.get(sessionId)
     if (!container) return
 
-    const streamState = s.getStreamState(sessionId)
-    streamState.accumulator.clear()
-
-    // Build content blocks from snapshot
-    const contentBlocks: any[] = []
+    // Rebuild streaming state from snapshot blocks
     for (const block of snapshot.blocks ?? []) {
-      streamState.accumulator.set(block.index, {
-        blockType: block.type,
-        content: block.content ?? '',
-      })
       if (block.type === 'thinking') {
-        contentBlocks.push({ type: 'thinking', thinking: block.content ?? '' })
-      } else {
-        contentBlocks.push({ type: 'text', text: block.content ?? '' })
+        s.updateStreamingThinking(sessionId, block.content ?? '')
+      } else if (block.type === 'text') {
+        s.updateStreamingText(sessionId, block.content ?? '')
       }
     }
-
-    if (contentBlocks.length === 0) return
-
-    // Create a single streaming assistant message
-    const streamingMsg: any = {
-      type: 'assistant',
-      _streaming: true,
-      uuid: snapshot.messageId,
-      message: { role: 'assistant', content: contentBlocks },
-    }
-
-    const next = new Map(s.containers)
-    next.set(sessionId, {
-      ...container,
-      messages: [...container.messages, streamingMsg],
-      streamingVersion: container.streamingVersion + 1,
-    })
-    useSessionContainerStore.setState({ containers: next })
+    s.setSpinnerMode(sessionId, 'responding')
   }
 
   private handleSessionTitleUpdated(msg: any) {
