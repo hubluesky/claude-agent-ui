@@ -57,7 +57,8 @@ export class CliSession extends AgentSession {
     }
 
     this._process = this._processManager.spawn(opts)
-    this._sessionId = this._process.sessionId
+    // Don't set _sessionId here — wait for CLI's init message with the real session_id.
+    // handler.ts relies on _sessionId being null for pending sessions.
 
     this._process.on('message', (msg: Record<string, unknown>) => {
       this.handleCliMessage(msg)

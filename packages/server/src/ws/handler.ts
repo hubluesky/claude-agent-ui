@@ -223,14 +223,14 @@ export function createWsHandler(deps: HandlerDeps) {
     let realSessionId = sessionId
     let titleGenTriggered = false
 
-    session.on('session-id-changed', (oldId: string | null, newId: string) => {
-      if (oldId && oldId.startsWith('pending-')) {
+    session.on('session-id-changed', (_oldId: string | null, newId: string) => {
+      if (realSessionId.startsWith('pending-')) {
         // New session: register, acquire lock, join, broadcast deferred user message
         sessionManager.registerActive(newId, session)
         lockManager.acquire(newId, connectionId)
         wsHub.joinSession(connectionId, newId)
         wsHub.broadcast(newId, { type: 'lock-status', sessionId: newId, status: 'locked', holderId: connectionId })
-        wsHub.broadcast(newId, { type: 'session-state-change', sessionId: newId, state: session.status })
+        wsHub.broadcast(newId, { type: 'session-state-change', sessionId: newId, state: session.status } as any)
 
         if (pendingUserMsg) {
           wsHub.broadcast(newId, {
@@ -239,14 +239,14 @@ export function createWsHandler(deps: HandlerDeps) {
             message: { type: 'user', uuid: randomUUID(), message: { role: 'user', content: pendingUserMsg.content } },
           } as any)
         }
-      } else if (oldId && oldId !== newId) {
+      } else if (realSessionId !== newId) {
         // Session ID changed (resume assigned different ID)
-        sessionManager.removeActive(oldId)
+        sessionManager.removeActive(realSessionId)
         sessionManager.registerActive(newId, session)
         for (const [, entry] of pendingRequestMap) {
-          if (entry.sessionId === oldId) entry.sessionId = newId
+          if (entry.sessionId === realSessionId) entry.sessionId = newId
         }
-        lockManager.release(oldId)
+        lockManager.release(realSessionId)
         lockManager.acquire(newId, connectionId)
         wsHub.joinSession(connectionId, newId)
         wsHub.broadcast(newId, { type: 'lock-status', sessionId: newId, status: 'locked', holderId: connectionId })
