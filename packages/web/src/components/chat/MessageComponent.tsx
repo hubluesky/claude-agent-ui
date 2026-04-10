@@ -117,7 +117,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       if (block.type === 'thinking') return !!(block.thinking || block.text)
       return false
     })
-    if (!hasVisibleContent) return null
+    if (!hasVisibleContent && !(message as any)._streaming) return null
     const msgUuid = (message as any).uuid as string | undefined
     return (
       <div className="flex items-start">

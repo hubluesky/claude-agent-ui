@@ -214,7 +214,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
       ))}
 
       {/* Footer — derive visibility from messages: show when the last
-          non-system message is a user message or streaming block (i.e., still
+          non-system message is a user message or streaming assistant (i.e., still
           waiting for a complete assistant response). No flags needed. */}
       {sessionStatus === 'running' && (() => {
         // Walk backward to find the last non-system message
