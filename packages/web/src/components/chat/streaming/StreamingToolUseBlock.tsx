@@ -9,7 +9,7 @@ interface StreamingToolUseBlockProps {
 
 export const StreamingToolUseBlock = memo(function StreamingToolUseBlock({ tool }: StreamingToolUseBlockProps) {
   const category = getToolCategory(tool.name)
-  const color = TOOL_COLORS[category] ?? TOOL_COLORS.other
+  const color = TOOL_COLORS[category] ?? TOOL_COLORS['default']
 
   return (
     <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md overflow-hidden">

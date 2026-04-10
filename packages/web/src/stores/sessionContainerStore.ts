@@ -105,33 +105,7 @@ function createStreamingState(): StreamingState {
   return { text: null, thinking: null, toolUses: [], completedBlocks: [], model: null }
 }
 
-// ─── StreamState (mutable, per-container, NOT in Zustand) ───
-
 export type SpinnerMode = 'requesting' | 'thinking' | 'responding' | 'tool-use'
-
-export class StreamState {
-  accumulator = new Map<number, { blockType: string; content: string }>()
-  pendingDeltas = new Map<number, string>()
-  pendingDeltaRafId: number | null = null
-
-  // Spinner state tracking
-  requestStartTime: number | null = null
-  thinkingStartTime: number | null = null
-  thinkingEndTime: number | null = null
-  responseLength = 0
-  spinnerMode: SpinnerMode = 'requesting'
-
-  clear() {
-    this.accumulator.clear()
-    this.pendingDeltas.clear()
-    this.pendingDeltaRafId = null
-    this.requestStartTime = null
-    this.thinkingStartTime = null
-    this.thinkingEndTime = null
-    this.responseLength = 0
-    this.spinnerMode = 'requesting'
-  }
-}
 
 // ─── Global connection state (not per-session) ───
 
@@ -195,7 +169,6 @@ function getUserText(msg: any): string {
 
 interface SessionContainerState {
   containers: Map<string, SessionContainer>
-  streamStates: Map<string, StreamState>
   activeSessionId: string | null
   global: GlobalConnectionState
 }
@@ -216,10 +189,6 @@ interface SessionContainerActions {
   setLoadingHistory(sessionId: string, loading: boolean): void
   setLoadingMore(sessionId: string, loading: boolean): void
   setHasMore(sessionId: string, hasMore: boolean): void
-  /** Updates a specific content block inside the _streaming assistant message */
-  updateStreamingBlock(sessionId: string, blockIndex: number, text: string): void
-  /** Removes _streaming flag from all messages in a session (for abort/complete) */
-  clearStreamingFlag(sessionId: string): void
   /** Increments streamingVersion (for scroll trigger on new content blocks) */
   incrementStreamingVersion(sessionId: string): void
   clearMessages(sessionId: string): void
@@ -241,9 +210,7 @@ interface SessionContainerActions {
   setGlobal(updates: Partial<GlobalConnectionState>): void
   /** Resets interaction state without clearing messages */
   resetSessionInteraction(sessionId: string): void
-  /** Returns mutable StreamState, creates if needed */
-  getStreamState(sessionId: string): StreamState
-  // New streaming methods
+  // Streaming methods
   updateStreamingText(sessionId: string, deltaText: string): void
   updateStreamingThinking(sessionId: string, deltaThinking: string): void
   addStreamingToolUse(sessionId: string, tool: StreamingToolUse): void
@@ -256,7 +223,6 @@ interface SessionContainerActions {
 
 export const useSessionContainerStore = create<SessionContainerState & SessionContainerActions>((set, get) => ({
   containers: new Map(),
-  streamStates: new Map(),
   activeSessionId: null,
   global: {
     connectionId: null,
@@ -285,14 +251,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
         const c = next.get(key)!
         if (c.subscribed) continue
         next.delete(key)
-        // Also clean up stream state
-        const { streamStates } = get()
-        if (streamStates.has(key)) {
-          streamStates.get(key)!.clear()
-          const nextStreams = new Map(streamStates)
-          nextStreams.delete(key)
-          set({ streamStates: nextStreams })
-        }
       }
     }
 
@@ -301,19 +259,10 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
   },
 
   remove(sessionId) {
-    const { containers, streamStates } = get()
+    const { containers } = get()
     if (!containers.has(sessionId)) return
     const next = new Map(containers)
     next.delete(sessionId)
-    // Clean up stream state
-    const stream = streamStates.get(sessionId)
-    if (stream) {
-      stream.clear()
-      const nextStreams = new Map(streamStates)
-      nextStreams.delete(sessionId)
-      set({ containers: next, streamStates: nextStreams })
-      return
-    }
     set({ containers: next })
   },
 
@@ -322,22 +271,13 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
   },
 
   migrateContainer(fromId, toId) {
-    const { containers, streamStates } = get()
+    const { containers } = get()
     const container = containers.get(fromId)
     if (!container) return
     const nextContainers = new Map(containers)
     nextContainers.delete(fromId)
     nextContainers.set(toId, { ...container, sessionId: toId })
-    // Migrate stream state if exists
-    const stream = streamStates.get(fromId)
-    if (stream) {
-      const nextStreams = new Map(streamStates)
-      nextStreams.delete(fromId)
-      nextStreams.set(toId, stream)
-      set({ containers: nextContainers, streamStates: nextStreams })
-    } else {
-      set({ containers: nextContainers })
-    }
+    set({ containers: nextContainers })
     // Update activeSessionId if it was pointing to fromId
     if (get().activeSessionId === fromId) {
       set({ activeSessionId: toId })
@@ -418,53 +358,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
-  updateStreamingBlock(sessionId, blockIndex, text) {
-    const { containers } = get()
-    const c = containers.get(sessionId)
-    if (!c) return
-    // Find the _streaming assistant message (search from end)
-    for (let i = c.messages.length - 1; i >= 0; i--) {
-      const msg = c.messages[i] as any
-      if (msg._streaming && msg.type === 'assistant') {
-        const content = msg.message?.content
-        if (!Array.isArray(content) || !content[blockIndex]) return
-        const blocks = [...content]
-        const block = blocks[blockIndex]
-        // Create new block object (triggers React memo)
-        if (block.type === 'thinking') {
-          blocks[blockIndex] = { ...block, thinking: (block.thinking ?? '') + text }
-        } else {
-          blocks[blockIndex] = { ...block, text: (block.text ?? '') + text }
-        }
-        const updated = [...c.messages]
-        updated[i] = { ...msg, message: { ...msg.message, content: blocks } }
-        const next = new Map(containers)
-        next.set(sessionId, { ...c, messages: updated })
-        set({ containers: next })
-        return
-      }
-    }
-  },
-
-  clearStreamingFlag(sessionId) {
-    const { containers } = get()
-    const c = containers.get(sessionId)
-    if (!c) return
-    const hasStreaming = c.messages.some((m: any) => m._streaming)
-    if (!hasStreaming) return
-    const updated = c.messages.map((m: any) => {
-      if (m._streaming) {
-        const clean = { ...m }
-        delete clean._streaming
-        return clean
-      }
-      return m
-    })
-    const next = new Map(containers)
-    next.set(sessionId, { ...c, messages: updated })
-    set({ containers: next })
-  },
-
   incrementStreamingVersion(sessionId) {
     const { containers } = get()
     const c = containers.get(sessionId)
@@ -478,10 +371,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     const { containers } = get()
     const c = containers.get(sessionId)
     if (!c) return
-    // Also clear stream state
-    const { streamStates } = get()
-    const stream = streamStates.get(sessionId)
-    if (stream) stream.clear()
     const next = new Map(containers)
     next.set(sessionId, { ...c, messages: [], hasMore: false, streamingVersion: 0 })
     set({ containers: next })
@@ -633,17 +522,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
       sessionStatus: 'idle',
     })
     set({ containers: next })
-  },
-
-  getStreamState(sessionId) {
-    const { streamStates } = get()
-    const existing = streamStates.get(sessionId)
-    if (existing) return existing
-    const stream = new StreamState()
-    const next = new Map(streamStates)
-    next.set(sessionId, stream)
-    set({ streamStates: next })
-    return stream
   },
 
   updateStreamingText(sessionId: string, deltaText: string) {

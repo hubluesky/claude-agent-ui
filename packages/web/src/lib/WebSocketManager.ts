@@ -794,7 +794,7 @@ class WebSocketManager {
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
     s.setQueue(sessionId, [])
-    // Clear all streaming state (replaces old finalizeStreamingMessage + clearStreamingFlag)
+    // Clear all streaming state
     s.clearStreaming(sessionId)
     this.currentToolBlockIndex.delete(sessionId)
     // Refresh session list in sidebar
@@ -939,10 +939,8 @@ class WebSocketManager {
       const s = store()
       const container = s.containers.get(sessionId)
       if (!container) return
-      // Preserve live (optimistic + streaming) messages
-      const live = container.messages.filter(
-        (m: any) => m._optimistic || (m as any)._streaming === true
-      )
+      // Preserve live (optimistic) messages
+      const live = container.messages.filter((m: any) => m._optimistic)
       s.replaceMessages(sessionId, [...(result.messages as AgentMessage[]), ...live], result.hasMore)
       s.setNeedsFullSync(sessionId, false)
     } catch (err) {

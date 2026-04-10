@@ -14,7 +14,7 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 const SPINNER_INTERVAL_MS = 80
 
 interface SpinnerProps {
-  spinnerMode: SpinnerMode
+  spinnerMode: SpinnerMode | null
   requestStartTime: number | null
   thinkingStartTime: number | null
   thinkingEndTime: number | null
