@@ -497,7 +497,7 @@ export function createWsHandler(deps: HandlerDeps) {
         sessionManager.removeActive(entry.sessionId)
 
         const newSession = sessionManager.createSession(session.projectCwd, {
-          model: session._model,
+          model: session.model,
           permissionMode: 'acceptEdits',
         })
         const newId = newSession.id ?? randomUUID()
@@ -547,8 +547,12 @@ export function createWsHandler(deps: HandlerDeps) {
       const session = sessionManager.getActive(sessionId)
       const cwd = session?.projectCwd ?? process.cwd()
 
-      const newSession = sessionManager.createSession(cwd, { model: (session as CliSession)?._model })
-      // Set up as fork — will use --resume --fork-session when process spawns
+      const newSession = sessionManager.createSession(cwd, {
+        model: (session as CliSession)?.model,
+      })
+      // Set resumeSessionId + forkSession so CLI spawns with --resume --fork-session
+      ;(newSession as any)._resumeSessionId = sessionId
+      ;(newSession as any)._forkSession = true
       const newId = randomUUID()
       sessionManager.registerActive(newId, newSession)
       sessionManager.invalidateSessionsCache(cwd)

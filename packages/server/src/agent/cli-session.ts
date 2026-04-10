@@ -12,12 +12,14 @@ export class CliSession extends AgentSession {
   private _resumeSessionId: string | null
   private _process: CliProcess | null = null
   private _processManager: ProcessManager
-  _model?: string
+  private _model?: string
   private _effort?: string
   private _thinking?: string
+  private _forkSession?: boolean
 
   constructor(processManager: ProcessManager, cwd: string, options?: {
     resumeSessionId?: string
+    forkSession?: boolean
     model?: string
     effort?: string
     thinking?: string
@@ -27,6 +29,7 @@ export class CliSession extends AgentSession {
     this._processManager = processManager
     this._projectCwd = cwd
     this._resumeSessionId = options?.resumeSessionId ?? null
+    this._forkSession = options?.forkSession
     this._model = options?.model
     this._effort = options?.effort
     this._thinking = options?.thinking
@@ -36,6 +39,7 @@ export class CliSession extends AgentSession {
   get id(): string | null { return this._sessionId }
   get projectCwd(): string { return this._projectCwd }
   get status(): SessionStatus { return this._status }
+  get model(): string | undefined { return this._model }
   get permissionMode(): PermissionMode { return this._permissionMode }
 
   /** Ensure a CLI process is running, spawn if needed */
@@ -54,6 +58,9 @@ export class CliSession extends AgentSession {
 
     if (this._resumeSessionId) {
       opts.resumeSessionId = this._resumeSessionId
+    }
+    if (this._forkSession) {
+      opts.forkSession = true
     }
 
     this._process = this._processManager.spawn(opts)

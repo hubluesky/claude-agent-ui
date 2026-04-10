@@ -1,4 +1,4 @@
-import { readdir, stat, open, appendFile } from 'fs/promises'
+import { readdir, stat, open, appendFile, readFile } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 
@@ -85,7 +85,7 @@ export class SessionStorage {
     while (i < text.length) {
       if (text[i] === '\\') { i += 2; continue }
       if (text[i] === '"') {
-        return text.slice(valueStart, i).replace(/\\"/g, '"').replace(/\\n/g, '\n')
+        return text.slice(valueStart, i).replace(/\\\\/g, '\\').replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
       }
       i++
     }
@@ -102,7 +102,7 @@ export class SessionStorage {
     while (i < text.length) {
       if (text[i] === '\\') { i += 2; continue }
       if (text[i] === '"') {
-        return text.slice(valueStart, i).replace(/\\"/g, '"').replace(/\\n/g, '\n')
+        return text.slice(valueStart, i).replace(/\\\\/g, '\\').replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
       }
       i++
     }
@@ -236,7 +236,6 @@ export class SessionStorage {
     }
     if (!filePath) return []
 
-    const { readFile } = await import('fs/promises')
     try {
       const content = await readFile(filePath, 'utf-8')
       const messages: unknown[] = []
