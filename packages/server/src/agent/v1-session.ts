@@ -301,25 +301,33 @@ export class V1QuerySession extends AgentSession {
           return
         }
 
-        // Forward all messages — mark partial vs final assistant
-        // SDK with includePartialMessages yields multiple assistant messages with the SAME message.id.
-        // Earlier ones are partial (subset of content blocks), the last one is final.
-        // We track the last-seen id to mark all-but-last as _partial.
+        // Forward all messages — handle partial vs final assistant
+        // SDK with includePartialMessages yields multiple assistant messages with the SAME message.id,
+        // each containing a SUBSET of content blocks (e.g., first has [thinking], second has [text]).
+        // We buffer them and merge content blocks, emitting partials as _partial for streaming info
+        // and the final merged message when a non-assistant message arrives or the loop ends.
         if ((msg as any).type === 'assistant') {
           const msgId = (msg as any).message?.id
-          if (msgId && msgId === this._lastAssistantMsgId) {
-            // Same id as previous → the previous was partial, this might be final
-            // Mark it as _partial for now; the NEXT message will reveal if this is truly final
-            // Actually: we already emitted the previous one. So we use a deferred approach:
-            // Buffer the current assistant msg. When the next msg arrives (any type), flush the buffer.
-          }
-          // Simpler approach: emit previous buffered assistant as _partial, buffer current one.
-          // When a non-assistant msg arrives or query ends, flush buffer as final.
-          if (this._bufferedAssistant) {
+          if (this._bufferedAssistant && msgId === this._lastAssistantMsgId) {
+            // Same id — emit current buffer as _partial (for frontend streaming info),
+            // then merge content blocks into the new message for the next buffer.
             this.emit('message', { ...this._bufferedAssistant, _partial: true })
+            const mergedContent = [
+              ...((this._bufferedAssistant as any).message?.content ?? []),
+              ...((msg as any).message?.content ?? []),
+            ]
+            this._bufferedAssistant = {
+              ...msg,
+              message: { ...(msg as any).message, content: mergedContent },
+            }
+          } else {
+            // Different id or first assistant — flush previous buffer as final if exists
+            if (this._bufferedAssistant) {
+              this.emit('message', this._bufferedAssistant)
+            }
+            this._bufferedAssistant = msg
+            this._lastAssistantMsgId = msgId
           }
-          this._bufferedAssistant = msg
-          this._lastAssistantMsgId = msgId
         } else {
           // Non-assistant msg: flush any buffered assistant as final first
           if (this._bufferedAssistant) {
