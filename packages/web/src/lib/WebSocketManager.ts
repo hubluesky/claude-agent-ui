@@ -626,7 +626,10 @@ class WebSocketManager {
       if (!container) return
 
       if (evt.index === 0) {
-        // New response — clear stale accumulator entries and create streaming assistant message
+        // New response starting — finalize any previous streaming message first
+        this.finalizeStreamingMessage(sessionId)
+
+        // Clear stale accumulator entries and create streaming assistant message
         streamState.accumulator.clear()
         streamState.accumulator.set(0, { blockType, content: '' })
 
@@ -700,6 +703,61 @@ class WebSocketManager {
     streamState.pendingDeltas.clear()
   }
 
+  /**
+   * Finalize the current streaming assistant message:
+   * - Build final content from accumulator (text/thinking) + provided tool/metadata blocks
+   * - Remove _streaming flag
+   * - Clear stream state
+   * Called by: content_block_start index=0 (new response) and handleSessionComplete
+   */
+  private finalizeStreamingMessage(sessionId: string, sdkMsg?: any) {
+    const s = store()
+    const streamState = s.getStreamState(sessionId)
+    const container = s.containers.get(sessionId)
+    if (!container) return
+
+    const messages = container.messages
+    const streamIdx = messages.findIndex(
+      (m: any) => m._streaming && m.type === 'assistant'
+    )
+    if (streamIdx < 0) return
+
+    // Build final content from accumulator
+    const accumulatedContent = this.buildContentFromAccumulator(streamState.accumulator)
+
+    // Extract tool/structural blocks from the SDK message (if provided)
+    const sdkContent: any[] = sdkMsg?.message?.content ?? []
+    const toolBlocks = sdkContent.filter(
+      (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
+        || b.type === 'tool_result' || b.type === 'web_search_tool_result'
+        || b.type === 'code_execution_tool_result'
+    )
+    const redactedBlocks = sdkContent.filter(
+      (b: any) => b.type === 'redacted_thinking'
+    )
+
+    // If accumulator has content, use it; otherwise fall back to the streaming message's own content
+    const streamingMsg = messages[streamIdx] as any
+    const finalContent = accumulatedContent.length > 0
+      ? [...accumulatedContent, ...redactedBlocks, ...toolBlocks]
+      : [...(streamingMsg.message?.content ?? []), ...toolBlocks]
+
+    // Build finalized message: merge SDK metadata if available
+    const finalized: any = sdkMsg
+      ? { ...sdkMsg, message: { ...sdkMsg.message, content: finalContent } }
+      : { ...streamingMsg, message: { ...streamingMsg.message, content: finalContent } }
+    delete finalized._streaming
+
+    const updated = [...messages]
+    updated[streamIdx] = finalized
+
+    const next = new Map(s.containers)
+    next.set(sessionId, { ...container, messages: updated })
+    useSessionContainerStore.setState({ containers: next })
+
+    streamState.clear()
+  }
+
   private handleFinalAssistantMessage(sessionId: string, agentMsg: AgentMessage) {
     let s = store()
     const streamState = s.getStreamState(sessionId)
@@ -716,7 +774,7 @@ class WebSocketManager {
       streamState.pendingDeltas.clear()
     }
 
-    // 2. Re-read store after flush (flush may create new containers Map)
+    // 2. Re-read store after flush
     s = store()
     const container = s.containers.get(sessionId)
     if (!container) return
@@ -730,63 +788,79 @@ class WebSocketManager {
       (m: any) => m._streaming && m.type === 'assistant'
     )
 
-    // 4. Build merged content: accumulator (text/thinking) + SDK (tool_use, redacted_thinking)
-    const accumulatedContent = this.buildContentFromAccumulator(streamState.accumulator)
-    const sdkContent: any[] = finalMsg.message?.content ?? []
-    const toolBlocks = sdkContent.filter(
-      (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
-        || b.type === 'tool_result' || b.type === 'web_search_tool_result'
-        || b.type === 'code_execution_tool_result'
-    )
-    const redactedBlocks = sdkContent.filter(
-      (b: any) => b.type === 'redacted_thinking'
-    )
-    const mergedContent = [...accumulatedContent, ...redactedBlocks, ...toolBlocks]
-
-    // 5. If accumulator is empty, trust the SDK message directly (no stream events scenario)
-    const useRawSdk = streamState.accumulator.size === 0
-
-    // 6. Build final message
-    const merged: any = {
-      ...finalMsg,
-      message: {
-        ...finalMsg.message,
-        content: useRawSdk ? sdkContent : mergedContent,
-      },
+    // ── CASE A: Streaming is active — SDK sent a partial/final mid-stream ──
+    // DON'T finalize. Only merge tool_use blocks and metadata into the streaming message.
+    // The streaming message keeps _streaming:true and the accumulator stays intact.
+    // True finalization happens at: content_block_start index=0 (next response) or session complete.
+    if (streamIdx >= 0) {
+      const sdkContent: any[] = finalMsg.message?.content ?? []
+      const toolBlocks = sdkContent.filter(
+        (b: any) => b.type === 'tool_use' || b.type === 'server_tool_use'
+          || b.type === 'tool_result' || b.type === 'web_search_tool_result'
+          || b.type === 'code_execution_tool_result'
+      )
+      // Only merge if there are tool blocks to add (most partials won't have any)
+      if (toolBlocks.length > 0) {
+        const streamingMsg = messages[streamIdx] as any
+        const existingContent = streamingMsg.message?.content ?? []
+        const updatedContent = [...existingContent, ...toolBlocks]
+        const updated = [...messages]
+        updated[streamIdx] = {
+          ...streamingMsg,
+          message: { ...streamingMsg.message, content: updatedContent },
+          // Preserve metadata from SDK message (uuid, message.id, model)
+          uuid: finalMsg.uuid ?? streamingMsg.uuid,
+        }
+        // Store the SDK message reference for later finalization
+        if (apiId) {
+          (updated[streamIdx] as any)._sdkMsgId = apiId
+          if (finalMsg.message?.model) {
+            updated[streamIdx] = {
+              ...updated[streamIdx],
+              message: { ...(updated[streamIdx] as any).message, id: apiId, model: finalMsg.message.model },
+            }
+          }
+        }
+        const next = new Map(s.containers)
+        next.set(sessionId, { ...container, messages: updated })
+        useSessionContainerStore.setState({ containers: next })
+      } else if (apiId) {
+        // No tool blocks but update metadata (API id, model) on the streaming message
+        const streamingMsg = messages[streamIdx] as any
+        const updated = [...messages]
+        updated[streamIdx] = {
+          ...streamingMsg,
+          uuid: finalMsg.uuid ?? streamingMsg.uuid,
+          message: {
+            ...streamingMsg.message,
+            id: apiId,
+            model: finalMsg.message?.model ?? streamingMsg.message?.model,
+          },
+        }
+        const next = new Map(s.containers)
+        next.set(sessionId, { ...container, messages: updated })
+        useSessionContainerStore.setState({ containers: next })
+      }
+      // DON'T clear streamState — streaming is still active
+      return
     }
-    delete merged._streaming
 
-    // 7. Deduplicate: also remove any previous assistant message with same API id
-    let cleaned = messages
+    // ── CASE B: No streaming message — fallback for history/no-stream-events ──
+    // Deduplicate by API id, then push the SDK message directly.
+    let base = messages
     if (apiId) {
-      cleaned = messages.filter((m: any) => {
-        if ((m as any)._streaming) return true  // Keep the streaming msg — we'll replace it by index
+      base = messages.filter((m: any) => {
         if (m.type === 'assistant' && (m as any).message?.id === apiId) return false
         return true
       })
     }
 
-    // 8. Write to store
-    const nextContainers = new Map(s.containers)
-    if (streamIdx >= 0) {
-      // Replace the streaming message in-place
-      const updated = [...cleaned]
-      const newStreamIdx = updated.findIndex((m: any) => (m as any)._streaming && m.type === 'assistant')
-      if (newStreamIdx >= 0) {
-        updated[newStreamIdx] = merged
-      } else {
-        updated.push(merged)
-      }
-      nextContainers.set(sessionId, { ...container, messages: updated })
-    } else {
-      // No streaming message found — fallback: just push the final message
-      const updated = [...cleaned, merged]
-      nextContainers.set(sessionId, { ...container, messages: updated })
-    }
-    useSessionContainerStore.setState({ containers: nextContainers })
+    const merged: any = { ...finalMsg }
+    delete merged._streaming
 
-    // 9. Clear stream state
-    streamState.clear()
+    const nextContainers = new Map(s.containers)
+    nextContainers.set(sessionId, { ...container, messages: [...base, merged] })
+    useSessionContainerStore.setState({ containers: nextContainers })
   }
 
   private handleToolApprovalRequest(msg: any) {
@@ -923,7 +997,9 @@ class WebSocketManager {
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
-    // Finalize any in-progress streaming message (e.g. abort during streaming)
+    // Finalize any in-progress streaming message (with accumulated content)
+    this.finalizeStreamingMessage(sessionId)
+    // Safety net: clear any remaining _streaming flags
     s.clearStreamingFlag(sessionId)
     // Refresh session list in sidebar (force — session just completed, title may have changed)
     const sessStore = useSessionStore.getState()
