@@ -9,6 +9,8 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'
 import type { SpinnerMode } from '../../stores/sessionContainerStore'
 
+const EMPTY_QUEUE: never[] = []
+
 interface ChatMessagesPaneProps {
   sessionId: string
   limit?: number
@@ -53,7 +55,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
 
   // Get queue from the container
   const queue = useSessionContainerStore(
-    (state) => state.containers.get(sessionId)?.queue ?? []
+    (state) => state.containers.get(sessionId)?.queue ?? EMPTY_QUEUE
   )
 
   // ── Spinner state from Zustand (reactive, no polling) ──

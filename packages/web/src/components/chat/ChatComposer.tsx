@@ -16,6 +16,8 @@ import type { FileItem } from './FileReferencePopup'
 import type { AttachedImage } from './ImagePreviewBar'
 import type { LocalSlashCommand } from '../../stores/commandStore'
 
+const EMPTY_QUEUE: never[] = []
+
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5MB
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
@@ -71,10 +73,10 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
   const queue = useSessionContainerStore(
-    (state) => sessionId ? state.containers.get(sessionId)?.queue ?? [] : []
+    (state) => sessionId ? state.containers.get(sessionId)?.queue ?? EMPTY_QUEUE : EMPTY_QUEUE
   )
 
-  // Consume composerDraft from store (set by PromptSuggestionCard)
+  // Consume composerDraft from store
   const composerDraft = useSessionStore((s) => s.composerDraft)
   useEffect(() => {
     if (composerDraft != null) {
