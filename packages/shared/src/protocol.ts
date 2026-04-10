@@ -41,6 +41,11 @@ export interface C2S_Abort {
   sessionId: string
 }
 
+export interface C2S_ClearQueue {
+  type: 'clear-queue'
+  sessionId: string
+}
+
 export interface C2S_SetMode {
   type: 'set-mode'
   sessionId: string
@@ -192,6 +197,19 @@ export interface S2C_SessionComplete {
 export interface S2C_SessionAborted {
   type: 'session-aborted'
   sessionId: string
+}
+
+export interface QueueItem {
+  id: string
+  prompt: string
+  addedAt: number
+  images?: { data: string; mediaType: string }[]
+}
+
+export interface S2C_QueueUpdated {
+  type: 'queue-updated'
+  sessionId: string
+  queue: QueueItem[]
 }
 
 export interface SlashCommandInfo {
@@ -395,6 +413,7 @@ export type C2SMessage =
   | C2S_ToolApprovalResponse
   | C2S_AskUserResponse
   | C2S_Abort
+  | C2S_ClearQueue
   | C2S_SetMode
   | C2S_SetEffort
   | C2S_Reconnect
@@ -441,4 +460,5 @@ export type S2CMessage =
   | S2C_StreamSnapshot
   | S2C_SessionTitleUpdated
   | S2C_SyncResult
+  | S2C_QueueUpdated
   | S2C_Error
