@@ -1,7 +1,10 @@
-import { useRef, useCallback, useEffect, useMemo, useLayoutEffect, useState } from 'react'
+import { useRef, useCallback, useEffect, useMemo, useLayoutEffect } from 'react'
 import { MessageComponent, isMessageVisible } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { PlanApprovalCard } from './PlanApprovalCard'
+import { StreamingTextBlock } from './streaming/StreamingTextBlock'
+import { StreamingThinkingBlock } from './streaming/StreamingThinkingBlock'
+import { StreamingToolUseBlock } from './streaming/StreamingToolUseBlock'
 import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'
 import type { SpinnerMode } from '../../stores/sessionContainerStore'
@@ -53,27 +56,28 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
     (state) => state.containers.get(sessionId)?.queue ?? []
   )
 
-  // ── Spinner state from mutable StreamState (polled every 500ms) ──
-  const [spinnerMode, setSpinnerMode] = useState<SpinnerMode>('requesting')
-  const [requestStartTime, setRequestStartTime] = useState<number | null>(null)
-  const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null)
-  const [thinkingEndTime, setThinkingEndTime] = useState<number | null>(null)
-  const [responseLength, setResponseLength] = useState(0)
+  // ── Spinner state from Zustand (reactive, no polling) ──
+  const spinnerMode = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.spinnerMode ?? null
+  ) as SpinnerMode | null
+  const requestStartTime = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.requestStartTime ?? null
+  )
+  const thinkingStartTime = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.thinkingStartTime ?? null
+  )
+  const thinkingEndTime = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.thinkingEndTime ?? null
+  )
+  const responseLength = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.responseLength ?? 0
+  )
 
-  useEffect(() => {
-    if (sessionStatus !== 'running') return
-    const poll = () => {
-      const ss = useSessionContainerStore.getState().getStreamState(sessionId)
-      setSpinnerMode(ss.spinnerMode)
-      setRequestStartTime(ss.requestStartTime)
-      setThinkingStartTime(ss.thinkingStartTime)
-      setThinkingEndTime(ss.thinkingEndTime)
-      setResponseLength(ss.responseLength)
-    }
-    poll()
-    const id = setInterval(poll, 500)
-    return () => clearInterval(id)
-  }, [sessionId, sessionStatus])
+  // ── Streaming state ──
+  const streaming = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.streaming ?? null
+  )
+  const hasStreamingContent = !!(streaming?.text || streaming?.thinking || (streaming?.toolUses?.length ?? 0) > 0 || (streaming?.completedBlocks?.length ?? 0) > 0)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -218,16 +222,46 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
         </div>
       ))}
 
+      {/* Streaming content — appended after completed messages, independent of messages[] */}
+      {hasStreamingContent && (
+        <div className="px-4 py-2.5">
+          <div className="flex items-start">
+            <div className="flex-1 min-w-0 flex gap-3 items-start">
+              <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                {streaming?.completedBlocks.map((block, i) => (
+                  block.type === 'thinking'
+                    ? <StreamingThinkingBlock key={`cb-${i}`} content={block.content} />
+                    : <StreamingTextBlock key={`cb-${i}`} text={block.content} />
+                ))}
+                {streaming?.thinking && (
+                  <StreamingThinkingBlock content={streaming.thinking} />
+                )}
+                {streaming?.toolUses.map(tool => (
+                  <StreamingToolUseBlock key={tool.id} tool={tool} />
+                ))}
+                {streaming?.text && (
+                  <StreamingTextBlock text={streaming.text} />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer — derive visibility from messages: show when the last
           non-system message is a user message or streaming assistant (i.e., still
           waiting for a complete assistant response). No flags needed. */}
       {sessionStatus === 'running' && (() => {
+        if (hasStreamingContent) return true
         // Walk backward to find the last non-system message
         for (let i = rawMessages.length - 1; i >= 0; i--) {
           const t = (rawMessages[i] as any).type
           if (t === 'system' || t === 'result') continue
-          // If last substantive message is user, optimistic, or streaming → show indicator
-          return t === 'user' || (t === 'assistant' && (rawMessages[i] as any)._streaming)
+          // If last substantive message is user → show indicator
+          return t === 'user'
         }
         return true // no messages yet → show
       })() && (
