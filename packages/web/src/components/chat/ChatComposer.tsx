@@ -60,7 +60,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const ctx = useChatSession()
-  const { lockStatus, sessionStatus } = ctx
+  const { lockStatus, sessionStatus, sessionId } = ctx
   const { models, accountInfo } = useGlobalConnection()
   const commands = useCommandStore((s) => s.commands)
   const [fileResults, setFileResults] = useState<FileItem[]>([])
@@ -70,6 +70,9 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const [slashQueryText, setSlashQueryText] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
+  const queue = useSessionContainerStore(
+    (state) => sessionId ? state.containers.get(sessionId)?.queue ?? [] : []
+  )
 
   // Consume composerDraft from store (set by PromptSuggestionCard)
   const composerDraft = useSessionStore((s) => s.composerDraft)
@@ -431,6 +434,23 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
           </div>
         )}
 
+        {/* Queue indicator */}
+        {queue.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-secondary)] border-b border-[var(--border)]">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+              {queue.length} message{queue.length > 1 ? 's' : ''} queued
+            </span>
+            <button
+              onClick={() => sessionId && wsManager.clearQueue(sessionId)}
+              className="text-[var(--text-tertiary)] hover:text-[var(--error)] transition-colors"
+              title="Clear queue"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Textarea */}
         <div>
           {inputDisabled ? (
@@ -461,19 +481,41 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
         {minimal ? (
           <div className="flex items-center px-2 py-1 gap-1">
             <div className="flex-1" />
-            <button
-              onClick={isRunning ? onAbort : handleSubmit}
-              disabled={!isRunning && !canSend}
-              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
-                isRunning
-                  ? 'bg-[var(--error)] text-white hover:bg-[var(--error-hover)] cursor-pointer'
-                  : canSend
+            {isRunning ? (
+              <>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSend}
+                  className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
+                    canSend
+                      ? 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] cursor-pointer'
+                      : 'bg-[var(--border)] text-[var(--text-dim)] cursor-default'
+                  }`}
+                  title="Queue message"
+                >
+                  ↑
+                </button>
+                <button
+                  onClick={onAbort}
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors bg-[var(--error)] text-white hover:bg-[var(--error-hover)] cursor-pointer"
+                  title="Stop (clears queue)"
+                >
+                  ■
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={!canSend}
+                className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
+                  canSend
                     ? 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] cursor-pointer'
                     : 'bg-[var(--border)] text-[var(--text-dim)] cursor-default'
-              }`}
-            >
-              {isRunning ? '■' : '↑'}
-            </button>
+                }`}
+              >
+                ↑
+              </button>
+            )}
           </div>
         ) : (
           <>

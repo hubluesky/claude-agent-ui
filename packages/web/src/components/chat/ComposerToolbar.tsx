@@ -181,15 +181,32 @@ export function ComposerToolbar({
           {permissionMode === 'auto' ? '自动模式' : currentModeInfo.label}
         </button>
 
-        {isRunning && !canSend ? (
-          <button
-            onClick={onAbort}
-            className="w-7 h-7 rounded-md bg-[var(--error)] flex items-center justify-center shrink-0"
-          >
-            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-          </button>
+        {isRunning ? (
+          <>
+            <button
+              onClick={onSend}
+              disabled={!canSend || isLocked || isDisconnected}
+              className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                canSend && !isLocked && !isDisconnected
+                  ? 'bg-[var(--text-primary)] hover:bg-white'
+                  : 'bg-[var(--bg-secondary)] opacity-40'
+              }`}
+              title="Queue message"
+            >
+              <svg className={`w-3.5 h-3.5 ${canSend && !isLocked ? 'text-[var(--bg-input)]' : 'text-[var(--text-muted)]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </button>
+            <button
+              onClick={onAbort}
+              className="w-7 h-7 rounded-md bg-[var(--error)] flex items-center justify-center shrink-0"
+              title="Stop (clears queue)"
+            >
+              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+            </button>
+          </>
         ) : (
           <button
             onClick={onSend}
