@@ -25,8 +25,10 @@ interface BufferedMessage {
 }
 
 interface StreamBlock {
-  type: 'text' | 'thinking'
+  type: 'text' | 'thinking' | 'tool_use'
   content: string
+  toolId?: string
+  toolName?: string
 }
 
 interface SessionBuffer {
@@ -329,7 +331,7 @@ export class WSHub {
   }
 
   /** Update the active stream snapshot for a session */
-  updateStreamSnapshot(sessionId: string, messageId: string, blockIndex: number, blockType: 'text' | 'thinking', delta: string): void {
+  updateStreamSnapshot(sessionId: string, messageId: string, blockIndex: number, blockType: 'text' | 'thinking' | 'tool_use', delta: string, toolMeta?: { toolId: string; toolName: string }): void {
     const buf = this.getOrCreateBuffer(sessionId)
     if (!buf.activeStream || buf.activeStreamMessageId !== messageId) {
       buf.activeStream = new Map()
@@ -339,7 +341,11 @@ export class WSHub {
     if (existing) {
       existing.content += delta
     } else {
-      buf.activeStream.set(blockIndex, { type: blockType, content: delta })
+      buf.activeStream.set(blockIndex, {
+        type: blockType,
+        content: delta,
+        ...(toolMeta && { toolId: toolMeta.toolId, toolName: toolMeta.toolName }),
+      })
     }
   }
 
@@ -353,12 +359,12 @@ export class WSHub {
   }
 
   /** Get the current stream snapshot for reconnection */
-  getStreamSnapshot(sessionId: string): { messageId: string; blocks: { index: number; type: 'text' | 'thinking'; content: string }[] } | null {
+  getStreamSnapshot(sessionId: string): { messageId: string; blocks: { index: number; type: 'text' | 'thinking' | 'tool_use'; content: string; toolId?: string; toolName?: string }[] } | null {
     const buf = this.sessionBuffers.get(sessionId)
     if (!buf?.activeStream || !buf.activeStreamMessageId) return null
-    const blocks: { index: number; type: 'text' | 'thinking'; content: string }[] = []
+    const blocks: { index: number; type: 'text' | 'thinking' | 'tool_use'; content: string; toolId?: string; toolName?: string }[] = []
     for (const [index, block] of buf.activeStream) {
-      blocks.push({ index, type: block.type, content: block.content })
+      blocks.push({ index, type: block.type, content: block.content, toolId: block.toolId, toolName: block.toolName })
     }
     return { messageId: buf.activeStreamMessageId, blocks }
   }
