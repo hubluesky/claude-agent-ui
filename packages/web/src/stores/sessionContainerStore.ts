@@ -555,7 +555,6 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
       pendingPlanApproval: null,
       resolvedPlanApproval: null,
       planModalOpen: false,
-      sessionStatus: 'idle',
     })
     set({ containers: next })
   },

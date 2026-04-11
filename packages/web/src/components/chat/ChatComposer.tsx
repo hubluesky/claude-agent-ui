@@ -100,7 +100,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const [showModes, setShowModes] = useState(false)
   const { permissionMode, effort, maxBudgetUsd, maxTurns, setPermissionMode, setEffort, setMaxBudgetUsd, setMaxTurns } = useSettingsStore()
   const isLocked = lockStatus === 'locked_other'
-  const isRunning = lockStatus === 'locked_self' && sessionStatus === 'running'
+  const isRunning = sessionStatus !== 'idle'
   const isLockHolder = lockStatus === 'locked_self'
   const inputDisabled = isLocked
 

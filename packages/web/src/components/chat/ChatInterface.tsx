@@ -154,7 +154,7 @@ export function ChatInterface({
       // Allow ESC from textarea (composer) but not from other inputs (search box etc.)
       const tag = (document.activeElement as HTMLElement)?.tagName
       if (tag === 'INPUT') return
-      if (ctx.sessionStatus === 'running' && ctx.lockStatus === 'locked_self') {
+      if (ctx.sessionStatus === 'running') {
         e.preventDefault()
         ctx.abort()
       }
