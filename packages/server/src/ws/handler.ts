@@ -334,13 +334,25 @@ export function createWsHandler(deps: HandlerDeps) {
     session.on('message', (msg: any) => {
       if (msg.type === 'stream_event') {
         const event = msg.event
-        if (event?.type === 'content_block_delta') {
+        if (event?.type === 'content_block_start') {
+          const blockType = event.content_block?.type
+          if (blockType === 'tool_use' || blockType === 'server_tool_use') {
+            const toolBlock = event.content_block
+            const index = event.index ?? 0
+            wsHub.updateStreamSnapshot(realSessionId, msg.uuid ?? '', index, 'tool_use', '', {
+              toolId: toolBlock.id ?? `tool-${index}`,
+              toolName: toolBlock.name ?? '',
+            })
+          }
+        } else if (event?.type === 'content_block_delta') {
           const delta = event.delta
           const index = event.index ?? 0
           if (delta?.type === 'text_delta' && delta.text) {
             wsHub.updateStreamSnapshot(realSessionId, msg.uuid ?? '', index, 'text', delta.text)
           } else if (delta?.type === 'thinking_delta' && delta.thinking) {
             wsHub.updateStreamSnapshot(realSessionId, msg.uuid ?? '', index, 'thinking', delta.thinking)
+          } else if (delta?.type === 'input_json_delta' && delta.partial_json) {
+            wsHub.updateStreamSnapshot(realSessionId, msg.uuid ?? '', index, 'tool_use', delta.partial_json)
           }
         }
         wsHub.broadcastRaw(realSessionId, { type: 'agent-message', sessionId: realSessionId, message: msg })
