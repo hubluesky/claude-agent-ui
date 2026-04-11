@@ -366,7 +366,7 @@ export interface S2C_StreamSnapshot {
   type: 'stream-snapshot'
   sessionId: string
   messageId: string
-  blocks: { index: number; type: 'text' | 'thinking'; content: string }[]
+  blocks: { index: number; type: 'text' | 'thinking' | 'tool_use'; content: string; toolId?: string; toolName?: string }[]
 }
 
 export interface S2C_SessionTitleUpdated {
