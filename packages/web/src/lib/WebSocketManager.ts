@@ -906,15 +906,31 @@ class WebSocketManager {
     const container = s.containers.get(sessionId)
     if (!container) return
 
-    // Rebuild streaming state from snapshot blocks
+    // Rebuild streaming state from snapshot blocks (all types: text, thinking, tool_use)
+    let lastBlockType: string = 'text'
     for (const block of snapshot.blocks ?? []) {
       if (block.type === 'thinking') {
         s.updateStreamingThinking(sessionId, block.content ?? '')
+        lastBlockType = 'thinking'
       } else if (block.type === 'text') {
         s.updateStreamingText(sessionId, block.content ?? '')
+        lastBlockType = 'text'
+      } else if (block.type === 'tool_use') {
+        s.addStreamingToolUse(sessionId, {
+          id: block.toolId ?? `tool-${block.index}`,
+          name: block.toolName ?? '',
+          input: block.content ?? '',
+        })
+        lastBlockType = 'tool_use'
       }
     }
-    s.setSpinnerMode(sessionId, 'responding')
+    // spinnerMode based on last block type
+    const modeMap: Record<string, 'thinking' | 'responding' | 'tool-use'> = {
+      thinking: 'thinking',
+      text: 'responding',
+      tool_use: 'tool-use',
+    }
+    s.setSpinnerMode(sessionId, modeMap[lastBlockType] ?? 'responding')
   }
 
   private handleSessionTitleUpdated(msg: any) {
