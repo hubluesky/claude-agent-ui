@@ -41,11 +41,6 @@ export interface C2S_Abort {
   sessionId: string
 }
 
-export interface C2S_ClearQueue {
-  type: 'clear-queue'
-  sessionId: string
-}
-
 export interface C2S_SetMode {
   type: 'set-mode'
   sessionId: string
@@ -197,6 +192,7 @@ export interface S2C_SessionComplete {
 export interface S2C_SessionAborted {
   type: 'session-aborted'
   sessionId: string
+  queuedPrompts?: string[]
 }
 
 export interface QueueItem {
@@ -393,7 +389,6 @@ export type C2SMessage =
   | C2S_ToolApprovalResponse
   | C2S_AskUserResponse
   | C2S_Abort
-  | C2S_ClearQueue
   | C2S_SetMode
   | C2S_SetEffort
   | C2S_Reconnect

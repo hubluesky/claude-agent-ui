@@ -67,6 +67,7 @@ export interface SessionContainer {
   mcpServers: McpServerInfo[]
   subagentMessages: { agentId: string; messages: any[] } | null
   queue: QueueItem[]
+  popBackPrompts: string[] | null
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
@@ -140,6 +141,7 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     mcpServers: [],
     subagentMessages: null,
     queue: [],
+    popBackPrompts: null,
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
@@ -183,6 +185,9 @@ interface SessionContainerActions {
   migrateContainer(fromId: string, toId: string): void
   /** Push a message, deduplicating by uuid */
   pushMessage(sessionId: string, msg: AgentMessage): void
+  /** Atomically push a final assistant message AND clear its streaming content in one render.
+   *  Eliminates the flash where streaming disappears but the message hasn't appeared yet. */
+  pushMessageAndClearStreaming(sessionId: string, msg: AgentMessage): void
   replaceMessages(sessionId: string, msgs: AgentMessage[], hasMore: boolean): void
   /** Replaces an _optimistic user message with the server version */
   replaceOptimistic(sessionId: string, serverMsg: AgentMessage): void
@@ -203,6 +208,7 @@ interface SessionContainerActions {
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
   setSubagentMessages(sessionId: string, data: SessionContainer['subagentMessages']): void
   setQueue(sessionId: string, queue: QueueItem[]): void
+  setPopBackPrompts(sessionId: string, prompts: string[] | null): void
   setSubscribed(sessionId: string, subscribed: boolean): void
   setLastSeq(sessionId: string, seq: number): void
   setNeedsFullSync(sessionId: string, needs: boolean): void
@@ -293,6 +299,27 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     if (uuid && c.messages.some((m: any) => (m as any).uuid === uuid)) return
     const next = new Map(containers)
     next.set(sessionId, { ...c, messages: [...c.messages, msg] })
+    set({ containers: next })
+  },
+
+  pushMessageAndClearStreaming(sessionId, msg) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c) return
+    const uuid = (msg as any).uuid
+    if (uuid && c.messages.some((m: any) => (m as any).uuid === uuid)) return
+
+    // Each API turn produces exactly ONE final assistant message containing ALL
+    // content blocks for that turn. Clear ALL streaming state — no selective
+    // clearing needed.  This matches Claude Code's model where the final message
+    // is the single source of truth for a completed turn.
+    const next = new Map(containers)
+    next.set(sessionId, {
+      ...c,
+      messages: [...c.messages, msg],
+      streaming: createStreamingState(),
+      streamingVersion: c.streamingVersion + 1,
+    })
     set({ containers: next })
   },
 
@@ -473,6 +500,15 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     if (!c) return
     const next = new Map(containers)
     next.set(sessionId, { ...c, queue })
+    set({ containers: next })
+  },
+
+  setPopBackPrompts(sessionId, prompts) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c) return
+    const next = new Map(containers)
+    next.set(sessionId, { ...c, popBackPrompts: prompts })
     set({ containers: next })
   },
 

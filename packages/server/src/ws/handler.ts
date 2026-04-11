@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { WebSocket } from 'ws'
-import type { C2SMessage, PermissionMode, PlanApprovalDecision } from '@claude-agent-ui/shared'
+import type { C2SMessage, PermissionMode, PlanApprovalDecision, QueueItem } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
@@ -23,6 +23,74 @@ export function createWsHandler(deps: HandlerDeps) {
     payload: Record<string, unknown>
   }
   const pendingRequestMap = new Map<string, PendingRequest>()
+
+  // ── Input Queue: server-managed FIFO per session ──
+  interface QueuedMessage {
+    id: string
+    prompt: string
+    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string }
+    images?: { data: string; mediaType: string }[]
+    addedAt: number
+    connectionId: string
+  }
+  const messageQueues = new Map<string, QueuedMessage[]>()
+
+  function getQueue(sessionId: string): QueuedMessage[] {
+    return messageQueues.get(sessionId) ?? []
+  }
+
+  function getQueueItems(sessionId: string): QueueItem[] {
+    return getQueue(sessionId).map(q => ({
+      id: q.id,
+      prompt: q.prompt,
+      addedAt: q.addedAt,
+      images: q.images,
+    }))
+  }
+
+  function broadcastQueueUpdate(sessionId: string) {
+    wsHub.broadcast(sessionId, {
+      type: 'queue-updated',
+      sessionId,
+      queue: getQueueItems(sessionId),
+    } as any)
+  }
+
+  function enqueueMessage(sessionId: string, msg: QueuedMessage) {
+    let queue = messageQueues.get(sessionId)
+    if (!queue) {
+      queue = []
+      messageQueues.set(sessionId, queue)
+    }
+    queue.push(msg)
+    broadcastQueueUpdate(sessionId)
+  }
+
+  function dequeueNext(sessionId: string): QueuedMessage | undefined {
+    const queue = messageQueues.get(sessionId)
+    if (!queue || queue.length === 0) return undefined
+    const next = queue.shift()!
+    if (queue.length === 0) messageQueues.delete(sessionId)
+    broadcastQueueUpdate(sessionId)
+    return next
+  }
+
+  /** Dequeue ALL messages, merge prompts (newline-joined) and images into one. Like CLI canBatchWith. */
+  function dequeueAll(sessionId: string): QueuedMessage | undefined {
+    const queue = messageQueues.get(sessionId)
+    if (!queue || queue.length === 0) return undefined
+    const all = queue.splice(0, queue.length)
+    messageQueues.delete(sessionId)
+    broadcastQueueUpdate(sessionId)
+    // Merge into a single message
+    const merged: QueuedMessage = {
+      ...all[0]!,
+      prompt: all.map(m => m.prompt).join('\n'),
+      images: all.flatMap(m => m.images ?? []),
+    }
+    if (!merged.images || merged.images.length === 0) delete merged.images
+    return merged
+  }
 
   wsHub.startHeartbeat()
 
@@ -77,9 +145,6 @@ export function createWsHandler(deps: HandlerDeps) {
         break
       case 'abort':
         await handleAbort(connectionId, msg.sessionId)
-        break
-      case 'clear-queue':
-        // CLI handles its own queue via priority messages; no-op for now
         break
       case 'set-mode':
         await handleSetMode(connectionId, msg.sessionId, msg.mode)
@@ -178,6 +243,12 @@ export function createWsHandler(deps: HandlerDeps) {
 
     const readonly = lockHolder !== null && lockHolder !== connectionId
     resendPendingRequests(sessionId, connectionId, readonly)
+
+    // Send current queue state
+    const queueItems = getQueueItems(sessionId)
+    if (queueItems.length > 0) {
+      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: queueItems } as any)
+    }
   }
 
   function handleSubscribeSession(connectionId: string, sessionId: string, lastSeq?: number) {
@@ -203,6 +274,12 @@ export function createWsHandler(deps: HandlerDeps) {
 
     wsHub.sendTo(connectionId, { type: 'sync-result', sessionId, replayed: syncResult.replayed, hasGap: syncResult.hasGap, gapRange: syncResult.gapRange } as any)
     resendPendingRequests(sessionId, connectionId, true)
+
+    // Send current queue state
+    const queueItems = getQueueItems(sessionId)
+    if (queueItems.length > 0) {
+      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: queueItems } as any)
+    }
   }
 
   // ======== Session event binding ========
@@ -337,11 +414,27 @@ export function createWsHandler(deps: HandlerDeps) {
           }
         }).catch(() => {})
       }
+
+      // ── Input Queue: auto-dequeue ALL messages after query completes (batch like CLI) ──
+      setImmediate(() => {
+        const merged = dequeueAll(realSessionId)
+        if (merged) {
+          sendMessageToSession(merged.connectionId, realSessionId, session, merged.prompt, merged.options)
+        }
+      })
     })
 
     session.on('error', (err: Error) => {
       lockManager.startTimeout(realSessionId)
       wsHub.broadcast(realSessionId, { type: 'error', message: err.message, code: 'internal' })
+
+      // ── Input Queue: also try dequeue on error ──
+      setImmediate(() => {
+        const merged = dequeueAll(realSessionId)
+        if (merged) {
+          sendMessageToSession(merged.connectionId, realSessionId, session, merged.prompt, merged.options)
+        }
+      })
     })
   }
 
@@ -384,6 +477,31 @@ export function createWsHandler(deps: HandlerDeps) {
       }
     }
 
+    // ── Input Queue: if session is busy, enqueue instead of sending ──
+    const sessionBusy = session.status === 'running' || session.status === 'awaiting_approval' || session.status === 'awaiting_user_input'
+    if (sessionBusy && effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
+      enqueueMessage(effectiveSessionId, {
+        id: randomUUID(),
+        prompt,
+        options,
+        images: options?.images,
+        addedAt: Date.now(),
+        connectionId,
+      })
+      return
+    }
+
+    sendMessageToSession(connectionId, effectiveSessionId!, session, prompt, options)
+  }
+
+  /** Send a message immediately (used for both direct sends and dequeued messages) */
+  function sendMessageToSession(
+    connectionId: string,
+    effectiveSessionId: string,
+    session: CliSession,
+    prompt: string,
+    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string }
+  ) {
     // Build content blocks for broadcast
     const broadcastContent: any[] = []
     if (options?.images) {
@@ -397,7 +515,7 @@ export function createWsHandler(deps: HandlerDeps) {
 
     // Apply per-message options
     if (options?.permissionMode) {
-      await session.setPermissionMode(options.permissionMode as PermissionMode).catch(() => {})
+      session.setPermissionMode(options.permissionMode as PermissionMode).catch(() => {})
     }
     if (options?.thinkingMode) {
       if (options.thinkingMode === 'disabled') session.setThinking?.(0)
@@ -519,9 +637,20 @@ export function createWsHandler(deps: HandlerDeps) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
+    // Pop all queued prompts BEFORE abort — complete/error callbacks have dequeueNext()
+    // that would consume them if we don't clear first
+    const queue = messageQueues.get(sessionId)
+    const queuedPrompts = queue && queue.length > 0
+      ? queue.map(q => q.prompt)
+      : undefined
+    // Clear server-side queue
+    if (queue) {
+      messageQueues.delete(sessionId)
+      broadcastQueueUpdate(sessionId)
+    }
     const session = sessionManager.getActive(sessionId)
     if (session) await session.abort()
-    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId })
+    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId, queuedPrompts })
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: PermissionMode) {

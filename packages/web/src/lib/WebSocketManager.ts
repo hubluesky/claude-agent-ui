@@ -188,10 +188,6 @@ class WebSocketManager {
     this.send({ type: 'abort', sessionId })
   }
 
-  clearQueue(sessionId: string) {
-    this.send({ type: 'clear-queue', sessionId } as any)
-  }
-
   getConnectionId(): string | null {
     return this.connectionId
   }
@@ -437,8 +433,10 @@ class WebSocketManager {
         this.handleModeChange(msg)
         break
       case 'session-complete':
-      case 'session-aborted':
         this.handleSessionComplete(msg)
+        break
+      case 'session-aborted':
+        this.handleSessionAborted(msg)
         break
       case 'session-forked':
         this.handleSessionForked(msg)
@@ -575,10 +573,12 @@ class WebSocketManager {
         // Partial assistant — extract tool_use blocks and model info, don't push to messages
         this.handlePartialAssistant(targetSessionId, agentMsg)
       } else {
-        // Final assistant — clear streaming state, push to messages
-        s.clearStreaming(targetSessionId)
+        // Final assistant — atomically clear streaming AND push message in a single
+        // Zustand set() call. This eliminates the flash where streaming disappears
+        // but the message hasn't rendered yet (two separate set() calls would produce
+        // an intermediate render with neither content visible).
         this.currentToolBlockIndex.delete(targetSessionId)
-        s.pushMessage(targetSessionId, agentMsg)
+        s.pushMessageAndClearStreaming(targetSessionId, agentMsg)
       }
     } else {
       s.pushMessage(targetSessionId, agentMsg)
@@ -799,6 +799,33 @@ class WebSocketManager {
     s.clearStreaming(sessionId)
     this.currentToolBlockIndex.delete(sessionId)
     // Refresh session list in sidebar
+    const sessStore = useSessionStore.getState()
+    if (sessStore.currentProjectCwd) {
+      sessStore.invalidateProjectSessions(sessStore.currentProjectCwd)
+      sessStore.loadProjectSessions(sessStore.currentProjectCwd, true)
+    }
+  }
+
+  private handleSessionAborted(msg: any) {
+    const sessionId = (msg as any).sessionId as string | undefined
+    if (!sessionId) return
+    const s = store()
+    s.setSessionStatus(sessionId, 'idle')
+    s.setApproval(sessionId, null)
+    s.setAskUser(sessionId, null)
+    s.setPlanApproval(sessionId, null)
+    s.setPlanModalOpen(sessionId, false)
+    s.setQueue(sessionId, [])
+    s.clearStreaming(sessionId)
+    this.currentToolBlockIndex.delete(sessionId)
+    // Pop queued prompts back to composer — only for lock holder (not readonly observers)
+    const queuedPrompts = (msg as any).queuedPrompts as string[] | undefined
+    const container = s.containers.get(sessionId)
+    const amLockHolder = container?.lockStatus === 'locked_self'
+    if (queuedPrompts && queuedPrompts.length > 0 && amLockHolder) {
+      s.setPopBackPrompts(sessionId, queuedPrompts)
+    }
+    // Refresh session list
     const sessStore = useSessionStore.getState()
     if (sessStore.currentProjectCwd) {
       sessStore.invalidateProjectSessions(sessStore.currentProjectCwd)

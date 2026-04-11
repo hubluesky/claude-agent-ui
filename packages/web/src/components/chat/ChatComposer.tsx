@@ -16,8 +16,6 @@ import type { FileItem } from './FileReferencePopup'
 import type { AttachedImage } from './ImagePreviewBar'
 import type { LocalSlashCommand } from '../../stores/commandStore'
 
-const EMPTY_QUEUE: never[] = []
-
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5MB
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
@@ -72,9 +70,21 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const [slashQueryText, setSlashQueryText] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
-  const queue = useSessionContainerStore(
-    (state) => sessionId ? state.containers.get(sessionId)?.queue ?? EMPTY_QUEUE : EMPTY_QUEUE
+
+  const popBackPrompts = useSessionContainerStore(
+    (state) => sessionId ? state.containers.get(sessionId)?.popBackPrompts ?? null : null
   )
+
+  // Consume popBackPrompts: merge queued texts into textarea when abort pops queue
+  useEffect(() => {
+    if (!popBackPrompts || popBackPrompts.length === 0 || !sessionId) return
+    const queuedText = popBackPrompts.join('\n')
+    setText(prev => {
+      const combined = prev ? [queuedText, prev].join('\n') : queuedText
+      return combined
+    })
+    useSessionContainerStore.getState().setPopBackPrompts(sessionId, null)
+  }, [popBackPrompts, sessionId])
 
   // Consume composerDraft from store
   const composerDraft = useSessionStore((s) => s.composerDraft)
@@ -436,23 +446,6 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
           </div>
         )}
 
-        {/* Queue indicator */}
-        {queue.length > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-secondary)] border-b border-[var(--border)]">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-              {queue.length} message{queue.length > 1 ? 's' : ''} queued
-            </span>
-            <button
-              onClick={() => sessionId && wsManager.clearQueue(sessionId)}
-              className="text-[var(--text-tertiary)] hover:text-[var(--error)] transition-colors"
-              title="Clear queue"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
         {/* Textarea */}
         <div>
           {inputDisabled ? (
@@ -500,7 +493,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                 <button
                   onClick={onAbort}
                   className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors bg-[var(--error)] text-white hover:bg-[var(--error-hover)] cursor-pointer"
-                  title="Stop (clears queue)"
+                  title="Stop"
                 >
                   ■
                 </button>

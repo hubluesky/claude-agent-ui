@@ -9,6 +9,7 @@ import { ConnectionBanner } from './ConnectionBanner'
 import { StatusBar } from './StatusBar'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { SearchBar } from './SearchBar'
+import { QueuedMessages } from './QueuedMessages'
 import { useChatSession } from '../../providers/ChatSessionContext'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -88,11 +89,17 @@ export function ChatInterface({
       if (ctx.sessionId === '__new__') {
         store.getOrCreate('__new__', currentProjectCwd ?? '')
       }
-      store.pushMessage(ctx.sessionId, {
-        type: 'user',
-        _optimistic: true,
-        message: { role: 'user', content: contentBlocks },
-      } as any)
+      // Only add optimistic user message if session is idle (not queued).
+      // When session is busy, the message is queued server-side and will be
+      // broadcast as a user message when it is actually dequeued and sent.
+      const sessionBusy = ctx.sessionStatus === 'running' || ctx.sessionStatus === 'awaiting_approval' || ctx.sessionStatus === 'awaiting_user_input'
+      if (!sessionBusy) {
+        store.pushMessage(ctx.sessionId, {
+          type: 'user',
+          _optimistic: true,
+          message: { role: 'user', content: contentBlocks },
+        } as any)
+      }
     }
 
     const { maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
@@ -142,16 +149,19 @@ export function ChatInterface({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      const tag = (document.activeElement as HTMLElement)?.tagName
-      if (tag === 'TEXTAREA' || tag === 'INPUT') return
       if (ctx.planModalOpen) return
+      if (searchOpen || helpOpen) return
+      // Allow ESC from textarea (composer) but not from other inputs (search box etc.)
+      const tag = (document.activeElement as HTMLElement)?.tagName
+      if (tag === 'INPUT') return
       if (ctx.sessionStatus === 'running' && ctx.lockStatus === 'locked_self') {
+        e.preventDefault()
         ctx.abort()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [ctx])
+  }, [ctx, searchOpen, helpOpen])
 
   if (!ctx.sessionId) return null
 
@@ -182,6 +192,7 @@ export function ChatInterface({
       ) : (
         <ChatMessagesPane sessionId={ctx.sessionId} limit={compact ? 50 : undefined} />
       )}
+      <QueuedMessages sessionId={ctx.sessionId} />
       {compact ? null : approvalConfig ? (
         <ApprovalPanel config={approvalConfig} />
       ) : (
