@@ -256,7 +256,6 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
             thinkingStartTime={thinkingStartTime}
             thinkingEndTime={thinkingEndTime}
             responseLength={responseLength}
-            messages={rawMessages}
           />
         </div>
       )}
