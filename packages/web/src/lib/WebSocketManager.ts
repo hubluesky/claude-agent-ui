@@ -687,11 +687,7 @@ class WebSocketManager {
   private handleToolApprovalResolved(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    const s = store()
-    s.setApproval(sessionId, null)
-    // Optimistically set running — CLI emits session_state_changed('running')
-    // after approval (structuredIO.ts:660) but there may be a delay.
-    s.setSessionStatus(sessionId, 'running')
+    store().setApproval(sessionId, null)
   }
 
   private handleAskUserRequest(msg: any) {
@@ -707,11 +703,7 @@ class WebSocketManager {
   private handleAskUserResolved(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    const s = store()
-    s.setAskUser(sessionId, null)
-    // Optimistically set running — CLI emits session_state_changed('running')
-    // after user responds (structuredIO.ts:660) but there may be a delay.
-    s.setSessionStatus(sessionId, 'running')
+    store().setAskUser(sessionId, null)
   }
 
   private handlePlanApproval(msg: any) {
@@ -743,8 +735,6 @@ class WebSocketManager {
       })
     }
     s.setPlanApproval(sessionId, null)
-    // Optimistically set running after plan approval
-    s.setSessionStatus(sessionId, 'running')
 
     // Sync permission mode to match the plan approval decision
     const settings = useSettingsStore.getState()

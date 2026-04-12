@@ -1,4 +1,7 @@
 import { randomUUID } from 'crypto'
+import { readFileSync, readdirSync, statSync } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
 import type { ProcessManager, CliProcess, SpawnOptions } from './process-manager.js'
 import { AgentSession } from './session.js'
 import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
@@ -16,6 +19,13 @@ export class CliSession extends AgentSession {
   private _effort?: string
   private _thinking?: string
   private _forkSession?: boolean
+
+  /**
+   * Tracks the origin of ask-user requests.
+   * AskUserQuestion tool uses can_use_tool (needs allow/deny response with updatedInput),
+   * while MCP elicitation uses elicitation (needs action/content response).
+   */
+  private _askUserOrigins = new Map<string, { origin: 'ask-user-tool' | 'elicitation'; originalInput?: Record<string, unknown> }>()
 
   constructor(processManager: ProcessManager, cwd: string, options?: {
     resumeSessionId?: string
@@ -116,9 +126,23 @@ export class CliSession extends AgentSession {
         this.emit('message', msg)
         break
 
-      case 'user':
-        // CLI echo — skip (server already broadcast user message)
+      case 'user': {
+        // The server already broadcasts the human user's text message when it
+        // receives send-message from the WebSocket client.  CLI echoes that same
+        // message back — we skip the echo to avoid duplicates.
+        //
+        // BUT the SDK also emits internal user messages that contain tool_result
+        // blocks (the results of tool executions).  These are NEVER broadcast by
+        // the server, so we MUST forward them.  Without them the frontend sees
+        // consecutive assistant messages with no separation between turns.
+        const userContent = (msg as any).message?.content
+        const blocks = Array.isArray(userContent) ? userContent : []
+        const hasToolResult = blocks.some((b: any) => b.type === 'tool_result')
+        if (hasToolResult) {
+          this.emit('message', msg)
+        }
         break
+      }
 
       case 'result': {
         const result: SessionResult = {
@@ -143,7 +167,6 @@ export class CliSession extends AgentSession {
         const request = msg.request as Record<string, unknown>
         const requestId = msg.request_id as string
         const subtype = request?.subtype as string
-
         if (subtype === 'can_use_tool') {
           const toolName = request.tool_name as string
 
@@ -151,11 +174,51 @@ export class CliSession extends AgentSession {
             this._status = 'awaiting_approval'
             this.emit('state-change', this._status)
             const input = request.input as Record<string, unknown>
+
+            // CLI's control_request does not include plan/planFilePath
+            // (normalizeToolInput only runs in message normalization, not in the
+            // permission-prompt-tool stdio flow). Read from disk as fallback.
+            let planContent = (input.plan as string) || ''
+            let planFilePath = (input.planFilePath as string) || ''
+
+            if (!planContent) {
+              // Try reading from the provided file path first
+              if (planFilePath) {
+                try { planContent = readFileSync(planFilePath, 'utf-8') } catch { /* ignore */ }
+              }
+              // Fall back: find the most recently modified .md in ~/.claude/plans/
+              if (!planContent) {
+                try {
+                  const plansDir = join(homedir(), '.claude', 'plans')
+                  const files = readdirSync(plansDir)
+                    .filter(f => f.endsWith('.md'))
+                    .map(f => ({ name: f, mtime: statSync(join(plansDir, f)).mtimeMs }))
+                    .sort((a, b) => b.mtime - a.mtime)
+                  if (files.length > 0) {
+                    planFilePath = join(plansDir, files[0].name)
+                    planContent = readFileSync(planFilePath, 'utf-8')
+                  }
+                } catch { /* ignore */ }
+              }
+            }
+
             this.emit('plan-approval', {
               requestId,
-              planContent: (input.plan as string) ?? '',
-              planFilePath: (input.planFilePath as string) ?? '',
+              planContent,
+              planFilePath,
               allowedPrompts: (input.allowedPrompts as { tool: string; prompt: string }[]) ?? [],
+            })
+          } else if (toolName === 'AskUserQuestion') {
+            // AskUserQuestion comes through can_use_tool but needs the ask-user UI,
+            // not the generic tool-approval UI. The user's answers are sent back
+            // via updatedInput in the can_use_tool response format.
+            this._status = 'awaiting_user_input'
+            this.emit('state-change', this._status)
+            const input = (request.input as Record<string, unknown>) ?? {}
+            this._askUserOrigins.set(requestId, { origin: 'ask-user-tool', originalInput: input })
+            this.emit('ask-user', {
+              requestId,
+              questions: (input.questions as unknown[]) ?? [],
             })
           } else {
             this._status = 'awaiting_approval'
@@ -175,6 +238,7 @@ export class CliSession extends AgentSession {
         } else if (subtype === 'elicitation') {
           this._status = 'awaiting_user_input'
           this.emit('state-change', this._status)
+          this._askUserOrigins.set(requestId, { origin: 'elicitation' })
           this.emit('ask-user', {
             requestId,
             questions: (request.questions as unknown[]) ?? [],
@@ -192,6 +256,12 @@ export class CliSession extends AgentSession {
 
   send(prompt: string, options?: SendOptions): void {
     const proc = this.ensureProcess()
+
+    // Immediately mark as running so subsequent sends get queued
+    if (this._status === 'idle') {
+      this._status = 'running'
+      this.emit('state-change', 'running')
+    }
 
     const content: unknown[] = []
     if (options?.images?.length) {
@@ -239,6 +309,10 @@ export class CliSession extends AgentSession {
         response: decision,
       },
     })
+    // CLI resumes execution after approval — set running immediately so all
+    // terminals see the state change. CLI will confirm via session_state_changed.
+    this._status = 'running'
+    this.emit('state-change', 'running')
   }
 
   resolvePlanApproval(requestId: string, decision: PlanApprovalDecision): void {
@@ -287,21 +361,52 @@ export class CliSession extends AgentSession {
         this.setPermissionMode(newMode).catch(() => {})
       }
     }
+    // CLI resumes execution after plan decision — set running immediately so all
+    // terminals see the state change. CLI will confirm via session_state_changed.
+    this._status = 'running'
+    this.emit('state-change', 'running')
   }
 
   resolveAskUser(requestId: string, response: AskUserResponse): void {
     if (!this._process) return
-    this._process.send({
-      type: 'control_response',
-      response: {
-        request_id: requestId,
-        subtype: 'success',
+    const origin = this._askUserOrigins.get(requestId)
+    this._askUserOrigins.delete(requestId)
+
+    if (origin?.origin === 'ask-user-tool') {
+      // AskUserQuestion tool: respond in can_use_tool format.
+      // The CLI expects updatedInput to include original input + answers.
+      this._process.send({
+        type: 'control_response',
         response: {
-          action: 'accept',
-          content: response.answers,
+          request_id: requestId,
+          subtype: 'success',
+          response: {
+            behavior: 'allow',
+            updatedInput: {
+              ...origin.originalInput,
+              answers: response.answers,
+            },
+          },
         },
-      },
-    })
+      })
+    } else {
+      // MCP elicitation: respond in elicitation format
+      this._process.send({
+        type: 'control_response',
+        response: {
+          request_id: requestId,
+          subtype: 'success',
+          response: {
+            action: 'accept',
+            content: response.answers,
+          },
+        },
+      })
+    }
+    // CLI resumes execution after user responds — set running immediately so all
+    // terminals see the state change. CLI will confirm via session_state_changed.
+    this._status = 'running'
+    this.emit('state-change', 'running')
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
