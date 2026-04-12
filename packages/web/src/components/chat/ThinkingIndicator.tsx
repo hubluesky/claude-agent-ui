@@ -32,6 +32,17 @@ interface TaskInfo {
 
 type ThinkingStatus = 'thinking' | number | null
 
+/**
+ * Spinner shown while AI is running. Matches Claude Code's SpinnerWithVerb:
+ *
+ * Structure:
+ *   [braille] verb… (elapsed · tokens · thinking)
+ *   Next: {subject}  OR  Tip: {text}
+ *
+ * No task tree — task list is rendered independently by MessageComponent.
+ * Task data is only used to derive the verb (currentTask.activeForm) and
+ * the "Next:" line (next pending task subject).
+ */
 export function ThinkingIndicator({
   spinnerMode,
   requestStartTime,
@@ -153,7 +164,9 @@ export function ThinkingIndicator({
     }
   }, [animateTokens])
 
-  // Extract tasks from messages
+  // Extract tasks from messages — only used for verb and "Next:" line.
+  // Matches Claude Code: currentTodo drives the verb, nextTask drives the
+  // "Next:" line. No task tree rendered here.
   const tasks: TaskInfo[] = []
   for (const msg of messages) {
     if (msg.type === 'system') {
@@ -180,8 +193,9 @@ export function ThinkingIndicator({
 
   const currentTask = tasks.find(t => t.status === 'active')
   const nextTask = tasks.find(t => t.status === 'pending')
-  const visibleTasks = tasks.filter(t => t.status !== 'done')
 
+  // Verb: currentTask.activeForm > currentTask.subject > random verb
+  // Matches Claude Code: overrideMessage ?? currentTodo?.activeForm ?? currentTodo?.subject ?? randomVerb
   const displayVerb = currentTask?.activeForm ?? currentTask?.subject ?? verb
 
   // Build status parts
@@ -204,23 +218,23 @@ export function ThinkingIndicator({
     statusParts.push(`thought for ${Math.round(thinkingStatus / 1000)}s`)
   }
 
-  // Tips
+  // Tip line — matches Claude Code:
+  // showClearTip = elapsed > 30min && !nextTask
+  // showBtwTip = elapsed > 30s && !nextTask
+  // nextTask takes priority over tips
   let tipText: string | null = null
   if (!nextTask) {
     if (elapsedMs > 1800_000) {
-      tipText = 'Tip: 使用 /clear 切换话题时释放上下文'
+      tipText = 'Use /clear to start fresh when switching topics and free up context'
     } else if (elapsedMs > 30_000) {
-      tipText = 'Tip: 使用 /btw 在不打断当前任务的情况下提问'
+      tipText = "Use /btw to ask a quick side question without interrupting Claude's current work"
     }
   }
 
   return (
     <div className="flex flex-col gap-1">
-      {/* Status line */}
-      <div className="flex items-center gap-1.5 px-4">
-        <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
-          <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
-        </div>
+      {/* Status line: [braille] verb… (elapsed · tokens · thinking) */}
+      <div className="flex items-center gap-1.5 px-4 pl-[19px] border-l-[3px] border-[var(--accent)] border-opacity-50 ml-4">
         <span className="text-sm text-[var(--purple)] font-mono w-3 text-center shrink-0">
           {SPINNER_FRAMES[spinnerFrame]}
         </span>
@@ -237,39 +251,10 @@ export function ThinkingIndicator({
         )}
       </div>
 
-      {/* Task tree */}
-      {visibleTasks.length > 0 && (
-        <div className="ml-12 flex flex-col gap-0.5">
-          {visibleTasks.map(task => {
-            const isActive = task.status === 'active'
-            const isBlocked = task.status === 'blocked'
-            const icon = isActive ? '■' : isBlocked ? '□' : '✓'
-            const iconColor = isActive
-              ? 'text-[var(--accent)]'
-              : isBlocked
-              ? 'text-[var(--text-muted)]'
-              : 'text-[var(--text-muted)]'
-            const textColor = isActive
-              ? 'text-[var(--text-secondary)]'
-              : 'text-[var(--text-muted)]'
-
-            return (
-              <div key={task.id} className={`flex items-center gap-1.5 text-xs ${textColor}`}>
-                <span className={iconColor}>{icon}</span>
-                <span className={textColor}>{task.subject}</span>
-                {isBlocked && task.blockedBy && (
-                  <span className="text-[var(--text-muted)]">› blocked by {task.blockedBy}</span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Next task / Tips */}
+      {/* Next task / Tip — exactly one line, matches Claude Code Spinner line 295-299 */}
       {(nextTask || tipText) && (
-        <div className="ml-12 text-xs text-[var(--text-muted)]">
-          {nextTask ? `Next: ${nextTask.subject}` : tipText}
+        <div className="ml-8 text-xs text-[var(--text-muted)]">
+          {nextTask ? `Next: ${nextTask.subject}` : `Tip: ${tipText}`}
         </div>
       )}
     </div>
