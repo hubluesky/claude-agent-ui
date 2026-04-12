@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import { useGlobalConnection } from '../../hooks/useContainer'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -31,6 +32,61 @@ function ThemeToggle() {
 
 const EFFORT_DISPLAY: Record<string, string> = { low: 'Lo', medium: 'Med', high: 'Hi' }
 
+/** Clipboard write with fallback for mobile / non-HTTPS contexts */
+function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => copyTextFallback(text))
+  }
+  return copyTextFallback(text)
+}
+
+function copyTextFallback(text: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    try {
+      document.execCommand('copy') ? resolve() : reject()
+    } catch {
+      reject()
+    } finally {
+      document.body.removeChild(ta)
+    }
+  })
+}
+
+function SessionIdBadge({ sessionId }: { sessionId: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    copyText(sessionId).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }).catch(() => {
+      // Last resort: prompt user to copy manually
+      window.prompt('复制 Session ID:', sessionId)
+    })
+  }, [sessionId])
+
+  return (
+    <button
+      type="button"
+      className="font-mono text-[10px] cursor-pointer truncate min-w-0 rounded px-1 py-0.5 transition-colors select-text active:scale-95"
+      style={{
+        color: copied ? 'var(--success)' : 'var(--text-dim)',
+        background: copied ? 'var(--success-subtle-bg, transparent)' : 'transparent',
+      }}
+      title={`Session ID: ${sessionId}\n点击复制`}
+      onClick={handleCopy}
+    >
+      {copied ? '已复制 ✓' : sessionId}
+    </button>
+  )
+}
+
 export function StatusBar() {
   const { connectionStatus, accountInfo } = useGlobalConnection()
   const effort = useSettingsStore((s) => s.effort)
@@ -38,7 +94,7 @@ export function StatusBar() {
   const isConnected = connectionStatus === 'connected'
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1 border-t text-[11px] shrink-0 select-none overflow-hidden" style={{ background: 'var(--bg-tertiary)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+    <div className="flex items-center gap-3 px-3 py-1 border-t text-[11px] shrink-0 select-none overflow-visible" style={{ background: 'var(--bg-tertiary)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
       {/* Connection indicator + model selector */}
       <div className="flex items-center gap-1.5 shrink-0">
         <span
@@ -84,13 +140,7 @@ export function StatusBar() {
 
       {/* Session ID */}
       {currentSessionId && currentSessionId !== '__new__' && (
-        <span
-          className="font-mono text-[10px] text-[var(--text-dim)] cursor-pointer hover:text-[var(--text-muted)] truncate min-w-0"
-          title={`Session ID: ${currentSessionId}\n点击复制`}
-          onClick={() => navigator.clipboard.writeText(currentSessionId)}
-        >
-          {currentSessionId}
-        </span>
+        <SessionIdBadge sessionId={currentSessionId} />
       )}
 
       {/* Theme toggle */}
