@@ -9,8 +9,6 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'
 import type { SpinnerMode } from '../../stores/sessionContainerStore'
 
-const EMPTY_QUEUE: never[] = []
-
 interface ChatMessagesPaneProps {
   sessionId: string
   limit?: number
@@ -34,6 +32,11 @@ interface ChatMessagesPaneProps {
  */
 const AT_BOTTOM_THRESHOLD = 50 // px from bottom to consider "at bottom"
 
+// No mergeConsecutiveAssistantMessages needed — the server now forwards
+// tool_result user messages from the CLI, which naturally separate assistant
+// turns.  This matches Claude Code's architecture where each API turn is one
+// assistant message, separated by user messages (tool_result or human input).
+
 export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const ctx = useChatSession()
   const rawMessages = ctx.messages
@@ -51,11 +54,6 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   // Get streamingVersion from the container for scroll trigger
   const streamingVersion = useSessionContainerStore(
     (state) => state.containers.get(sessionId)?.streamingVersion ?? 0
-  )
-
-  // Get queue from the container
-  const queue = useSessionContainerStore(
-    (state) => state.containers.get(sessionId)?.queue ?? EMPTY_QUEUE
   )
 
   // ── Spinner state from Zustand (reactive, no polling) ──
@@ -227,46 +225,30 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
       {/* Streaming content — appended after completed messages, independent of messages[] */}
       {hasStreamingContent && (
         <div className="px-4 py-2.5">
-          <div className="flex items-start">
-            <div className="flex-1 min-w-0 flex gap-3 items-start">
-              <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                {streaming?.completedBlocks.map((block, i) => (
-                  block.type === 'thinking'
-                    ? <StreamingThinkingBlock key={`cb-${i}`} content={block.content} />
-                    : <StreamingTextBlock key={`cb-${i}`} text={block.content} />
-                ))}
-                {streaming?.thinking && (
-                  <StreamingThinkingBlock content={streaming.thinking} />
-                )}
-                {streaming?.toolUses.map(tool => (
-                  <StreamingToolUseBlock key={tool.id} tool={tool} />
-                ))}
-                {streaming?.text && (
-                  <StreamingTextBlock text={streaming.text} />
-                )}
-              </div>
-            </div>
+          <div className="pl-3 border-l-[3px] border-[var(--accent)] border-opacity-50 space-y-2">
+            {streaming?.completedBlocks.map((block, i) => (
+              block.type === 'thinking'
+                ? <StreamingThinkingBlock key={`cb-${i}`} content={block.content} />
+                : <StreamingTextBlock key={`cb-${i}`} text={block.content} />
+            ))}
+            {streaming?.thinking && (
+              <StreamingThinkingBlock content={streaming.thinking} />
+            )}
+            {streaming?.toolUses.map(tool => (
+              <StreamingToolUseBlock key={tool.id} tool={tool} />
+            ))}
+            {streaming?.text && (
+              <StreamingTextBlock text={streaming.text} />
+            )}
           </div>
         </div>
       )}
 
-      {/* Footer — derive visibility from messages: show when the last
-          non-system message is a user message or streaming assistant (i.e., still
-          waiting for a complete assistant response). No flags needed. */}
-      {sessionStatus === 'running' && (() => {
-        if (hasStreamingContent) return true
-        // Walk backward to find the last non-system message
-        for (let i = rawMessages.length - 1; i >= 0; i--) {
-          const t = (rawMessages[i] as any).type
-          if (t === 'system' || t === 'result') continue
-          // If last substantive message is user → show indicator
-          return t === 'user'
-        }
-        return true // no messages yet → show
-      })() && (
+      {/* Footer — show spinner whenever AI is running, regardless of last message type.
+          Matches Claude Code behavior: spinner is always visible during a query.
+          Between turns (assistant final → tool execution → next turn start),
+          the spinner stays visible so the user knows AI is still working. */}
+      {sessionStatus === 'running' && (
         <div className="px-4 py-2.5">
           <ThinkingIndicator
             spinnerMode={spinnerMode}
@@ -278,22 +260,6 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
           />
         </div>
       )}
-      {/* Queued messages */}
-      {queue.length > 0 && queue.map((item) => (
-        <div key={item.id} className="px-4 py-2.5">
-          <div className="flex items-start gap-3 opacity-50">
-            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--accent)]/20 flex items-center justify-center">
-              <span className="text-xs text-[var(--accent)]">Q</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-[var(--text-tertiary)] mb-0.5">Queued</div>
-              <div className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap break-words line-clamp-3">
-                {item.prompt}
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
       <PlanApprovalCard />
     </div>
   )
