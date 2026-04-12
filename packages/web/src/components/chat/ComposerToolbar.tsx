@@ -45,10 +45,10 @@ export function ComposerToolbar({
 
   // Status config (migrated from StatusBar)
   const statusConfig: Record<string, { color: string; text: string; pulse: boolean }> = {
-    idle: { color: 'bg-[var(--success)]', text: 'idle', pulse: false },
-    running: { color: 'bg-[var(--accent)]', text: 'running', pulse: true },
-    awaiting_approval: { color: 'bg-[var(--warning)]', text: 'awaiting approval', pulse: true },
-    awaiting_user_input: { color: 'bg-[var(--warning)]', text: 'awaiting input', pulse: true },
+    idle: { color: 'bg-[var(--success)]', text: '空闲', pulse: false },
+    running: { color: 'bg-[var(--accent)]', text: '运行中', pulse: true },
+    awaiting_approval: { color: 'bg-[var(--warning)]', text: '待审批', pulse: true },
+    awaiting_user_input: { color: 'bg-[var(--warning)]', text: '待输入', pulse: true },
   }
 
   const statusInfo = isDisconnected
@@ -179,15 +179,27 @@ export function ComposerToolbar({
         </button>
 
         {isRunning ? (
-          <button
-            onClick={onAbort}
-            className="w-7 h-7 rounded-md bg-[var(--error)] flex items-center justify-center shrink-0"
-            title="Stop"
-          >
-            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-          </button>
+          canSend ? (
+            <button
+              onClick={onSend}
+              className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors bg-[var(--text-primary)] hover:bg-white"
+              title="Queue message"
+            >
+              <svg className="w-3.5 h-3.5 text-[var(--bg-input)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={onAbort}
+              className="w-7 h-7 rounded-md bg-[var(--error)] flex items-center justify-center shrink-0"
+              title="Stop"
+            >
+              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+            </button>
+          )
         ) : (
           <button
             onClick={onSend}

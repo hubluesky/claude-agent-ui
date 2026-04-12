@@ -523,26 +523,34 @@ class WebSocketManager {
     if (agentMsg.type === 'system' && (agentMsg as any).subtype === 'init' && (agentMsg as any).session_id) {
       const newId = (agentMsg as any).session_id as string
       const sessState = useSessionStore.getState()
-      if (!sessState.currentSessionId || sessState.currentSessionId !== newId) {
-        const s = store()
-        // Migrate optimistic messages from __new__ container to the real session
+      const s = store()
+
+      // Always migrate __new__ container to the real session ID
+      if (!s.containers.has(newId)) {
         const newContainer = s.containers.get('__new__')
         if (newContainer && newContainer.messages.length > 0) {
           s.migrateContainer('__new__', newId)
         } else {
-          const cwd = sessState.currentProjectCwd ?? ''
-          s.getOrCreate(newId, cwd)
+          s.getOrCreate(newId, sessState.currentProjectCwd ?? '')
         }
+      }
+
+      // Only update currentSessionId if the user is still on __new__ (hasn't
+      // navigated away). Blindly overriding here hijacks user navigation and
+      // causes cross-contamination in multi-panel mode.
+      if (sessState.currentSessionId === '__new__' || sessState.currentSessionId === null) {
         sessState.setCurrentSessionId(newId)
-        // Join the real session
-        if (this.ws?.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({ type: 'join-session', sessionId: newId }))
-        }
-        // Refresh sidebar session list (force bypass cache — new session just created)
-        if (sessState.currentProjectCwd) {
-          sessState.invalidateProjectSessions(sessState.currentProjectCwd)
-          sessState.loadProjectSessions(sessState.currentProjectCwd, true)
-        }
+      }
+
+      // Note: the server already called wsHub.joinSession in its
+      // session-id-changed handler, so the connection is already subscribed.
+      // Sending join-session from the client here would disrupt multi-panel
+      // subscriptions (joinSession is exclusive — it leaves other sessions).
+
+      // Refresh sidebar session list (force bypass cache — new session just created)
+      if (sessState.currentProjectCwd) {
+        sessState.invalidateProjectSessions(sessState.currentProjectCwd)
+        sessState.loadProjectSessions(sessState.currentProjectCwd, true)
       }
       // Capture model name from init
       if ((agentMsg as any).model) {
@@ -679,7 +687,11 @@ class WebSocketManager {
   private handleToolApprovalResolved(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    store().setApproval(sessionId, null)
+    const s = store()
+    s.setApproval(sessionId, null)
+    // Optimistically set running — CLI emits session_state_changed('running')
+    // after approval (structuredIO.ts:660) but there may be a delay.
+    s.setSessionStatus(sessionId, 'running')
   }
 
   private handleAskUserRequest(msg: any) {
@@ -695,7 +707,11 @@ class WebSocketManager {
   private handleAskUserResolved(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    store().setAskUser(sessionId, null)
+    const s = store()
+    s.setAskUser(sessionId, null)
+    // Optimistically set running — CLI emits session_state_changed('running')
+    // after user responds (structuredIO.ts:660) but there may be a delay.
+    s.setSessionStatus(sessionId, 'running')
   }
 
   private handlePlanApproval(msg: any) {
@@ -727,6 +743,8 @@ class WebSocketManager {
       })
     }
     s.setPlanApproval(sessionId, null)
+    // Optimistically set running after plan approval
+    s.setSessionStatus(sessionId, 'running')
 
     // Sync permission mode to match the plan approval decision
     const settings = useSettingsStore.getState()
@@ -818,12 +836,13 @@ class WebSocketManager {
     s.setQueue(sessionId, [])
     s.clearStreaming(sessionId)
     this.currentToolBlockIndex.delete(sessionId)
-    // Pop queued prompts back to composer — only for lock holder (not readonly observers)
-    const queuedPrompts = (msg as any).queuedPrompts as string[] | undefined
+    // Pop editable commands back to composer — only for lock holder (not readonly observers)
+    // Mirrors Claude Code messageQueueManager.ts popAllEditable()
+    const queuedCommands = (msg as any).queuedCommands as any[] | undefined
     const container = s.containers.get(sessionId)
     const amLockHolder = container?.lockStatus === 'locked_self'
-    if (queuedPrompts && queuedPrompts.length > 0 && amLockHolder) {
-      s.setPopBackPrompts(sessionId, queuedPrompts)
+    if (queuedCommands && queuedCommands.length > 0 && amLockHolder) {
+      s.setPopBackCommands(sessionId, queuedCommands)
     }
     // Refresh session list
     const sessStore = useSessionStore.getState()
