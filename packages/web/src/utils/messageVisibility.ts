@@ -106,11 +106,11 @@ function isPassthroughVisible(msg: NormalizedMessage): boolean {
     case 'system': {
       if (sub === 'api_retry') return true
       if (sub === 'status' && (original as any).status === 'compacting') return true
-      if (sub === 'task_started') return true
-      if (sub === 'task_progress') {
-        return !!((original as any).description || (original as any).summary || (original as any).content || (original as any).message)
-      }
-      if (sub === 'task_notification') return true
+      // task_* subtypes are now rendered INSIDE the Agent tool_use block,
+      // not as standalone messages. Filter them from the main stream.
+      if (sub === 'task_started') return false
+      if (sub === 'task_progress') return false
+      if (sub === 'task_notification') return false
       if (sub === 'local_command_output') return !!((original as any).output ?? (original as any).content)
       return false
     }
