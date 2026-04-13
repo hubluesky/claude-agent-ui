@@ -14,7 +14,7 @@
 import { useMemo } from 'react'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 import { normalizeMessages, type NormalizedMessage } from '../utils/normalizeMessages'
-import { buildMessageLookups, type MessageLookups } from '../utils/messageLookups'
+import { buildMessageLookups, buildAgentProgress, type MessageLookups } from '../utils/messageLookups'
 import { collapseReadSearch, type RenderableItem } from '../utils/collapseReadSearch'
 import { isBlockVisible, filterAbsorbedToolResults } from '../utils/messageVisibility'
 
@@ -35,6 +35,11 @@ export function useProcessedMessages(rawMessages: AgentMessage[]): ProcessedMess
 
     // Stage 3: Build lookups (needed for tool_result absorption)
     const lookups = buildMessageLookups(visible)
+
+    // Build Agent progress from RAW messages (before filtering)
+    // task_* messages are filtered out in visibility but we need them for Agent progress
+    const agentProgress = buildAgentProgress(rawMessages, lookups)
+    lookups.agentProgressByToolUseId = agentProgress
 
     // Stage 4: Filter absorbed tool_results (they'll be shown inline by tool_use)
     const withoutAbsorbed = filterAbsorbedToolResults(visible, lookups)
