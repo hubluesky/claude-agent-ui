@@ -1,10 +1,10 @@
 import { memo, useState, useCallback } from 'react'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'
-import type { QueueItem } from '@claude-agent-ui/shared'
+import type { QueueItemWire } from '@claude-agent-ui/shared'
 
-const EMPTY_QUEUE: QueueItem[] = []
+const EMPTY_QUEUE: QueueItemWire[] = []
 
-function QueuedMessageItem({ item }: { item: QueueItem }) {
+function QueuedMessageItem({ item }: { item: QueueItemWire }) {
   const [expanded, setExpanded] = useState(false)
   const toggle = useCallback(() => setExpanded(prev => !prev), [])
 
@@ -14,7 +14,7 @@ function QueuedMessageItem({ item }: { item: QueueItem }) {
       onClick={toggle}
     >
       <p className={`text-sm text-[var(--text-secondary)] ${expanded ? 'whitespace-pre-wrap' : 'truncate'}`}>
-        {item.prompt}
+        {item.value}
       </p>
     </div>
   )

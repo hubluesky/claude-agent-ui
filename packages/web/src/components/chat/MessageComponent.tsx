@@ -54,14 +54,45 @@ function classifyText(text: string): 'compact-summary' | 'internal-output' | 'no
   return 'normal'
 }
 
+/** Known SDK internal messages that should not be displayed to users.
+ *  These appear when sessions are resumed — the CLI echoes a user prompt and
+ *  the model may respond with a no-op. */
+const SDK_INTERNAL_PATTERNS = [
+  /^Continue from where you left off\.?$/,
+  /^No response requested\.?$/,
+]
+
+/** Extract plain text from a message's content (handles both string and block array formats). */
+function extractMessageText(message: AgentMessage): string {
+  const content = (message as any).message?.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text ?? '')
+      .join('')
+  }
+  return ''
+}
+
+function isSDKInternalMessage(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  return SDK_INTERNAL_PATTERNS.some(p => p.test(trimmed))
+}
+
 /** Fast visibility check — mirrors the null-return paths of MessageComponent.
  *  Used by ChatMessagesPane to pre-filter messages so Virtuoso never sees zero-height items. */
 export function isMessageVisible(message: AgentMessage): boolean {
-  if (message.type === 'user') return true
+  if (message.type === 'user') {
+    // Filter SDK resume artifacts (e.g. "Continue from where you left off.")
+    if (isSDKInternalMessage(extractMessageText(message))) return false
+    return true
+  }
 
   if (message.type === 'assistant') {
     const contentBlocks = (message as any).message?.content ?? []
-    return contentBlocks.some((block: any) => {
+    const hasVisibleBlock = contentBlocks.some((block: any) => {
       if (block.type === 'text') return !!block.text
       if (block.type === 'tool_use' || block.type === 'server_tool_use') return true
       if (block.type === 'tool_result' || block.type === 'web_search_tool_result' || block.type === 'code_execution_tool_result') return true
@@ -69,6 +100,10 @@ export function isMessageVisible(message: AgentMessage): boolean {
       if (block.type === 'thinking') return !!(block.thinking || block.text)
       return false
     })
+    if (!hasVisibleBlock) return false
+    // Filter SDK internal responses (e.g. "No response requested.")
+    if (isSDKInternalMessage(extractMessageText(message))) return false
+    return true
   }
 
   if (message.type === 'result') {
@@ -118,13 +153,10 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     if (!hasVisibleContent) return null
     const msgUuid = (message as any).uuid as string | undefined
     return (
-      <div className="flex items-start">
-        <div className="flex-1 min-w-0 flex gap-3 items-start">
-          <div className="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold font-mono text-[var(--accent)]">C</span>
-          </div>
-          <div className="flex-1 min-w-0 space-y-2">
-            {contentBlocks.map((block: any, i: number) => {
+      <div className="group relative pl-3 border-l-[3px] border-[var(--accent)] border-opacity-50">
+        {msgUuid && <MessageActions messageId={msgUuid} />}
+        <div className="space-y-2">
+          {contentBlocks.map((block: any, i: number) => {
               if (block.type === 'text') {
                 const textClass = classifyText(block.text)
                 if (textClass === 'internal-output') return null
@@ -177,9 +209,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
               }
               return null
             })}
-          </div>
         </div>
-        {msgUuid && <MessageActions messageId={msgUuid} />}
       </div>
     )
   }
@@ -244,11 +274,11 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const lastTool = (message as any).last_tool_name
       const usage = (message as any).usage
       return (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10 pl-5 border-l-2 border-[var(--purple-subtle-border)]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--purple)]" />
-          <span className="min-w-0 truncate">{typeof content === 'string' ? content.slice(0, 150) : JSON.stringify(content).slice(0, 150)}</span>
-          {lastTool && <span className="text-[10px] text-[var(--purple)] bg-[#a855f71a] px-1.5 py-0.5 rounded shrink-0">{lastTool}</span>}
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] pl-4 border-l-2 border-[var(--purple-subtle-border)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--purple)] shrink-0" />
+          {lastTool && <span className="font-mono font-semibold text-[var(--purple)] shrink-0">{lastTool}</span>}
           {usage?.duration_ms != null && <span className="text-[10px] text-[var(--text-dim)] tabular-nums shrink-0">{(usage.duration_ms / 1000).toFixed(1)}s</span>}
+          <span className="font-mono truncate flex-1">{typeof content === 'string' ? content.slice(0, 150) : JSON.stringify(content).slice(0, 150)}</span>
         </div>
       )
     }
@@ -261,7 +291,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const durationMs = usage?.duration_ms ?? (message as any).duration_ms
       const toolCount = usage?.tool_uses ?? (message as any).tool_count
       return (
-        <div className={`ml-10 rounded-md border overflow-hidden ${
+        <div className={`rounded-md border overflow-hidden ${
           isError ? 'border-[var(--error-subtle-border)]' : 'border-[var(--success-subtle-border)]'
         }`}>
           {/* Status header */}
@@ -291,7 +321,7 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
       const output = (message as any).output ?? (message as any).content ?? ''
       if (!output) return null
       return (
-        <div className="border border-[var(--border)] rounded-md overflow-hidden ml-10">
+        <div className="border border-[var(--border)] rounded-md overflow-hidden">
           <div className="px-3 py-2 text-xs font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-all">
             {typeof output === 'string' ? output : JSON.stringify(output)}
           </div>
@@ -305,11 +335,14 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
   if (message.type === 'tool_use_summary') {
     const toolName = (message as any).tool_name ?? (message as any).name ?? 'tool'
     const summary = (message as any).summary ?? (message as any).result_summary ?? ''
+    const sumCategory = getToolCategory(toolName)
+    const sumColor = TOOL_COLORS[sumCategory]
     return (
-      <div className="border border-[var(--border)] rounded-md overflow-hidden ml-10">
+      <div className="border border-[var(--border)] rounded-md overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-secondary)]">
-          <div className="w-0.5 h-4 rounded-full bg-[var(--text-muted)]" />
-          <span className="text-xs font-mono font-semibold text-[var(--text-muted)]">{toolName}</span>
+          <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: sumColor }} />
+          <ToolIcon category={sumCategory} />
+          <span className="text-xs font-mono font-semibold shrink-0" style={{ color: sumColor }}>{toolName}</span>
           {summary && <span className="text-xs font-mono text-[var(--text-muted)] truncate flex-1">{typeof summary === 'string' ? summary.slice(0, 200) : JSON.stringify(summary).slice(0, 200)}</span>}
         </div>
       </div>
@@ -324,12 +357,12 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
     const elapsed = typeof rawElapsed === 'number' ? rawElapsed : undefined
     const elapsedStr = elapsed != null ? `${elapsed.toFixed(1)}s` : null
     return (
-      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-10">
-        <svg className="w-3 h-3 text-[var(--success)] animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        <svg className="w-3 h-3 text-[var(--success)] animate-spin shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
         </svg>
-        <span className="truncate">{typeof content === 'string' ? content : JSON.stringify(content).slice(0, 150)}</span>
-        {elapsedStr && <span className="text-[var(--text-dim)] tabular-nums shrink-0">{elapsedStr}</span>}
+        {elapsedStr && <span className="text-[10px] text-[var(--text-dim)] tabular-nums shrink-0">{elapsedStr}</span>}
+        <span className="font-mono truncate flex-1">{typeof content === 'string' ? content : JSON.stringify(content).slice(0, 150)}</span>
       </div>
     )
   }
@@ -364,47 +397,19 @@ export const MessageComponent = memo(function MessageComponent({ message }: Mess
 
 // ---- Stop Task Button ----
 
-// ---- Message Actions (⋯ menu with Fork) ----
+// ---- Message Actions (hover Fork button) ----
 
 function MessageActions({ messageId }: { messageId: string }) {
   const { forkSession } = useChatSession()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  const handleFork = () => {
-    forkSession(messageId)
-    setOpen(false)
-  }
 
   return (
-    <div ref={ref} className="relative shrink-0 ml-1">
-      <button
-        onClick={() => setOpen(!open)}
-        className="px-1 py-0.5 text-[11px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] cursor-pointer transition-colors"
-        title="操作"
-      >
-        ⋯
-      </button>
-      {open && (
-        <div className="absolute top-full right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-md shadow-lg z-10 py-1 min-w-[100px]">
-          <button
-            onClick={handleFork}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
-          >
-            Fork
-          </button>
-        </div>
-      )}
-    </div>
+    <button
+      onClick={() => forkSession(messageId)}
+      className="absolute top-1 right-1.5 opacity-0 group-hover:opacity-100 transition-all text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)]/30 hover:bg-[var(--bg-hover)] cursor-pointer border border-[var(--border)] rounded-[5px] bg-[var(--bg-secondary)] px-2.5 py-0.5"
+      title="Fork"
+    >
+      Fork
+    </button>
   )
 }
 
@@ -421,7 +426,7 @@ function AgentCard({ agentId, agentName }: { agentId?: string; agentName: string
   }
 
   return (
-    <div className="ml-10 border border-[var(--purple-subtle-border)] rounded-md overflow-hidden">
+    <div className="border border-[var(--purple-subtle-border)] rounded-md overflow-hidden">
       <div
         className="flex items-center gap-2 text-xs text-[var(--purple)] bg-[#a855f70a] px-3 py-2 cursor-pointer hover:bg-[#a855f712]"
         onClick={handleExpand}
@@ -645,7 +650,7 @@ function UserMessage({ message, isOptimistic, uuid }: { message: AgentMessage; i
   }
 
   return (
-    <div className="flex items-start">
+    <div className="group relative">
       <div className="flex-1 min-w-0">
         {renderContent()}
       </div>
@@ -760,7 +765,7 @@ function ToolResultBlock({ block }: { block: any }) {
   const isLong = text.length > 120
 
   return (
-    <div className={`border rounded-md overflow-hidden ml-10 ${
+    <div className={`border rounded-md overflow-hidden ${
       isDenial ? 'border-[var(--accent-subtle-border)] bg-[#d977060a]'
         : isError ? 'border-[var(--error-subtle-border)] bg-[var(--error-subtle-bg)]'
         : 'border-[var(--border)] bg-[var(--bg-secondary)]'

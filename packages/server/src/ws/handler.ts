@@ -1,11 +1,13 @@
 import { randomUUID } from 'crypto'
 import type { WebSocket } from 'ws'
-import type { C2SMessage, PermissionMode, PlanApprovalDecision, QueueItem } from '@claude-agent-ui/shared'
+import type { C2SMessage, PermissionMode, PlanApprovalDecision, QueuedCommand, CommandMode } from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import { CliSession } from '../agent/cli-session.js'
 import { maybeGenerateTitle } from '../agent/title-generator.js'
+import { getKnownModels } from '../agent/known-models.js'
+import { MessageQueueManager, processQueue, joinPromptValues } from '../queue/index.js'
 
 export interface HandlerDeps {
   wsHub: WSHub
@@ -24,72 +26,23 @@ export function createWsHandler(deps: HandlerDeps) {
   }
   const pendingRequestMap = new Map<string, PendingRequest>()
 
-  // ── Input Queue: server-managed FIFO per session ──
-  interface QueuedMessage {
-    id: string
-    prompt: string
-    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string }
-    images?: { data: string; mediaType: string }[]
-    addedAt: number
-    connectionId: string
-  }
-  const messageQueues = new Map<string, QueuedMessage[]>()
+  // ── Input Queue: per-session priority queue (mirrors Claude Code messageQueueManager.ts) ──
+  const sessionQueues = new Map<string, MessageQueueManager>()
 
-  function getQueue(sessionId: string): QueuedMessage[] {
-    return messageQueues.get(sessionId) ?? []
-  }
-
-  function getQueueItems(sessionId: string): QueueItem[] {
-    return getQueue(sessionId).map(q => ({
-      id: q.id,
-      prompt: q.prompt,
-      addedAt: q.addedAt,
-      images: q.images,
-    }))
-  }
-
-  function broadcastQueueUpdate(sessionId: string) {
-    wsHub.broadcast(sessionId, {
-      type: 'queue-updated',
-      sessionId,
-      queue: getQueueItems(sessionId),
-    } as any)
-  }
-
-  function enqueueMessage(sessionId: string, msg: QueuedMessage) {
-    let queue = messageQueues.get(sessionId)
-    if (!queue) {
-      queue = []
-      messageQueues.set(sessionId, queue)
+  function getOrCreateQueue(sessionId: string): MessageQueueManager {
+    let q = sessionQueues.get(sessionId)
+    if (!q) {
+      q = new MessageQueueManager()
+      sessionQueues.set(sessionId, q)
+      q.on('changed', () => {
+        wsHub.broadcast(sessionId, {
+          type: 'queue-updated',
+          sessionId,
+          queue: q!.toWireArray(),
+        } as any)
+      })
     }
-    queue.push(msg)
-    broadcastQueueUpdate(sessionId)
-  }
-
-  function dequeueNext(sessionId: string): QueuedMessage | undefined {
-    const queue = messageQueues.get(sessionId)
-    if (!queue || queue.length === 0) return undefined
-    const next = queue.shift()!
-    if (queue.length === 0) messageQueues.delete(sessionId)
-    broadcastQueueUpdate(sessionId)
-    return next
-  }
-
-  /** Dequeue ALL messages, merge prompts (newline-joined) and images into one. Like CLI canBatchWith. */
-  function dequeueAll(sessionId: string): QueuedMessage | undefined {
-    const queue = messageQueues.get(sessionId)
-    if (!queue || queue.length === 0) return undefined
-    const all = queue.splice(0, queue.length)
-    messageQueues.delete(sessionId)
-    broadcastQueueUpdate(sessionId)
-    // Merge into a single message
-    const merged: QueuedMessage = {
-      ...all[0]!,
-      prompt: all.map(m => m.prompt).join('\n'),
-      images: all.flatMap(m => m.images ?? []),
-    }
-    if (!merged.images || merged.images.length === 0) delete merged.images
-    return merged
+    return q
   }
 
   wsHub.startHeartbeat()
@@ -233,6 +186,9 @@ export function createWsHandler(deps: HandlerDeps) {
       permissionMode: activeSession?.permissionMode,
     })
 
+    // Always send known models when joining
+    wsHub.sendTo(connectionId, { type: 'models', models: getKnownModels() } as any)
+
     if (!syncResult.alreadyInSession) {
       const snapshot = wsHub.getStreamSnapshot(sessionId)
       if (snapshot) {
@@ -245,9 +201,9 @@ export function createWsHandler(deps: HandlerDeps) {
     resendPendingRequests(sessionId, connectionId, readonly)
 
     // Send current queue state
-    const queueItems = getQueueItems(sessionId)
-    if (queueItems.length > 0) {
-      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: queueItems } as any)
+    const q = sessionQueues.get(sessionId)
+    if (q && !q.isEmpty) {
+      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: q.toWireArray() } as any)
     }
   }
 
@@ -276,9 +232,9 @@ export function createWsHandler(deps: HandlerDeps) {
     resendPendingRequests(sessionId, connectionId, true)
 
     // Send current queue state
-    const queueItems = getQueueItems(sessionId)
-    if (queueItems.length > 0) {
-      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: queueItems } as any)
+    const q = sessionQueues.get(sessionId)
+    if (q && !q.isEmpty) {
+      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: q.toWireArray() } as any)
     }
   }
 
@@ -298,7 +254,6 @@ export function createWsHandler(deps: HandlerDeps) {
     }
 
     let realSessionId = sessionId
-    let titleGenTriggered = false
 
     session.on('session-id-changed', (_oldId: string | null, newId: string) => {
       if (realSessionId.startsWith('pending-')) {
@@ -308,6 +263,9 @@ export function createWsHandler(deps: HandlerDeps) {
         wsHub.joinSession(connectionId, newId)
         wsHub.broadcast(newId, { type: 'lock-status', sessionId: newId, status: 'locked', holderId: connectionId })
         wsHub.broadcast(newId, { type: 'session-state-change', sessionId: newId, state: session.status } as any)
+
+        // Send known models list to clients
+        wsHub.broadcast(newId, { type: 'models', models: getKnownModels() } as any)
 
         if (pendingUserMsg) {
           wsHub.broadcast(newId, {
@@ -327,6 +285,12 @@ export function createWsHandler(deps: HandlerDeps) {
         lockManager.acquire(newId, connectionId)
         wsHub.joinSession(connectionId, newId)
         wsHub.broadcast(newId, { type: 'lock-status', sessionId: newId, status: 'locked', holderId: connectionId })
+      }
+      // Migrate queue to new session ID
+      const oldQ = sessionQueues.get(realSessionId)
+      if (oldQ) {
+        sessionQueues.delete(realSessionId)
+        sessionQueues.set(newId, oldQ)
       }
       realSessionId = newId
     })
@@ -361,23 +325,12 @@ export function createWsHandler(deps: HandlerDeps) {
 
       if (msg.type === 'assistant') {
         wsHub.clearStreamSnapshot(realSessionId)
-
-        if (!titleGenTriggered && !realSessionId.startsWith('pending-')) {
-          titleGenTriggered = true
-          maybeGenerateTitle(realSessionId).then((title) => {
-            if (title) {
-              sessionManager.invalidateSessionsCache(session.projectCwd)
-              wsHub.broadcast(realSessionId, { type: 'session-title-updated', sessionId: realSessionId, title })
-            }
-          }).catch(() => {})
-        }
       }
 
       wsHub.broadcast(realSessionId, { type: 'agent-message', sessionId: realSessionId, message: msg })
     })
 
     session.on('tool-approval', (req: any) => {
-      lockManager.startTimeout(realSessionId)
       pendingRequestMap.set(req.requestId, { sessionId: realSessionId, type: 'tool-approval', toolName: req.toolName, payload: req })
       const holder = lockManager.getHolder(realSessionId)
       for (const connId of wsHub.getSessionClients(realSessionId)) {
@@ -386,7 +339,6 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('ask-user', (req: any) => {
-      lockManager.startTimeout(realSessionId)
       pendingRequestMap.set(req.requestId, { sessionId: realSessionId, type: 'ask-user', payload: req })
       const holder = lockManager.getHolder(realSessionId)
       for (const connId of wsHub.getSessionClients(realSessionId)) {
@@ -395,7 +347,6 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('plan-approval', (req: any) => {
-      lockManager.startTimeout(realSessionId)
       pendingRequestMap.set(req.requestId, { sessionId: realSessionId, type: 'plan-approval', payload: req })
       const holder = lockManager.getHolder(realSessionId)
       for (const connId of wsHub.getSessionClients(realSessionId)) {
@@ -405,10 +356,17 @@ export function createWsHandler(deps: HandlerDeps) {
 
     session.on('state-change', (state: string) => {
       wsHub.broadcast(realSessionId, { type: 'session-state-change', sessionId: realSessionId, state } as any)
+      // Centralized lock timeout management:
+      // - AI running → cancel timeout (lock held indefinitely while AI works)
+      // - AI not running (idle/awaiting_approval/awaiting_user_input) → start 60s timeout
+      if (state === 'running') {
+        lockManager.cancelTimeout(realSessionId)
+      } else {
+        lockManager.startTimeout(realSessionId)
+      }
     })
 
     session.on('complete', (result: any) => {
-      lockManager.startTimeout(realSessionId)
       // Clean up pending requests
       for (const [id, entry] of pendingRequestMap) {
         if (entry.sessionId === realSessionId) pendingRequestMap.delete(id)
@@ -417,8 +375,8 @@ export function createWsHandler(deps: HandlerDeps) {
       wsHub.clearBuffer(realSessionId)
       sessionManager.invalidateSessionsCache(session.projectCwd)
 
-      if (!titleGenTriggered) {
-        titleGenTriggered = true
+      // Re-evaluate title on every session complete
+      if (!realSessionId.startsWith('pending-')) {
         maybeGenerateTitle(realSessionId).then((title) => {
           if (title) {
             sessionManager.invalidateSessionsCache(session.projectCwd)
@@ -427,25 +385,47 @@ export function createWsHandler(deps: HandlerDeps) {
         }).catch(() => {})
       }
 
-      // ── Input Queue: auto-dequeue ALL messages after query completes (batch like CLI) ──
+      // Push context usage immediately after session completes
+      if (session.getContextUsage) {
+        session.getContextUsage().then((resp: any) => {
+          const usage = resp?.response ?? resp
+          if (usage) {
+            wsHub.broadcast(realSessionId, {
+              type: 'context-usage',
+              sessionId: realSessionId,
+              categories: usage.categories ?? [],
+              totalTokens: usage.totalTokens ?? 0,
+              maxTokens: usage.maxTokens ?? 0,
+              percentage: usage.percentage ?? 0,
+              model: usage.model ?? '',
+            } as any)
+          }
+        }).catch(() => {})
+      }
+
+      // ── Input Queue: process next command(s) via QueueProcessor ──
+      // Mirrors Claude Code print.ts:2485-2493 post-run recheck pattern
       setImmediate(() => {
-        const merged = dequeueAll(realSessionId)
-        if (merged) {
-          sendMessageToSession(merged.connectionId, realSessionId, session, merged.prompt, merged.options)
-        }
+        const q = sessionQueues.get(realSessionId)
+        if (!q || q.isEmpty) return
+        processQueue(q, {
+          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
+          isSessionBusy: () => session.status !== 'idle',
+        })
       })
     })
 
     session.on('error', (err: Error) => {
-      lockManager.startTimeout(realSessionId)
       wsHub.broadcast(realSessionId, { type: 'error', message: err.message, code: 'internal' })
 
       // ── Input Queue: also try dequeue on error ──
       setImmediate(() => {
-        const merged = dequeueAll(realSessionId)
-        if (merged) {
-          sendMessageToSession(merged.connectionId, realSessionId, session, merged.prompt, merged.options)
-        }
+        const q = sessionQueues.get(realSessionId)
+        if (!q || q.isEmpty) return
+        processQueue(q, {
+          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
+          isSessionBusy: () => session.status !== 'idle',
+        })
       })
     })
   }
@@ -489,70 +469,114 @@ export function createWsHandler(deps: HandlerDeps) {
       }
     }
 
-    // ── Input Queue: if session is busy, enqueue instead of sending ──
+    // ── Input Queue: classify command and enqueue ──
+    // Mirrors Claude Code handlePromptSubmit.ts:313-351
+    const mode: CommandMode = prompt.trim().startsWith('/') ? 'slash' : 'prompt'
+    const command: QueuedCommand = {
+      id: randomUUID(),
+      value: prompt,
+      mode,
+      priority: 'next',
+      editable: true,
+      connectionId,
+      addedAt: Date.now(),
+      images: options?.images,
+      options,
+    }
+
     const sessionBusy = session.status === 'running' || session.status === 'awaiting_approval' || session.status === 'awaiting_user_input'
     if (sessionBusy && effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
-      enqueueMessage(effectiveSessionId, {
-        id: randomUUID(),
-        prompt,
-        options,
-        images: options?.images,
-        addedAt: Date.now(),
-        connectionId,
-      })
+      const q = getOrCreateQueue(effectiveSessionId)
+      q.enqueue(command)
       return
     }
-
-    sendMessageToSession(connectionId, effectiveSessionId!, session, prompt, options)
+    // Session idle → execute directly via executeCommands
+    executeCommands(connectionId, effectiveSessionId!, session, [command])
   }
 
-  /** Send a message immediately (used for both direct sends and dequeued messages) */
-  function sendMessageToSession(
+  /**
+   * Execute queued commands as a single turn.
+   * Each command is broadcast as a separate user message with its own UUID.
+   * Only the first command applies options (permissionMode, thinkingMode, effort).
+   *
+   * Mirrors Claude Code handlePromptSubmit.ts executeUserInput() (line 448-522):
+   * for (let i = 0; i < commands.length; i++) { processUserInput(...) }
+   */
+  function executeCommands(
     connectionId: string,
-    effectiveSessionId: string,
+    sessionId: string,
     session: CliSession,
-    prompt: string,
-    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string }
+    commands: QueuedCommand[],
   ) {
-    // Build content blocks for broadcast
-    const broadcastContent: any[] = []
-    if (options?.images) {
-      for (const img of options.images) {
-        broadcastContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })
+    if (commands.length === 0) return
+
+    const isPending = sessionId.startsWith('pending-')
+
+    for (let i = 0; i < commands.length; i++) {
+      const cmd = commands[i]!
+      const isFirst = i === 0
+
+      // Build content blocks for broadcast
+      const broadcastContent: any[] = []
+      if (isFirst && cmd.images) {
+        for (const img of cmd.images) {
+          broadcastContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })
+        }
       }
-    }
-    if (prompt) {
-      broadcastContent.push({ type: 'text', text: prompt })
+      if (cmd.value) {
+        broadcastContent.push({ type: 'text', text: cmd.value })
+      }
+
+      // Apply per-message options only on first command (mirrors skipAttachments: !isFirst)
+      if (isFirst && cmd.options) {
+        if (cmd.options.permissionMode) {
+          session.setPermissionMode(cmd.options.permissionMode as PermissionMode).catch(() => {})
+        }
+        if (cmd.options.thinkingMode) {
+          if (cmd.options.thinkingMode === 'disabled') session.setThinking?.(0)
+          else session.setThinking?.(null)
+        }
+        if (cmd.options.effort) session.setEffort?.(cmd.options.effort)
+      }
+
+      // Bind events only on first command
+      if (isFirst) {
+        bindSessionEvents(session, sessionId, connectionId, isPending ? { prompt: cmd.value, content: broadcastContent } : undefined)
+      }
+
+      // Broadcast user message (each command keeps its own UUID)
+      // Skip for pending — deferred until session-id-changed
+      if (!isPending) {
+        wsHub.broadcast(sessionId, {
+          type: 'agent-message',
+          sessionId,
+          message: { type: 'user', uuid: cmd.id, message: { role: 'user', content: broadcastContent } },
+        } as any)
+      }
+
+      // For batched prompt commands, join values into single send
+      // For single commands, send as-is
     }
 
-    // Apply per-message options
-    if (options?.permissionMode) {
-      session.setPermissionMode(options.permissionMode as PermissionMode).catch(() => {})
+    // Send to CLI: if multiple prompt commands batched, join their values
+    // Mirrors Claude Code print.ts joinPromptValues (line 422-427)
+    const firstCmd = commands[0]!
+    if (commands.length > 1) {
+      const joinedValue = joinPromptValues(commands.map(c => c.value))
+      session.send(joinedValue, {
+        cwd: firstCmd.options?.cwd,
+        images: firstCmd.images,
+        effort: firstCmd.options?.effort as any,
+        thinkingMode: firstCmd.options?.thinkingMode as any,
+      })
+    } else {
+      session.send(firstCmd.value, {
+        cwd: firstCmd.options?.cwd,
+        images: firstCmd.images,
+        effort: firstCmd.options?.effort as any,
+        thinkingMode: firstCmd.options?.thinkingMode as any,
+      })
     }
-    if (options?.thinkingMode) {
-      if (options.thinkingMode === 'disabled') session.setThinking?.(0)
-      else session.setThinking?.(null)
-    }
-    if (options?.effort) session.setEffort?.(options.effort)
-
-    const isPending = effectiveSessionId.startsWith('pending-')
-    bindSessionEvents(session, effectiveSessionId, connectionId, isPending ? { prompt, content: broadcastContent } : undefined)
-
-    // Broadcast user message (skip for pending — deferred until session-id-changed)
-    if (!isPending) {
-      wsHub.broadcast(effectiveSessionId, {
-        type: 'agent-message',
-        sessionId: effectiveSessionId,
-        message: { type: 'user', uuid: randomUUID(), message: { role: 'user', content: broadcastContent } },
-      } as any)
-    }
-
-    session.send(prompt, {
-      cwd: options?.cwd,
-      images: options?.images,
-      effort: options?.effort as any,
-      thinkingMode: options?.thinkingMode as any,
-    })
   }
 
   // ======== Approval responses ========
@@ -649,20 +673,25 @@ export function createWsHandler(deps: HandlerDeps) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
-    // Pop all queued prompts BEFORE abort — complete/error callbacks have dequeueNext()
-    // that would consume them if we don't clear first
-    const queue = messageQueues.get(sessionId)
-    const queuedPrompts = queue && queue.length > 0
-      ? queue.map(q => q.prompt)
+    // Pop only editable commands — non-editable (task-notification) stay in queue
+    // Mirrors Claude Code messageQueueManager.ts popAllEditable()
+    const q = sessionQueues.get(sessionId)
+    const editableCommands = q?.popAllEditable() ?? []
+    const queuedCommands = editableCommands.length > 0
+      ? editableCommands.map(cmd => ({
+          id: cmd.id,
+          value: cmd.value,
+          mode: cmd.mode,
+          priority: cmd.priority,
+          editable: cmd.editable,
+          addedAt: cmd.addedAt,
+          images: cmd.images,
+        }))
       : undefined
-    // Clear server-side queue
-    if (queue) {
-      messageQueues.delete(sessionId)
-      broadcastQueueUpdate(sessionId)
-    }
+
     const session = sessionManager.getActive(sessionId)
     if (session) await session.abort()
-    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId, queuedPrompts })
+    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId, queuedCommands } as any)
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: PermissionMode) {
@@ -716,8 +745,14 @@ export function createWsHandler(deps: HandlerDeps) {
     if (connectionId === previousConnectionId) return
     const lockedSessions = lockManager.getLockedSessions(previousConnectionId)
     for (const sid of lockedSessions) {
-      lockManager.release(sid)
-      lockManager.acquire(sid, connectionId)
+      // Transfer lock to new connection, preserving timeout state
+      lockManager.transfer(sid, connectionId)
+      wsHub.broadcast(sid, { type: 'lock-status', sessionId: sid, status: 'locked', holderId: connectionId })
+      // Ensure timeout is running if session is not actively running
+      const session = sessionManager.getActive(sid)
+      if (!session || session.status !== 'running') {
+        lockManager.startTimeout(sid)
+      }
     }
   }
 

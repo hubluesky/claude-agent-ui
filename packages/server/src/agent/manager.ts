@@ -3,6 +3,7 @@ import { CliSession } from './cli-session.js'
 import type { AgentSession } from './session.js'
 import { ProcessManager } from './process-manager.js'
 import { SessionStorage } from './session-storage.js'
+import { scanSkills } from './skills.js'
 import { basename } from 'path'
 
 interface CacheEntry<T> {
@@ -173,8 +174,14 @@ export class SessionManager {
     this._cachedCommands = commands
   }
 
-  async getCommands(): Promise<SlashCommandInfo[]> {
+  async getCommands(cwd?: string): Promise<SlashCommandInfo[]> {
     if (this._cachedCommands) return this._cachedCommands
+
+    try {
+      const skills = scanSkills(cwd)
+      this._cachedCommands = skills
+      return skills
+    } catch { /* ignore scan errors */ }
     return []
   }
 }

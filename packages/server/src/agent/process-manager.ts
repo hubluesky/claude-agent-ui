@@ -41,6 +41,10 @@ export class ProcessManager {
       '--output-format', 'stream-json',
       '--include-partial-messages',
       '--verbose',
+      // Enable stdio-based permission prompts so the parent process can handle
+      // interactive tool requests (AskUserQuestion, etc.) via control_request.
+      // Without this, the CLI auto-denies tools with requiresUserInteraction().
+      '--permission-prompt-tool', 'stdio',
     ]
     if (options.resumeSessionId) {
       args.push('--resume', options.resumeSessionId)

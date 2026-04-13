@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react'
 import { useChatSession } from '../../providers/ChatSessionContext'
 import { useGlobalConnection } from '../../hooks/useContainer'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'
@@ -53,6 +53,9 @@ interface ChatComposerProps {
   minimal?: boolean
 }
 
+// Per-session draft storage — saves/restores input text when switching sessions
+const sessionDrafts = new Map<string, { text: string; images: AttachedImage[] }>()
+
 export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const [text, setText] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -61,6 +64,39 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const ctx = useChatSession()
   const { lockStatus, sessionStatus, sessionId } = ctx
+
+  // Auto-resize textarea: runs synchronously after React commits value changes
+  // but BEFORE browser paint. This ensures cursor/scroll position set by React
+  // is preserved — no DOM height manipulation in event handlers.
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+  }, [text, images])
+
+  // Save draft on session switch, restore draft for new session
+  const prevSessionIdRef = useRef(sessionId)
+  useEffect(() => {
+    const prevId = prevSessionIdRef.current
+    prevSessionIdRef.current = sessionId
+    if (prevId === sessionId) return
+
+    // Save current draft for the old session
+    if (prevId) {
+      const currentText = textareaRef.current?.value ?? ''
+      if (currentText || images.length > 0) {
+        sessionDrafts.set(prevId, { text: currentText, images })
+      } else {
+        sessionDrafts.delete(prevId)
+      }
+    }
+
+    // Restore draft for the new session (or clear)
+    const saved = sessionId ? sessionDrafts.get(sessionId) : undefined
+    setText(saved?.text ?? '')
+    setImages(saved?.images ?? [])
+  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
   const { models, accountInfo } = useGlobalConnection()
   const commands = useCommandStore((s) => s.commands)
   const [fileResults, setFileResults] = useState<FileItem[]>([])
@@ -71,20 +107,21 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
-  const popBackPrompts = useSessionContainerStore(
-    (state) => sessionId ? state.containers.get(sessionId)?.popBackPrompts ?? null : null
+  const popBackCommands = useSessionContainerStore(
+    (state) => sessionId ? state.containers.get(sessionId)?.popBackCommands ?? null : null
   )
 
-  // Consume popBackPrompts: merge queued texts into textarea when abort pops queue
+  // Consume popBackCommands: merge editable command values into textarea when abort pops queue
+  // Mirrors Claude Code messageQueueManager.ts popAllEditable() → restore to input
   useEffect(() => {
-    if (!popBackPrompts || popBackPrompts.length === 0 || !sessionId) return
-    const queuedText = popBackPrompts.join('\n')
+    if (!popBackCommands || popBackCommands.length === 0 || !sessionId) return
+    const queuedText = popBackCommands.map(cmd => cmd.value).join('\n')
     setText(prev => {
       const combined = prev ? [queuedText, prev].join('\n') : queuedText
       return combined
     })
-    useSessionContainerStore.getState().setPopBackPrompts(sessionId, null)
-  }, [popBackPrompts, sessionId])
+    useSessionContainerStore.getState().setPopBackCommands(sessionId, null)
+  }, [popBackCommands, sessionId])
 
   // Consume composerDraft from store
   const composerDraft = useSessionStore((s) => s.composerDraft)
@@ -255,7 +292,6 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
     setSelectedIndex(0)
     setSlashCursorStart(null)
     setSlashQueryText(null)
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }, [onSend, text, slashCursorStart])
 
   const canSend = (text.trim().length > 0 || images.length > 0) && !inputDisabled
@@ -277,7 +313,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
     setText('')
     setImages([])
     setSelectedIndex(0)
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    // Height reset handled by useLayoutEffect reacting to text=''
   }, [text, images, canSend, onSend, showPopup, filteredCommands, selectedIndex, executeCommand])
 
   const selectFile = useCallback((file: FileItem) => {
@@ -370,11 +406,9 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
     const newText = e.target.value
     setText(newText)
     setSelectedIndex(0)
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    // Height is managed by useLayoutEffect on [text] — no DOM manipulation here.
 
-    const cursorPos = el.selectionStart ?? newText.length
+    const cursorPos = e.target.selectionStart ?? newText.length
 
     // Detect slash trigger
     const slashTrigger = findSlashTrigger(newText, cursorPos)

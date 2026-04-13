@@ -2,6 +2,7 @@ import type { SessionStatus, PermissionMode, EffortLevel, LockStatus } from './c
 import type { ToolApprovalDecision, AskUserQuestion, PlanApprovalDecisionType } from './tools.js'
 import type { AgentMessage } from './messages.js'
 import type { SessionResult } from './session.js'
+import type { QueueItemWire } from './queue.js'
 
 // ============ Client → Server (C2S) ============
 
@@ -192,20 +193,14 @@ export interface S2C_SessionComplete {
 export interface S2C_SessionAborted {
   type: 'session-aborted'
   sessionId: string
-  queuedPrompts?: string[]
-}
-
-export interface QueueItem {
-  id: string
-  prompt: string
-  addedAt: number
-  images?: { data: string; mediaType: string }[]
+  /** Only editable commands are popped back; system commands stay in queue */
+  queuedCommands?: QueueItemWire[]
 }
 
 export interface S2C_QueueUpdated {
   type: 'queue-updated'
   sessionId: string
-  queue: QueueItem[]
+  queue: QueueItemWire[]
 }
 
 export interface SlashCommandInfo {

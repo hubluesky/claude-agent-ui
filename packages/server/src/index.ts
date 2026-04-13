@@ -23,51 +23,13 @@ import { createTray } from './tray.js'
 import { managementRoutes } from './routes/management.js'
 import { AuthManager } from './auth.js'
 import { adminRoutes } from './routes/admin.js'
-import { spawn } from 'child_process'
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
-import { existsSync } from 'fs'
+import { ChildProcessManager } from './child-process-manager.js'
 
-/** 全局 systray 引用，重启时需要 kill 掉旧进程 */
-let _systrayInstance: any = null
-export function setSystrayInstance(instance: any) { _systrayInstance = instance }
+// 子进程生命周期管理（vite、systray、restart 统一收敛于此）
+const pm = new ChildProcessManager()
 
-/** 重启服务器：spawn 新进程后退出当前进程 */
 export function restartServer() {
-  // 先 kill 旧的 systray Go 进程，避免重启后出现重复图标
-  if (_systrayInstance) {
-    try { _systrayInstance.kill(false) } catch {}
-  }
-  setTimeout(() => {
-    const serverDir = dirname(fileURLToPath(import.meta.url))
-    const projectRoot = join(serverDir, '..', '..', '..')
-    // 找到 tsx 可执行文件
-    const tsxPaths = [
-      join(projectRoot, 'packages', 'server', 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.CMD' : 'tsx'),
-      join(projectRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.CMD' : 'tsx'),
-    ]
-    const tsxBin = tsxPaths.find(p => existsSync(p))
-    const scriptPath = join(projectRoot, 'packages', 'server', 'src', 'index.ts')
-
-    if (tsxBin) {
-      // 用 tsx 启动
-      spawn(tsxBin, [scriptPath, '--mode=auto'], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: projectRoot,
-        shell: process.platform === 'win32',
-      }).unref()
-    } else {
-      // fallback: 用 node 启动编译后的代码
-      const distPath = join(projectRoot, 'packages', 'server', 'dist', 'index.js')
-      spawn(process.argv[0], [distPath, '--mode=auto'], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: projectRoot,
-      }).unref()
-    }
-    process.exit(0)
-  }, 300)
+  pm.restart()
 }
 
 const config = loadConfig()
@@ -96,6 +58,7 @@ const lockManager = new LockManager((sessionId) => {
   wsHub.broadcast(sessionId, { type: 'lock-status', sessionId, status: 'idle' })
 })
 const logCollector = new LogCollector()
+pm.setLogCollector(logCollector)
 const serverManager = new ServerManager(config, wsHub, lockManager)
 const sdkUpdater = new SdkUpdater(logCollector)
 
@@ -140,12 +103,31 @@ if (config.staticDir) {
   })
 }
 
+// Graceful shutdown
+let _shutdownCalled = false
+async function gracefulShutdown(reason: string) {
+  if (_shutdownCalled) return
+  _shutdownCalled = true
+  logCollector.info('server', `正在关闭：${reason}`)
+  pm.cleanup()
+  try { await server.close() } catch {}
+  process.exit(0)
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+
 // Start
 server.listen({ port: config.port, host: config.host }, (err) => {
   if (err) { server.log.error(err); process.exit(1) }
   server.log.info(`Server running on ${config.host}:${config.port}`)
 
   logCollector.info('server', `服务器已启动，端口 ${config.port}`)
+
+  // dev 模式下自动启动 vite dev server
+  if (config.mode === 'dev') {
+    pm.startVite()
+  }
 
   // 创建系统托盘
   try {
@@ -167,14 +149,9 @@ server.listen({ port: config.port, host: config.host }, (err) => {
         }
         open(`http://localhost:${config.port}/admin`)
       },
-      onQuit: async () => {
-        logCollector.info('server', '用户通过托盘退出')
-        try { trayInstance.kill(false) } catch {}
-        await server.close()
-        process.exit(0)
-      },
+      onQuit: () => gracefulShutdown('用户通过托盘退出'),
     })
-    setSystrayInstance(trayInstance)
+    pm.setSystray(trayInstance)
     logCollector.info('server', '系统托盘已创建')
   } catch (err) {
     server.log.warn(`系统托盘创建失败（可能无桌面环境）: ${err}`)

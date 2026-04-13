@@ -14,6 +14,36 @@ export interface SessionInfo {
   createdAt?: number
 }
 
+/** Known SDK resume artifact patterns. These appear when sessions are resumed and should not be shown to users. */
+const SDK_RESUME_PATTERNS = [
+  /^Continue from where you left off\.?$/,
+  /^No response requested\.?$/,
+]
+
+/** Extract plain text from a JSONL message object. */
+function extractMsgText(obj: Record<string, unknown>): string {
+  const msg = obj.message as Record<string, unknown> | undefined
+  if (!msg) return ''
+  const content = msg.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return (content as { type?: string; text?: string }[])
+      .filter(b => b.type === 'text')
+      .map(b => b.text ?? '')
+      .join('')
+  }
+  return ''
+}
+
+/** Check if a JSONL message is an SDK resume artifact that should be filtered out. */
+function isSDKResumeArtifact(obj: Record<string, unknown>): boolean {
+  const type = obj.type as string
+  if (type !== 'user' && type !== 'assistant') return false
+  const text = extractMsgText(obj).trim()
+  if (!text) return false
+  return SDK_RESUME_PATTERNS.some(p => p.test(text))
+}
+
 /**
  * Direct filesystem access to Claude session JSONL files.
  * Replaces SDK's listSessions / getSessionInfo / renameSession / getSessionMessages.
@@ -244,6 +274,8 @@ export class SessionStorage {
         try {
           const obj = JSON.parse(line) as Record<string, unknown>
           if (['custom-title', 'ai-title', 'tag', 'task-summary', 'pr-link', 'agent-name'].includes(obj.type as string)) continue
+          // Filter SDK resume artifacts (e.g. "Continue from where you left off." / "No response requested.")
+          if (isSDKResumeArtifact(obj)) continue
           messages.push(obj)
         } catch { continue }
       }
@@ -264,6 +296,21 @@ export class SessionStorage {
     if (!filePath) throw new Error(`Session ${sessionId} not found`)
 
     const entry = JSON.stringify({ type: 'custom-title', customTitle: title, sessionId }) + '\n'
+    await appendFile(filePath, entry, { mode: 0o600 })
+  }
+
+  /** Set AI-generated title (does not override user's custom title). */
+  async setAiTitle(sessionId: string, title: string, dir?: string): Promise<void> {
+    let filePath: string | undefined
+    if (dir) {
+      filePath = this.getSessionFilePath(sessionId, dir)
+    } else {
+      const info = await this.getSessionInfo(sessionId)
+      if (info?.cwd) filePath = this.getSessionFilePath(sessionId, info.cwd)
+    }
+    if (!filePath) throw new Error(`Session ${sessionId} not found`)
+
+    const entry = JSON.stringify({ type: 'ai-title', aiTitle: title, sessionId }) + '\n'
     await appendFile(filePath, entry, { mode: 0o600 })
   }
 

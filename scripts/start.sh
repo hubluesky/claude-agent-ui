@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
-# Claude Agent UI — macOS/Linux 启动脚本
+# Claude Agent UI startup script (Windows Git Bash / macOS / Linux)
+# Server auto-manages vite dev server in dev mode.
 set -e
 
 if ! command -v node &> /dev/null; then
-    echo "Node.js 未安装，请安装 Node.js 22+ 后重试"
-    echo "下载地址: https://nodejs.org/"
+    echo "[ERROR] Node.js not found. Please install Node.js 22+"
+    echo "Download: https://nodejs.org/"
     exit 1
 fi
 
-# 切换到项目根目录（scripts 的上级）
+# Project root (parent of scripts/)
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DIR"
 
-# 优先用 tsx 运行源码
-if [ -x "node_modules/.bin/tsx" ]; then
-    echo "启动 Claude Agent UI 服务器..."
-    exec node_modules/.bin/tsx packages/server/src/index.ts --mode=auto
+# Find tsx
+TSX_BIN=""
+if [ -f "packages/server/node_modules/.bin/tsx" ]; then
+    TSX_BIN="packages/server/node_modules/.bin/tsx"
+elif [ -f "node_modules/.bin/tsx" ]; then
+    TSX_BIN="node_modules/.bin/tsx"
+fi
+
+# Dev mode if source code exists, otherwise production
+if [ -d "packages/web/src" ] && [ -n "$TSX_BIN" ]; then
+    echo "Starting Claude Agent UI (dev mode, tsx watch)..."
+    exec "$TSX_BIN" watch packages/server/src/index.ts --mode=dev
+elif [ -n "$TSX_BIN" ]; then
+    echo "Starting Claude Agent UI (production mode)..."
+    exec "$TSX_BIN" packages/server/src/index.ts --mode=auto
 elif [ -f "packages/server/dist/index.js" ]; then
-    echo "启动 Claude Agent UI 服务器..."
+    echo "Starting Claude Agent UI (production mode)..."
     exec node packages/server/dist/index.js --mode=auto
 else
-    echo "未找到服务器文件，请先运行: pnpm install && pnpm build"
+    echo "[ERROR] No server files found. Run: pnpm install && pnpm build"
     exit 1
 fi

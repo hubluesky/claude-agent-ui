@@ -55,7 +55,7 @@ export class ServerManager {
     const rawConns = this.wsHub.getAllConnections()
     // Only include connections that have joined a session
     const activeConns = rawConns.filter(c => c.sessionId)
-    const connections: ConnectionInfo[] = await Promise.all(
+    const resolved = await Promise.all(
       activeConns.map(async (c) => {
         const info = await this.resolveSessionInfo(c.sessionId!)
         return {
@@ -70,6 +70,8 @@ export class ServerManager {
         }
       })
     )
+    // Only show connections with resolved project info
+    const connections: ConnectionInfo[] = resolved.filter(c => c.projectName)
 
     return {
       status: 'running',

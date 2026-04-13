@@ -58,10 +58,19 @@ export function ChatInterface({
     const container = store.containers.get(ctx.sessionId)
     const lastSeq = container?.lastSeq ?? 0
 
-    wsManager.joinSession(ctx.sessionId, lastSeq)
+    if (compact) {
+      // Multi-panel mode: use subscribe (additive) instead of joinSession
+      // (exclusive). joinSession leaves other sessions, so multiple panels
+      // calling it would clobber each other's subscriptions.
+      wsManager.subscribe(ctx.sessionId, lastSeq)
+    } else {
+      // Single-panel mode: exclusive join (leaves previous session)
+      wsManager.joinSession(ctx.sessionId, lastSeq)
+    }
 
-    // 离开旧 session（混合策略）
-    if (prevSession && prevSession !== '__new__' && prevSession !== ctx.sessionId) {
+    // 离开旧 session（混合策略） — only for single-panel mode.
+    // Multi-panel panels keep their subscriptions independently.
+    if (!compact && prevSession && prevSession !== '__new__' && prevSession !== ctx.sessionId) {
       const prevContainer = store.containers.get(prevSession)
       if (prevContainer?.sessionStatus === 'running') {
         // running session 保持订阅
@@ -71,7 +80,7 @@ export function ChatInterface({
         wsManager.unsubscribe(prevSession)
       }
     }
-  }, [ctx.sessionId])
+  }, [ctx.sessionId, compact])
 
   const handleSend = useCallback((prompt: string, images?: { data: string; mediaType: string }[]) => {
     const contentBlocks: any[] = []

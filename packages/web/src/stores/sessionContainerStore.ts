@@ -8,7 +8,7 @@ import type {
   PlanApprovalRequest,
   ContextUsageCategory,
   McpServerStatusInfo,
-  QueueItem,
+  QueueItemWire,
 } from '@claude-agent-ui/shared'
 
 // ─── Types migrated from connectionStore ───
@@ -66,8 +66,8 @@ export interface SessionContainer {
   contextUsage: ContextUsage | null
   mcpServers: McpServerInfo[]
   subagentMessages: { agentId: string; messages: any[] } | null
-  queue: QueueItem[]
-  popBackPrompts: string[] | null
+  queue: QueueItemWire[]
+  popBackCommands: QueueItemWire[] | null
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
@@ -141,7 +141,7 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     mcpServers: [],
     subagentMessages: null,
     queue: [],
-    popBackPrompts: null,
+    popBackCommands: null,
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
@@ -207,8 +207,8 @@ interface SessionContainerActions {
   setContextUsage(sessionId: string, usage: ContextUsage | null): void
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
   setSubagentMessages(sessionId: string, data: SessionContainer['subagentMessages']): void
-  setQueue(sessionId: string, queue: QueueItem[]): void
-  setPopBackPrompts(sessionId: string, prompts: string[] | null): void
+  setQueue(sessionId: string, queue: QueueItemWire[]): void
+  setPopBackCommands(sessionId: string, commands: QueueItemWire[] | null): void
   setSubscribed(sessionId: string, subscribed: boolean): void
   setLastSeq(sessionId: string, seq: number): void
   setNeedsFullSync(sessionId: string, needs: boolean): void
@@ -503,12 +503,12 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
-  setPopBackPrompts(sessionId, prompts) {
+  setPopBackCommands(sessionId, commands) {
     const { containers } = get()
     const c = containers.get(sessionId)
     if (!c) return
     const next = new Map(containers)
-    next.set(sessionId, { ...c, popBackPrompts: prompts })
+    next.set(sessionId, { ...c, popBackCommands: commands })
     set({ containers: next })
   },
 

@@ -53,6 +53,24 @@ export class LockManager {
     return this.locks.has(sessionId) ? 'locked' : 'idle'
   }
 
+  /** Transfer lock to a new holder, preserving timeout state */
+  transfer(sessionId: string, newHolderId: string): boolean {
+    const lock = this.locks.get(sessionId)
+    if (!lock) return false
+    lock.holderId = newHolderId
+    return true
+  }
+
+  /** Cancel timeout without releasing the lock (e.g. session started running) */
+  cancelTimeout(sessionId: string): void {
+    const lock = this.locks.get(sessionId)
+    if (!lock) return
+    if (lock.timeoutTimer) {
+      clearTimeout(lock.timeoutTimer)
+      lock.timeoutTimer = null
+    }
+  }
+
   getLockedSessions(connectionId: string): string[] {
     const sessions: string[] = []
     for (const [sessionId, lock] of this.locks) {

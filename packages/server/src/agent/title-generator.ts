@@ -41,14 +41,17 @@ function extractTextContent(content: unknown): string {
   return ''
 }
 
-async function callHaikuForTitle(userMessage: string, assistantSummary: string): Promise<string | null> {
+async function callHaikuForTitle(conversationSummary: string, currentTitle?: string): Promise<string | null> {
   const config = getApiConfig()
   if (!config) return null
 
-  const prompt = `Based on this conversation, generate a concise title (under 20 characters, same language as the user). Return ONLY the title, no quotes or punctuation wrapper.
+  const reevalClause = currentTitle
+    ? `\nCurrent title: "${currentTitle}". If the new conversation context makes this title inaccurate, generate a better one. If it's still appropriate, return it unchanged.`
+    : ''
 
-User: ${userMessage.slice(0, 500)}
-${assistantSummary ? `Assistant: ${assistantSummary.slice(0, 300)}` : ''}`
+  const prompt = `Based on this conversation, generate a concise title (under 20 characters, same language as the user). Return ONLY the title, no quotes or punctuation wrapper.${reevalClause}
+
+${conversationSummary}`
 
   try {
     const resp = await fetch(`${config.baseUrl}/v1/messages`, {
@@ -77,6 +80,12 @@ ${assistantSummary ? `Assistant: ${assistantSummary.slice(0, 300)}` : ''}`
   }
 }
 
+/**
+ * Generate or re-evaluate a session title.
+ * - Skips if user set a custom title
+ * - Uses the latest user messages to build context for the title
+ * - Re-evaluates existing AI title if conversation has progressed
+ */
 export async function maybeGenerateTitle(sessionId: string): Promise<string | null> {
   try {
     const info = await sessionStorage.getSessionInfo(sessionId)
@@ -85,27 +94,41 @@ export async function maybeGenerateTitle(sessionId: string): Promise<string | nu
     const messages = await sessionStorage.getSessionMessages(sessionId)
     if (!messages || messages.length < 2) return null
 
-    let userText = ''
-    let assistantText = ''
+    // Collect last few user and assistant messages for better context
+    const userTexts: string[] = []
+    const assistantTexts: string[] = []
     for (const msg of messages) {
       const m = msg as any
-      if (!userText && m.type === 'user') {
-        userText = extractTextContent(m.message?.content)
-      } else if (!assistantText && m.type === 'assistant') {
-        assistantText = extractTextContent(m.message?.content)
+      if (m.type === 'user') {
+        const text = extractTextContent(m.message?.content)
+        if (text.trim()) userTexts.push(text)
+      } else if (m.type === 'assistant') {
+        const text = extractTextContent(m.message?.content)
+        if (text.trim()) assistantTexts.push(text)
       }
-      if (userText && assistantText) break
     }
 
-    if (!userText) return null
+    if (userTexts.length === 0) return null
 
-    const trimmed = userText.trim()
-    if (trimmed.length < 3) return null
+    // Build conversation summary: first user message + last user message + assistant summary
+    const firstUser = userTexts[0]!.slice(0, 500)
+    const lastUser = userTexts.length > 1 ? userTexts[userTexts.length - 1]!.slice(0, 300) : ''
+    const assistantSummary = assistantTexts.length > 0 ? assistantTexts[assistantTexts.length - 1]!.slice(0, 300) : ''
 
-    const title = await callHaikuForTitle(userText, assistantText)
+    let summary = `User (first): ${firstUser}`
+    if (lastUser) summary += `\nUser (latest): ${lastUser}`
+    if (assistantSummary) summary += `\nAssistant: ${assistantSummary}`
+
+    // Get current AI title from session info (stored in summary if no customTitle)
+    const currentAiTitle = !info?.customTitle ? info?.summary : undefined
+
+    const title = await callHaikuForTitle(summary, currentAiTitle)
     if (!title) return null
 
-    await sessionStorage.renameSession(sessionId, title)
+    // Skip if title didn't change
+    if (title === currentAiTitle) return null
+
+    await sessionStorage.setAiTitle(sessionId, title)
     return title
   } catch (err) {
     console.error('[TitleGen] Failed to generate title:', err)

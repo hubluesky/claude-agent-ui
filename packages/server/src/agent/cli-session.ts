@@ -27,6 +27,10 @@ export class CliSession extends AgentSession {
    */
   private _askUserOrigins = new Map<string, { origin: 'ask-user-tool' | 'elicitation'; originalInput?: Record<string, unknown> }>()
 
+  /** Stores the original tool input for ExitPlanMode requests so
+   *  resolvePlanApproval can include updatedInput (required by SDK Zod schema). */
+  private _planApprovalInputs = new Map<string, Record<string, unknown>>()
+
   constructor(processManager: ProcessManager, cwd: string, options?: {
     resumeSessionId?: string
     forkSession?: boolean
@@ -202,6 +206,7 @@ export class CliSession extends AgentSession {
               }
             }
 
+            this._planApprovalInputs.set(requestId, input)
             this.emit('plan-approval', {
               requestId,
               planContent,
@@ -318,6 +323,9 @@ export class CliSession extends AgentSession {
   resolvePlanApproval(requestId: string, decision: PlanApprovalDecision): void {
     if (!this._process) return
 
+    const originalInput = this._planApprovalInputs.get(requestId) ?? {}
+    this._planApprovalInputs.delete(requestId)
+
     if (decision.decision === 'feedback') {
       this._process.send({
         type: 'control_response',
@@ -342,12 +350,14 @@ export class CliSession extends AgentSession {
       })
       this.emit('clear-and-accept-requested', decision)
     } else {
+      // SDK PermissionPromptToolResultSchema requires updatedInput (non-optional)
+      // on the allow path. Pass the original input back.
       this._process.send({
         type: 'control_response',
         response: {
           request_id: requestId,
           subtype: 'success',
-          response: { behavior: 'allow', toolUseID: requestId },
+          response: { behavior: 'allow', toolUseID: requestId, updatedInput: originalInput },
         },
       })
 

@@ -8,10 +8,81 @@ interface EnabledPlugins {
 }
 
 /**
+ * Scan all skill sources and return a merged list.
+ * Sources (matching Claude Code CLI discovery order):
+ *   1. User skills:    ~/.claude/skills/<name>/SKILL.md
+ *   2. Project skills:  <cwd>/.claude/skills/<name>/SKILL.md
+ *   3. Plugin skills:  ~/.claude/plugins/cache/.../<name>/SKILL.md
+ *
+ * User/project skills use their directory name directly (e.g. "quick-fix").
+ * Plugin skills are prefixed with plugin name (e.g. "superpowers:brainstorming").
+ * Later sources do NOT override earlier ones (user > project > plugin).
+ */
+export function scanSkills(cwd?: string): SlashCommandInfo[] {
+  const seen = new Set<string>()
+  const skills: SlashCommandInfo[] = []
+
+  const add = (list: SlashCommandInfo[]) => {
+    for (const s of list) {
+      if (!seen.has(s.name)) {
+        seen.add(s.name)
+        skills.push(s)
+      }
+    }
+  }
+
+  // 1. User skills (~/.claude/skills/)
+  const userSkillsDir = join(homedir(), '.claude', 'skills')
+  add(scanSkillsDir(userSkillsDir))
+
+  // 2. Project skills (<cwd>/.claude/skills/)
+  if (cwd) {
+    const projectSkillsDir = join(cwd, '.claude', 'skills')
+    add(scanSkillsDir(projectSkillsDir))
+  }
+
+  // 3. Plugin skills (~/.claude/plugins/cache/)
+  add(scanPluginSkills())
+
+  return skills
+}
+
+/**
+ * Scan a skills directory for SKILL.md files.
+ * Expects structure: <basePath>/<skill-name>/SKILL.md
+ * Returns skills using directory name directly (no prefix).
+ */
+function scanSkillsDir(basePath: string): SlashCommandInfo[] {
+  if (!existsSync(basePath)) return []
+
+  const skills: SlashCommandInfo[] = []
+
+  try {
+    const entries = readdirSync(basePath, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+
+      const skillMd = join(basePath, entry.name, 'SKILL.md')
+      if (!existsSync(skillMd)) continue
+
+      const info = parseSkillFrontmatter(skillMd)
+      if (info) {
+        skills.push({
+          name: info.name || entry.name,
+          description: info.description ?? '',
+        })
+      }
+    }
+  } catch { /* skip unreadable dirs */ }
+
+  return skills
+}
+
+/**
  * Scan ~/.claude/plugins/cache for SKILL.md files from enabled plugins.
  * Returns skills with prefixed names like "superpowers:brainstorming".
  */
-export function scanSkills(): SlashCommandInfo[] {
+function scanPluginSkills(): SlashCommandInfo[] {
   const claudeDir = join(homedir(), '.claude')
   const settingsPath = join(claudeDir, 'settings.json')
   const cacheDir = join(claudeDir, 'plugins', 'cache')

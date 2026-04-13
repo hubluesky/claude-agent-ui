@@ -118,12 +118,13 @@ export function ContextUsageIndicator() {
       if (sessionStatus === 'running') {
         getContextUsage()
       }
-    }, 15000)
+    }, 10000)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [sessionId])
 
+  // Fetch context usage on every session status change (running→idle, idle→running, etc.)
   useEffect(() => {
-    if (sessionStatus === 'running' && sessionId && sessionId !== '__new__') {
+    if (sessionId && sessionId !== '__new__') {
       getContextUsage()
     }
   }, [sessionStatus])
