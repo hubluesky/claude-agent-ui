@@ -63,7 +63,7 @@ export interface ChatSessionContextValue {
   planModalOpen: boolean
   contextUsage: ContextUsage | null
   mcpServers: McpServerStatusInfo[]
-  subagentMessages: { agentId: string; messages: any[] } | null
+  subagentMessages: Map<string, any[]>
 
   // Actions
   send(prompt: string, options?: SendOptions): void

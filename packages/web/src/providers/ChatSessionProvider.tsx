@@ -103,7 +103,7 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
     const planModalOpen = container?.planModalOpen ?? false
     const contextUsage = container?.contextUsage ?? null
     const mcpServers = container?.mcpServers ?? []
-    const subagentMessages = container?.subagentMessages ?? null
+    const subagentMessages = container?.subagentMessages ?? new Map<string, any[]>()
 
     return {
       sessionId,

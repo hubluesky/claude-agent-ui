@@ -83,7 +83,7 @@ export interface SessionContainer {
   lockHolder: string | null
   contextUsage: ContextUsage | null
   mcpServers: McpServerInfo[]
-  subagentMessages: { agentId: string; messages: any[] } | null
+  subagentMessages: Map<string, any[]>
   queue: QueueItemWire[]
   popBackCommands: QueueItemWire[] | null
   subscribed: boolean
@@ -160,7 +160,7 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     lockHolder: null,
     contextUsage: null,
     mcpServers: [],
-    subagentMessages: null,
+    subagentMessages: new Map(),
     queue: [],
     popBackCommands: null,
     subscribed: false,
@@ -229,7 +229,7 @@ interface SessionContainerActions {
   setLockStatus(sessionId: string, status: ClientLockStatus, holder?: string | null): void
   setContextUsage(sessionId: string, usage: ContextUsage | null): void
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
-  setSubagentMessages(sessionId: string, data: SessionContainer['subagentMessages']): void
+  setSubagentMessages(sessionId: string, data: { agentId: string; messages: any[] }): void
   setQueue(sessionId: string, queue: QueueItemWire[]): void
   setPopBackCommands(sessionId: string, commands: QueueItemWire[] | null): void
   setSubscribed(sessionId: string, subscribed: boolean): void
@@ -517,7 +517,9 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     const c = containers.get(sessionId)
     if (!c) return
     const next = new Map(containers)
-    next.set(sessionId, { ...c, subagentMessages: data })
+    const newSubagentMessages = new Map(c.subagentMessages)
+    newSubagentMessages.set(data.agentId, data.messages)
+    next.set(sessionId, { ...c, subagentMessages: newSubagentMessages })
     set({ containers: next })
   },
 
