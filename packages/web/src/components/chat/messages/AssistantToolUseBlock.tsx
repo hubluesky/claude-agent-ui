@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
 import { ToolIcon, formatToolSummary } from '../tool-display'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import type { MessageLookups } from '../../../utils/messageLookups'
+import { AgentToolBlock } from './AgentToolBlock'
+import hljs from 'highlight.js'
 
 interface Props {
   block: { id?: string; name?: string; input?: any; [key: string]: unknown }
@@ -51,11 +53,9 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({ block
   // TodoWrite: VSCode-style checklist
   if (name === 'TodoWrite') return <TodoWriteBlock input={input} />
 
-  // Agent: CLI-style tree progress line
+  // Agent: CLI-style aggregated rendering (inline progress + completion stats + transcript)
   if (name === 'Agent') {
-    const isResolved = id ? lookups.resolvedToolUseIds.has(id) : false
-    const isErrored = id ? lookups.erroredToolUseIds.has(id) : false
-    return <AgentProgressLine input={input} isResolved={isResolved} isErrored={isErrored} />
+    return <AgentToolBlock block={block} lookups={lookups} />
   }
 
   // Get inlined tool_result via lookups
@@ -219,8 +219,6 @@ function getToolDetail(toolName: string, input: any): React.ReactNode | null {
           {input.glob && <><br /><span className="text-[var(--success)]">glob: </span>{input.glob}</>}
         </div>
       )
-    case 'Agent':
-      return input.prompt ? <div>{input.prompt.slice(0, 500)}</div> : null
     default:
       return null
   }
@@ -256,10 +254,10 @@ function LazyEditDiff({ filePath, oldString, newString }: { filePath: string; ol
 
   if (diffData === 'error') {
     // Fallback to local diff (no file context)
-    return <InlineDiff oldStr={oldString} newStr={newString} />
+    return <InlineDiff oldStr={oldString} newStr={newString} filePath={filePath} />
   }
 
-  return <StructuredDiffView hunks={diffData.hunks} />
+  return <StructuredDiffView hunks={diffData.hunks} filePath={filePath} />
 }
 
 // ─── LazyWriteDiff: fetches write diff context from server ──
@@ -302,13 +300,41 @@ function LazyWriteDiff({ filePath, content }: { filePath: string; content: strin
         {parts.length > 0 && (
           <div className="text-[10px] text-[var(--text-muted)] mb-2 font-sans">{parts.join(', ')}</div>
         )}
-        <StructuredDiffView hunks={state.hunks} />
+        <StructuredDiffView hunks={state.hunks} filePath={filePath} />
       </div>
     )
   }
 
   // Create mode: show first 10 lines like CLI
-  return <WriteContent content={content} />
+  return <WriteContent content={content} filePath={filePath} />
+}
+
+// ─── Syntax highlighting for diff lines ──────────────────
+
+/** Highlight a single line of code, returning HTML string with hljs spans */
+function highlightLine(text: string, lang: string | null): string {
+  if (!lang || !text) return escapeHtml(text)
+  try {
+    const result = hljs.highlight(text, { language: lang, ignoreIllegals: true })
+    return result.value
+  } catch {
+    return escapeHtml(text)
+  }
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** Highlighted code span — renders hljs HTML with diff line color overlay */
+function HighlightedCode({ text, lang, className }: { text: string; lang: string | null; className?: string }) {
+  const html = useMemo(() => highlightLine(text, lang), [text, lang])
+  return (
+    <span
+      className={`px-1 whitespace-pre-wrap break-all ${className ?? ''}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
 }
 
 // ─── StructuredDiffView (server-enriched, real line numbers) ──
@@ -321,7 +347,8 @@ interface DiffHunk {
   newLines: number
 }
 
-function StructuredDiffView({ hunks }: { hunks: DiffHunk[] }) {
+function StructuredDiffView({ hunks, filePath }: { hunks: DiffHunk[]; filePath?: string }) {
+  const lang = guessLanguage(filePath ?? undefined)
   return (
     <div className="font-mono text-[11px] leading-[1.6]">
       {hunks.map((hunk, hi) => {
@@ -349,12 +376,11 @@ function StructuredDiffView({ hunks }: { hunks: DiffHunk[] }) {
 
               const bg = type === 'remove' ? 'bg-[var(--error-subtle-bg)]' : type === 'add' ? 'bg-[#3fb95010]' : ''
               const numClr = type === 'remove' ? 'text-[#f8717166]' : type === 'add' ? 'text-[#3fb95066]' : 'text-[var(--text-dim)]'
-              const txtClr = type === 'remove' ? 'text-[#f87171cc]' : type === 'add' ? 'text-[#3fb950cc]' : 'text-[var(--text-muted)]'
               return (
                 <div key={li} className={`flex ${bg}`}>
                   <span className={`min-w-[3ch] text-right pr-1 ${numClr} select-none shrink-0`}>{lineNo}</span>
                   <span className={`w-3 text-center shrink-0 ${numClr} select-none`}>{type === 'context' ? ' ' : marker}</span>
-                  <span className={`px-1 ${txtClr} whitespace-pre-wrap break-all`}>{text}</span>
+                  <HighlightedCode text={text} lang={lang} />
                 </div>
               )
             })}
@@ -369,8 +395,9 @@ function StructuredDiffView({ hunks }: { hunks: DiffHunk[] }) {
 
 const WRITE_PREVIEW_LINES = 10
 
-function WriteContent({ content }: { content: string }) {
+function WriteContent({ content, filePath }: { content: string; filePath?: string }) {
   const [showAll, setShowAll] = useState(false)
+  const lang = guessLanguage(filePath ?? undefined)
   const allLines = content.split('\n')
   const numLines = content.endsWith('\n') ? allLines.length - 1 : allLines.length
   const displayLines = showAll ? allLines : allLines.slice(0, WRITE_PREVIEW_LINES)
@@ -380,9 +407,10 @@ function WriteContent({ content }: { content: string }) {
     <div className="font-mono text-[11px] leading-[1.6]">
       <div className="rounded overflow-hidden border border-[var(--border)]">
         {displayLines.map((line, i) => (
-          <div key={i} className="flex">
-            <span className="w-8 text-right pr-2 text-[var(--text-dim)] select-none shrink-0 border-r border-[var(--border)]">{i + 1}</span>
-            <span className="px-2 text-[#3fb950cc] whitespace-pre-wrap break-all">+ {line}</span>
+          <div key={i} className="flex bg-[#3fb95010]">
+            <span className="w-8 text-right pr-2 text-[#3fb95066] select-none shrink-0 border-r border-[var(--border)]">{i + 1}</span>
+            <span className="w-4 text-center shrink-0 text-[#3fb95066] select-none">+</span>
+            <HighlightedCode text={line} lang={lang} />
           </div>
         ))}
       </div>
@@ -404,7 +432,7 @@ function WriteContent({ content }: { content: string }) {
 
 const MAX_CONTEXT = 3
 
-function InlineDiff({ oldStr, newStr }: { oldStr: string; newStr: string }) {
+function InlineDiff({ oldStr, newStr, filePath }: { oldStr: string; newStr: string; filePath?: string }) {
   const oldLines = oldStr.split('\n')
   const newLines = newStr.split('\n')
 
@@ -463,44 +491,6 @@ function extractResultText(block: any): string | null {
   // (e.g., "The file X has been updated successfully." — the header already shows the file)
   if (/^The file .+ has been (updated|created|written) successfully\.?$/i.test(text.trim())) return null
   return text
-}
-
-// ─── AgentProgressLine (CLI-style tree) ─────────────────
-
-function AgentProgressLine({ input, isResolved, isErrored }: { input: any; isResolved: boolean; isErrored: boolean }) {
-  const description = input?.description as string | undefined
-  const subagentType = input?.subagent_type as string | undefined
-  const agentName = input?.name as string | undefined
-  const displayType = agentName ? `@${agentName}` : subagentType && subagentType !== 'general-purpose' ? subagentType : 'Agent'
-
-  return (
-    <div className="flex items-start gap-1.5 text-xs pl-3">
-      <span className="text-[var(--text-dim)] shrink-0">└─</span>
-      {!isResolved && !isErrored && (
-        <span className="inline-block w-1.5 h-1.5 mt-1 bg-[var(--purple)] rounded-full animate-pulse shrink-0" />
-      )}
-      {isResolved && !isErrored && (
-        <span className="text-[var(--text-dim)] shrink-0">■</span>
-      )}
-      {isErrored && (
-        <span className="text-[var(--error)] shrink-0">✗</span>
-      )}
-      <span className={`font-semibold ${isResolved ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'}`}>
-        {displayType}
-      </span>
-      {description && (
-        <span className="text-[var(--text-muted)] truncate">
-          {description}
-        </span>
-      )}
-      {isResolved && !isErrored && (
-        <span className="text-[var(--text-dim)]">Done</span>
-      )}
-      {isErrored && (
-        <span className="text-[var(--error)]">Error</span>
-      )}
-    </div>
-  )
 }
 
 /** Guess language from file extension for syntax display */
