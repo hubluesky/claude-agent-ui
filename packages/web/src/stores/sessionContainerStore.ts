@@ -46,6 +46,24 @@ export interface ResolvedPlanApproval {
   decision: string
 }
 
+// ─── Turn Summary (rendered after assistant turn completes) ───
+
+export interface TurnSummary {
+  durationMs: number
+  inputTokens: number
+  outputTokens: number
+  thinkingDurationMs: number | null
+  verb: string
+}
+
+const TURN_COMPLETION_VERBS = [
+  'Baked', 'Brewed', 'Churned', 'Cogitated', 'Cooked', 'Crunched', 'Sautéed', 'Worked',
+]
+
+function pickTurnVerb(): string {
+  return TURN_COMPLETION_VERBS[Math.floor(Math.random() * TURN_COMPLETION_VERBS.length)]
+}
+
 // ─── SessionContainer ───
 
 export interface SessionContainer {
@@ -79,6 +97,9 @@ export interface SessionContainer {
   thinkingStartTime: number | null
   thinkingEndTime: number | null
   responseLength: number
+  turnSummary: TurnSummary | null
+  /** Current in-progress task title from TodoWrite (used by spinner & turn summary) */
+  currentTaskTitle: string | null
 }
 
 // ─── Streaming State (new: separated from messages) ───
@@ -153,6 +174,8 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     thinkingStartTime: null,
     thinkingEndTime: null,
     responseLength: 0,
+    turnSummary: null,
+    currentTaskTitle: null,
   }
 }
 
@@ -225,6 +248,10 @@ interface SessionContainerActions {
   clearStreaming(sessionId: string): void
   setStreamingModel(sessionId: string, model: string): void
   setSpinnerMode(sessionId: string, mode: SpinnerMode): void
+  setTurnSummary(sessionId: string, summary: TurnSummary | null): void
+  setCurrentTaskTitle(sessionId: string, title: string | null): void
+  /** Snapshot turn summary from result + streaming state, then clear streaming */
+  completeTurnAndClearStreaming(sessionId: string, result: { duration_ms: number; usage: { input_tokens: number; output_tokens: number } }): void
 }
 
 export const useSessionContainerStore = create<SessionContainerState & SessionContainerActions>((set, get) => ({
@@ -426,7 +453,7 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     const c = containers.get(sessionId)
     if (!c) return
     const next = new Map(containers)
-    next.set(sessionId, { ...c, pendingPlanApproval: req })
+    next.set(sessionId, { ...c, pendingPlanApproval: req, planModalOpen: !!req })
     set({ containers: next })
   },
 
@@ -685,6 +712,57 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
       updates.thinkingEndTime = Date.now()
     }
     containers.set(sessionId, { ...c, ...updates })
+    set({ containers })
+  },
+
+  setTurnSummary(sessionId: string, summary: TurnSummary | null) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    containers.set(sessionId, { ...c, turnSummary: summary })
+    set({ containers })
+  },
+
+  setCurrentTaskTitle(sessionId: string, title: string | null) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+    containers.set(sessionId, { ...c, currentTaskTitle: title })
+    set({ containers })
+  },
+
+  completeTurnAndClearStreaming(sessionId: string, result: { duration_ms: number; usage: { input_tokens: number; output_tokens: number } }) {
+    const containers = new Map(get().containers)
+    const c = containers.get(sessionId)
+    if (!c) return
+
+    // Snapshot thinking duration from streaming state BEFORE clearing
+    let thinkingDurationMs: number | null = null
+    if (c.thinkingStartTime !== null) {
+      const end = c.thinkingEndTime ?? Date.now()
+      thinkingDurationMs = end - c.thinkingStartTime
+    }
+
+    const summary: TurnSummary = {
+      durationMs: result.duration_ms,
+      inputTokens: result.usage.input_tokens,
+      outputTokens: result.usage.output_tokens,
+      thinkingDurationMs,
+      verb: c.currentTaskTitle ?? pickTurnVerb(),
+    }
+
+    containers.set(sessionId, {
+      ...c,
+      turnSummary: summary,
+      // Clear streaming (same as clearStreaming)
+      streaming: createStreamingState(),
+      spinnerMode: null,
+      requestStartTime: null,
+      thinkingStartTime: null,
+      thinkingEndTime: null,
+      responseLength: 0,
+      streamingVersion: c.streamingVersion + 1,
+    })
     set({ containers })
   },
 }))

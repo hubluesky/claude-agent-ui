@@ -1,49 +1,35 @@
 import { useRef, useCallback, useEffect, useMemo, useLayoutEffect } from 'react'
-import { MessageComponent, isMessageVisible } from './MessageComponent'
+import { MessageComponent } from './MessageComponent'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { PlanApprovalCard } from './PlanApprovalCard'
 import { StreamingTextBlock } from './streaming/StreamingTextBlock'
 import { StreamingThinkingBlock } from './streaming/StreamingThinkingBlock'
 import { StreamingToolUseBlock } from './streaming/StreamingToolUseBlock'
+import { TurnCompletionLine } from './messages/TurnCompletionLine'
 import { useChatSession } from '../../providers/ChatSessionContext'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'
-import type { SpinnerMode } from '../../stores/sessionContainerStore'
+import { useProcessedMessages } from '../../hooks/useProcessedMessages'
+import { isCollapsedGroup } from '../../utils/collapseReadSearch'
+import type { SpinnerMode, TurnSummary } from '../../stores/sessionContainerStore'
 
 interface ChatMessagesPaneProps {
   sessionId: string
   limit?: number
 }
 
-/**
- * Native-scroll message list — replaces Virtuoso to eliminate mobile flicker.
- *
- * Virtuoso programmatically adjusts scrollTop when items enter/leave the
- * virtual viewport. On mobile, these JS-driven adjustments race with the
- * browser's native momentum scroll, producing visible flicker every time
- * the user scrolls upward (new DOM nodes above → scrollTop bump → flash).
- *
- * With native scroll:
- *   - All loaded messages are in the DOM from the start (50–200 items is
- *     trivial for modern phones).
- *   - IntersectionObserver triggers loadMore at the top.
- *   - useLayoutEffect restores scroll position after prepend (runs before
- *     paint → zero visual shift).
- *   - No JS touches scrollTop during normal scroll → no flicker.
- */
-const AT_BOTTOM_THRESHOLD = 50 // px from bottom to consider "at bottom"
-
-// No mergeConsecutiveAssistantMessages needed — the server now forwards
-// tool_result user messages from the CLI, which naturally separate assistant
-// turns.  This matches Claude Code's architecture where each API turn is one
-// assistant message, separated by user messages (tool_result or human input).
+const AT_BOTTOM_THRESHOLD = 50
 
 export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const ctx = useChatSession()
   const rawMessages = ctx.messages
-  const messages = useMemo(() => {
-    const visible = rawMessages.filter(isMessageVisible)
-    return limit ? visible.slice(-limit) : visible
+
+  // ── Pipeline: normalize → filter → collapse → lookups ──
+  const limitedRaw = useMemo(() => {
+    return limit ? rawMessages.slice(-limit) : rawMessages
   }, [rawMessages, limit])
+
+  const { items, lookups } = useProcessedMessages(limitedRaw)
+
   const hasMore = ctx.hasMore
   const isLoadingHistory = ctx.isLoadingHistory
   const isLoadingMore = ctx.isLoadingMore
@@ -73,6 +59,16 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
     (state) => state.containers.get(sessionId)?.responseLength ?? 0
   )
 
+  // ── Turn summary (shown after turn completes) ──
+  const turnSummary = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.turnSummary ?? null
+  ) as TurnSummary | null
+
+  // ── Current task title (from TodoWrite) ──
+  const currentTaskTitle = useSessionContainerStore(
+    (state) => state.containers.get(sessionId)?.currentTaskTitle ?? null
+  )
+
   // ── Streaming state ──
   const streaming = useSessionContainerStore(
     (state) => state.containers.get(sessionId)?.streaming ?? null
@@ -85,38 +81,36 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   const isLoadingMoreRef = useRef(false)
 
   // ── Refs for detecting prepend vs append vs initial load ──
-  const prevMessagesRef = useRef(messages)
+  const prevItemsLenRef = useRef(items.length)
   const prevSessionIdRef = useRef(sessionId)
-  // scrollHeight captured in render phase (before React commits DOM changes)
   const scrollHeightBeforePrepend = useRef(0)
   const didPrepend = useRef(false)
-  // Track whether this is the very first load (for scroll-to-bottom)
   const hasInitiallyScrolled = useRef(false)
 
   isLoadingMoreRef.current = isLoadingMore
 
   // ── Reset on session switch ──
   if (sessionId !== prevSessionIdRef.current) {
-    prevMessagesRef.current = []
+    prevItemsLenRef.current = 0
     prevSessionIdRef.current = sessionId
     isAtBottomRef.current = true
     hasInitiallyScrolled.current = false
   }
 
   // ── Detect prepend during render (before DOM commit) ──
-  const prev = prevMessagesRef.current
-  if (messages !== prev) {
+  const prevLen = prevItemsLenRef.current
+  if (items.length !== prevLen) {
     didPrepend.current = false
-    if (messages.length > prev.length && prev.length > 0) {
-      const prevLast = prev[prev.length - 1]
-      const currLast = messages[messages.length - 1]
-      if (prevLast === currLast) {
-        // Items were prepended — save current scrollHeight before React commits
+    if (items.length > prevLen && prevLen > 0) {
+      // Check if the last item UUID is the same → items were prepended
+      const prevLastUuid = prevLen > 0 ? getItemUuid(items[items.length - 1]) : null
+      // Simple heuristic: if items grew but we're loading more, assume prepend
+      if (isLoadingMore && prevLastUuid) {
         didPrepend.current = true
         scrollHeightBeforePrepend.current = scrollRef.current?.scrollHeight ?? 0
       }
     }
-    prevMessagesRef.current = messages
+    prevItemsLenRef.current = items.length
   }
 
   // ── Restore scroll position after prepend (before browser paints) ──
@@ -148,20 +142,19 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
 
   // ── Initial load → scroll to bottom ──
   useEffect(() => {
-    if (!hasInitiallyScrolled.current && messages.length > 0) {
+    if (!hasInitiallyScrolled.current && items.length > 0) {
       hasInitiallyScrolled.current = true
       requestAnimationFrame(() => scrollToBottom('auto'))
     }
-  }, [messages.length, scrollToBottom])
+  }, [items.length, scrollToBottom])
 
   // ── Auto-scroll on new messages at bottom (streaming) ──
   useEffect(() => {
     if (!hasInitiallyScrolled.current) return
-    // Only follow if it's an append (new message at bottom), not a prepend
-    if (isAtBottomRef.current && messages.length > 0 && !didPrepend.current) {
+    if (isAtBottomRef.current && items.length > 0 && !didPrepend.current) {
       requestAnimationFrame(() => scrollToBottom('smooth'))
     }
-  }, [messages.length, streamingVersion, scrollToBottom])
+  }, [items.length, streamingVersion, scrollToBottom])
 
   // ── Scroll to bottom when Footer content changes ──
   useEffect(() => {
@@ -199,7 +192,7 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden"
+      className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col"
       onScroll={handleScroll}
     >
       {/* Top sentinel for loadMore trigger */}
@@ -212,17 +205,17 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
         </p>
       )}
 
-      {/* Messages — all rendered, no virtualization */}
-      {messages.map((msg, i) => (
+      {/* Messages — pipeline output (normalized + collapsed) */}
+      {items.map((item, i) => (
         <div
-          key={(msg as any).uuid ?? `msg-${i}`}
+          key={getItemUuid(item) ?? `msg-${i}`}
           className="px-4 py-2.5 empty:p-0"
         >
-          <MessageComponent message={msg} />
+          <MessageComponent item={item} lookups={lookups} />
         </div>
       ))}
 
-      {/* Streaming content — appended after completed messages, independent of messages[] */}
+      {/* Streaming content — appended after completed messages */}
       {hasStreamingContent && (
         <div className="px-4 py-2.5">
           <div className="pl-3 border-l-[3px] border-[var(--accent)] border-opacity-50 space-y-2">
@@ -244,10 +237,17 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
         </div>
       )}
 
-      {/* Footer — show spinner whenever AI is running, regardless of last message type.
-          Matches Claude Code behavior: spinner is always visible during a query.
-          Between turns (assistant final → tool execution → next turn start),
-          the spinner stays visible so the user knows AI is still working. */}
+      {/* Turn completion summary (shown after turn finishes, before next turn starts) */}
+      {turnSummary && sessionStatus !== 'running' && (
+        <div className="px-4 py-1.5">
+          <TurnCompletionLine summary={turnSummary} />
+        </div>
+      )}
+
+      {/* flexGrow spacer — pushes spinner to bottom of scroll area (matches CLI's <Box flexGrow={1} />) */}
+      <div className="flex-grow" />
+
+      {/* Spinner indicator — inside scroll area, pushed to bottom by flexGrow spacer */}
       {sessionStatus === 'running' && (
         <div className="px-4 py-2.5">
           <ThinkingIndicator
@@ -256,10 +256,18 @@ export function ChatMessagesPane({ sessionId, limit }: ChatMessagesPaneProps) {
             thinkingStartTime={thinkingStartTime}
             thinkingEndTime={thinkingEndTime}
             responseLength={responseLength}
+            currentTaskTitle={currentTaskTitle}
           />
         </div>
       )}
       <PlanApprovalCard />
     </div>
   )
+}
+
+// ─── Helpers ─────────────────────────────────────────────
+
+function getItemUuid(item: any): string | undefined {
+  if (isCollapsedGroup(item)) return item.uuid
+  return item.uuid
 }

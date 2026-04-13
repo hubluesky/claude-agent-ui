@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Claude Agent UI startup script (Windows Git Bash / macOS / Linux)
 # Server auto-manages vite dev server in dev mode.
+#
+# For headless (no terminal window), use the cross-platform Node.js launcher:
+#   node scripts/start.mjs --headless
 set -e
 
 if ! command -v node &> /dev/null; then
@@ -12,6 +15,11 @@ fi
 # Project root (parent of scripts/)
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DIR"
+
+# --headless: delegate to cross-platform Node.js launcher
+if [[ " $* " == *" --headless "* ]]; then
+    exec node "$DIR/scripts/start.mjs" --headless
+fi
 
 # Find tsx
 TSX_BIN=""

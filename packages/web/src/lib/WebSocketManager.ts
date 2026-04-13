@@ -587,6 +587,8 @@ class WebSocketManager {
         // an intermediate render with neither content visible).
         this.currentToolBlockIndex.delete(targetSessionId)
         s.pushMessageAndClearStreaming(targetSessionId, agentMsg)
+        // Extract current task title from TodoWrite tool_use blocks
+        this.extractTaskTitle(targetSessionId, agentMsg)
       }
     } else {
       s.pushMessage(targetSessionId, agentMsg)
@@ -646,6 +648,23 @@ class WebSocketManager {
     // message_start, message_stop — no action needed
   }
 
+  /** Extract current in-progress task title from TodoWrite tool_use blocks */
+  private extractTaskTitle(sessionId: string, agentMsg: AgentMessage) {
+    const msg = agentMsg as any
+    const content = msg.message?.content
+    if (!Array.isArray(content)) return
+    for (const block of content) {
+      if (block.type === 'tool_use' && block.name === 'TodoWrite') {
+        const todos = block.input?.todos as Array<{ content?: string; subject?: string; activeForm?: string; status?: string }> | undefined
+        if (!Array.isArray(todos)) continue
+        const inProgress = todos.find(t => t.status === 'in_progress')
+        if (inProgress) {
+          store().setCurrentTaskTitle(sessionId, inProgress.activeForm ?? inProgress.subject ?? inProgress.content ?? null)
+        }
+      }
+    }
+  }
+
   private handlePartialAssistant(sessionId: string, agentMsg: AgentMessage) {
     const s = store()
     const msg = agentMsg as any
@@ -666,6 +685,8 @@ class WebSocketManager {
         })
       }
     }
+    // Also extract task title from partial (updates spinner in real-time)
+    this.extractTaskTitle(sessionId, agentMsg)
   }
 
   private handleToolApprovalRequest(msg: any) {
@@ -785,7 +806,12 @@ class WebSocketManager {
   private handleSessionStateChange(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    store().setSessionStatus(sessionId, msg.state)
+    const s = store()
+    // Clear previous turn summary when a new turn starts running
+    if (msg.state === 'running') {
+      s.setTurnSummary(sessionId, null)
+    }
+    s.setSessionStatus(sessionId, msg.state)
   }
 
   private handleModeChange(msg: any) {
@@ -803,8 +829,19 @@ class WebSocketManager {
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
     s.setQueue(sessionId, [])
-    // Clear all streaming state
-    s.clearStreaming(sessionId)
+    // Snapshot turn summary from result, then clear streaming state
+    const result = (msg as any).result
+    if (result && typeof result.duration_ms === 'number') {
+      s.completeTurnAndClearStreaming(sessionId, {
+        duration_ms: result.duration_ms,
+        usage: {
+          input_tokens: result.usage?.input_tokens ?? 0,
+          output_tokens: result.usage?.output_tokens ?? 0,
+        },
+      })
+    } else {
+      s.clearStreaming(sessionId)
+    }
     this.currentToolBlockIndex.delete(sessionId)
     // Refresh session list in sidebar
     const sessStore = useSessionStore.getState()

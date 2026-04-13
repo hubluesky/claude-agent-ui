@@ -18,6 +18,7 @@ interface SpinnerProps {
   thinkingStartTime: number | null
   thinkingEndTime: number | null
   responseLength: number
+  currentTaskTitle?: string | null
 }
 
 type ThinkingStatus = 'thinking' | number | null
@@ -47,6 +48,7 @@ export function ThinkingIndicator({
   thinkingStartTime,
   thinkingEndTime,
   responseLength,
+  currentTaskTitle,
 }: SpinnerProps) {
   const [verb, setVerb] = useState(() => getRandomVerb())
   const [now, setNow] = useState(() => Date.now())
@@ -168,7 +170,7 @@ export function ThinkingIndicator({
   if (elapsedMs >= SHOW_TOKENS_AFTER_MS) {
     statusParts.push(formatDuration(elapsedMs))
     if (displayedTokens > 0) {
-      statusParts.push(`${formatNumber(displayedTokens)} tokens`)
+      statusParts.push(`↓ ${formatNumber(displayedTokens)} tokens`)
     }
   }
 
@@ -193,15 +195,15 @@ export function ThinkingIndicator({
   return (
     <div className="flex flex-col gap-1">
       {/* Status line: [braille] verb… (elapsed · tokens · thinking) */}
-      <div className="flex items-center gap-1.5 px-4 pl-[19px] border-l-[3px] border-[var(--accent)] border-opacity-50 ml-4">
+      <div className="flex items-center gap-1.5">
         <span className="text-sm text-[var(--purple)] font-mono w-3 text-center shrink-0">
           {SPINNER_FRAMES[spinnerFrame]}
         </span>
         <span
           className="text-sm text-[var(--purple)] transition-opacity duration-200"
-          style={{ opacity: verbOpacity }}
+          style={{ opacity: currentTaskTitle ? 1 : verbOpacity }}
         >
-          {verb}…
+          {currentTaskTitle ?? verb}…
         </span>
         {statusParts.length > 0 && (
           <span className="text-xs text-[var(--text-muted)]">

@@ -3,7 +3,7 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
 export function PlanApprovalCard() {
-  const { pendingPlanApproval } = useChatSession()
+  const { pendingPlanApproval, setPlanModalOpen } = useChatSession()
   const [collapsed, setCollapsed] = useState(false)
 
   // Only show in Footer when pending — resolved state is part of message history
@@ -30,6 +30,13 @@ export function PlanApprovalCard() {
           {readonly ? '计划审批（等待操作者响应）' : '计划审批'}
         </span>
         <span className="text-[11px] text-[var(--text-muted)] font-mono truncate max-w-[200px]">{fileName}</span>
+        <button
+          onClick={() => setPlanModalOpen(true)}
+          className="text-[11px] text-[var(--accent)] hover:text-[var(--accent-hover)] shrink-0 ml-1"
+          title="全屏查看计划"
+        >
+          全屏
+        </button>
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0 ml-1"

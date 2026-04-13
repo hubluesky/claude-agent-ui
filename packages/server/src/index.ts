@@ -15,7 +15,7 @@ import { settingsRoutes } from './routes/settings.js'
 import { commandRoutes } from './routes/commands.js'
 import { fileRoutes } from './routes/files.js'
 import { browseRoutes } from './routes/browse.js'
-import open from 'open'
+import { openUrl } from './child-process-manager.js'
 import { LogCollector } from './log-collector.js'
 import { ServerManager } from './server-manager.js'
 import { SdkUpdater } from './sdk-updater.js'
@@ -117,6 +117,17 @@ async function gracefulShutdown(reason: string) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 
+// 全局异常处理——防止未捕获的异常导致进程闪退
+process.on('uncaughtException', (err) => {
+  logCollector.error('server', `uncaughtException: ${err.stack ?? err.message}`)
+  server.log.error(err, 'uncaughtException')
+})
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+  logCollector.error('server', `unhandledRejection: ${msg}`)
+  server.log.error({ reason }, 'unhandledRejection')
+})
+
 // Start
 server.listen({ port: config.port, host: config.host }, (err) => {
   if (err) { server.log.error(err); process.exit(1) }
@@ -126,17 +137,17 @@ server.listen({ port: config.port, host: config.host }, (err) => {
 
   // dev 模式下自动启动 vite dev server
   if (config.mode === 'dev') {
-    pm.startVite()
+    pm.startVite().catch(() => {})
   }
 
   // 创建系统托盘
   try {
     const trayInstance = createTray(config.port, {
       onOpenUI: () => {
-        open(`http://localhost:${config.port}`)
+        openUrl(`http://localhost:${config.port}`)
       },
       onOpenAdmin: () => {
-        open(`http://localhost:${config.port}/admin`)
+        openUrl(`http://localhost:${config.port}/admin`)
       },
       onRestart: () => {
         logCollector.info('server', '服务器正在重启...')
@@ -147,7 +158,7 @@ server.listen({ port: config.port, host: config.host }, (err) => {
           authManager.resetPassword()
           logCollector.info('server', '管理密码已通过托盘重置')
         }
-        open(`http://localhost:${config.port}/admin`)
+        openUrl(`http://localhost:${config.port}/admin`)
       },
       onQuit: () => gracefulShutdown('用户通过托盘退出'),
     })

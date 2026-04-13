@@ -88,6 +88,7 @@ export class SdkUpdater {
       const child = spawn('pnpm', ['--filter', '@claude-agent-ui/server', 'update', '@anthropic-ai/claude-agent-sdk', '--latest'], {
         cwd: process.cwd(),
         shell: true,
+        windowsHide: true,
       })
 
       child.stdout?.on('data', (data: Buffer) => {
@@ -161,7 +162,7 @@ export class SdkUpdater {
       // Windows 自带 tar 需要用正斜杠路径
       const sdkDirPosix = sdkDir.replace(/\\/g, '/')
       const tmpTarPosix = tmpTar.replace(/\\/g, '/')
-      execSync(`tar -xzf "${tmpTarPosix}" --strip-components=1 -C "${sdkDirPosix}"`, { stdio: 'pipe' })
+      execSync(`tar -xzf "${tmpTarPosix}" --strip-components=1 -C "${sdkDirPosix}"`, { stdio: 'pipe', windowsHide: true })
       rmSync(tmpTar, { force: true })
 
       onProgress({ step: 'verifying', message: '验证安装...' })

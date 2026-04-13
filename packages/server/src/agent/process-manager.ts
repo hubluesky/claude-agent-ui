@@ -73,6 +73,7 @@ export class ProcessManager {
       cwd: options.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: process.platform === 'win32',
+      windowsHide: true,
       env: {
         ...process.env,
         CLAUDE_CODE_SESSION_ACCESS_TOKEN: sessionAccessToken,

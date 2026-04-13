@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { SessionManager } from '../agent/manager.js'
+import { computeEditDiffContext, computeWriteDiffContext } from '../agent/diff-context.js'
 
 export function sessionRoutes(sessionManager: SessionManager) {
   return async function (app: FastifyInstance) {
@@ -113,6 +114,43 @@ export function sessionRoutes(sessionManager: SessionManager) {
       reply.header('Content-Type', 'text/markdown; charset=utf-8')
       reply.header('Content-Disposition', `attachment; filename="session-${safeId}.md"`)
       return lines.join('\n')
+    })
+
+    // POST /api/diff-context — compute diff with real line numbers for Edit tool
+    // POST because old_string/new_string can be large (entire code blocks)
+    app.post<{
+      Body: { file: string; old_string: string; new_string: string }
+    }>('/api/diff-context', async (request, reply) => {
+      const { file, old_string, new_string } = request.body ?? {}
+      if (!file || old_string == null || new_string == null) {
+        reply.status(400)
+        return { error: 'file, old_string, and new_string are required' }
+      }
+      const diff = await computeEditDiffContext(file, old_string, new_string)
+      if (!diff) {
+        reply.status(404)
+        return { error: 'Could not compute diff (string not found in file)' }
+      }
+      return diff
+    })
+
+    // POST /api/write-diff-context — compute diff for Write tool (full file content)
+    // POST because content can be an entire file
+    app.post<{
+      Body: { file: string; content: string }
+    }>('/api/write-diff-context', async (request, reply) => {
+      const { file, content } = request.body ?? {}
+      if (!file || content == null) {
+        reply.status(400)
+        return { error: 'file and content are required' }
+      }
+      const diff = await computeWriteDiffContext(file, content)
+      if (!diff) {
+        // File didn't exist → this is a create, not an update
+        reply.status(404)
+        return { type: 'create' }
+      }
+      return { type: 'update', ...diff }
     })
 
     // POST /api/sessions/:id/tag

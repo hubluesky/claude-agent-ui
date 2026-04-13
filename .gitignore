@@ -6,3 +6,4 @@ dist/
 /.superpowers
 /Python/
 *.tgz
+logs/
