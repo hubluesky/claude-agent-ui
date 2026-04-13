@@ -174,6 +174,13 @@ export class SessionManager {
     this._cachedCommands = commands
   }
 
+  async getSubagentMessages(
+    sessionId: string,
+    agentId: string,
+  ): Promise<unknown[]> {
+    return await this.sessionStorage.getSubagentMessages(sessionId, agentId)
+  }
+
   async getCommands(cwd?: string): Promise<SlashCommandInfo[]> {
     if (this._cachedCommands) return this._cachedCommands
 

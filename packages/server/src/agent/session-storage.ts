@@ -327,4 +327,51 @@ export class SessionStorage {
     const entry = JSON.stringify({ type: 'tag', tag, sessionId }) + '\n'
     await appendFile(filePath, entry, { mode: 0o600 })
   }
+
+  /**
+   * Read subagent messages from the sidechain JSONL file.
+   * CLI stores subagent transcripts at:
+   *   ~/.claude/projects/{project-hash}/{sessionId}/subagents/agent-{agentId}.jsonl
+   */
+  async getSubagentMessages(sessionId: string, agentId: string, dir?: string): Promise<unknown[]> {
+    // Find the project directory for this session
+    let projectDir: string | undefined
+    if (dir) {
+      projectDir = this.getProjectDir(dir)
+    } else {
+      const info = await this.getSessionInfo(sessionId)
+      if (info?.cwd) {
+        projectDir = this.getProjectDir(info.cwd)
+      }
+    }
+    if (!projectDir) return []
+
+    // Try multiple possible paths for the subagent JSONL
+    const candidates = [
+      join(projectDir, sessionId, 'subagents', `agent-${agentId}.jsonl`),
+      join(projectDir, 'subagents', `agent-${agentId}.jsonl`),
+    ]
+
+    for (const filePath of candidates) {
+      try {
+        const content = await readFile(filePath, 'utf-8')
+        const messages: unknown[] = []
+        for (const line of content.split('\n')) {
+          if (!line.trim()) continue
+          try {
+            const obj = JSON.parse(line) as Record<string, unknown>
+            // Skip metadata entries
+            if (['custom-title', 'ai-title', 'tag', 'task-summary'].includes(obj.type as string)) continue
+            if (isSDKResumeArtifact(obj)) continue
+            messages.push(obj)
+          } catch { continue }
+        }
+        return messages
+      } catch {
+        continue // File doesn't exist at this path, try next
+      }
+    }
+
+    return []
+  }
 }

@@ -160,9 +160,25 @@ export function createWsHandler(deps: HandlerDeps) {
         }
         break
       }
-      case 'get-subagent-messages':
-        wsHub.sendTo(connectionId, { type: 'subagent-messages', sessionId: msg.sessionId, agentId: msg.agentId, messages: [] } as any)
+      case 'get-subagent-messages': {
+        try {
+          const messages = await sessionManager.getSubagentMessages(msg.sessionId, msg.agentId)
+          wsHub.sendTo(connectionId, {
+            type: 'subagent-messages',
+            sessionId: msg.sessionId,
+            agentId: msg.agentId,
+            messages,
+          } as any)
+        } catch {
+          wsHub.sendTo(connectionId, {
+            type: 'subagent-messages',
+            sessionId: msg.sessionId,
+            agentId: msg.agentId,
+            messages: [],
+          } as any)
+        }
         break
+      }
       case 'pong':
         wsHub.recordPong(connectionId)
         break
