@@ -14,6 +14,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { dirname } from 'path'
 import { structuredPatch } from 'diff'
+import type { SessionStorage } from './session-storage.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -50,9 +51,10 @@ export async function computeEditDiffContext(
   filePath: string,
   oldString: string,
   newString: string,
+  providedFileContent?: string | null,
 ): Promise<DiffContext | null> {
   try {
-    const fileContent = await readFile(filePath, 'utf-8')
+    const fileContent = providedFileContent ?? await readFile(filePath, 'utf-8')
 
     // Try to find old_string (file not yet modified) or new_string (already modified)
     let idx = fileContent.indexOf(oldString)
@@ -153,24 +155,114 @@ async function getGitHeadContent(filePath: string): Promise<string | null> {
 }
 
 /**
+ * Strip line number prefixes from Read tool_result content.
+ * Read results use format: "1\tcontent\n2\tcontent\n..."
+ */
+function stripLineNumbers(content: string): string {
+  return content.split('\n').map(line => {
+    const match = line.match(/^\d+\t(.*)$/)
+    return match ? match[1] : line
+  }).join('\n')
+}
+
+/**
+ * Compute the "old content" (baseline) for a Write by scanning the session JSONL.
+ * Tracks the file state through prior Read/Write/Edit operations in the same session.
+ *
+ * Algorithm:
+ * 1. Parse JSONL in order until we reach the target toolUseId
+ * 2. Track content state:
+ *    - Read tool_result → set initial baseline (actual disk content at read time)
+ *    - Write → replace entirely
+ *    - Edit → apply old_string→new_string replacement
+ * 3. If no prior operation found, fall back to git HEAD
+ */
+export async function computeWriteOldContent(
+  sessionStorage: SessionStorage,
+  sessionId: string,
+  filePath: string,
+  toolUseId: string,
+): Promise<string | null> {
+  const normalizedTarget = filePath.replace(/\\/g, '/')
+
+  const messages = await sessionStorage.getSessionMessages(sessionId)
+  let trackedContent: string | null = null
+
+  // Track pending Read tool_use IDs for the target file → resolve from tool_result
+  const pendingReadIds = new Set<string>()
+
+  for (const msg of messages) {
+    const m = msg as any
+    const content = m.message?.content
+    if (!Array.isArray(content)) continue
+
+    if (m.type === 'assistant') {
+      for (const block of content) {
+        if (block.type !== 'tool_use' && block.type !== 'server_tool_use') continue
+
+        // Reached the target Write → return what we've accumulated
+        if (block.id === toolUseId) {
+          return trackedContent ?? await getGitHeadContent(filePath)
+        }
+
+        const input = block.input
+        if (!input?.file_path) continue
+        const normalizedBlock = (input.file_path as string).replace(/\\/g, '/')
+        if (normalizedBlock !== normalizedTarget) continue
+
+        if (block.name === 'Read' && block.id) {
+          pendingReadIds.add(block.id)
+        } else if (block.name === 'Write' && input.content != null) {
+          trackedContent = input.content as string
+        } else if (block.name === 'Edit' && input.old_string != null && input.new_string != null) {
+          if (trackedContent === null) {
+            trackedContent = await getGitHeadContent(filePath)
+          }
+          if (trackedContent !== null) {
+            const idx = trackedContent.indexOf(input.old_string as string)
+            if (idx !== -1) {
+              trackedContent = trackedContent.slice(0, idx) + (input.new_string as string) + trackedContent.slice(idx + (input.old_string as string).length)
+            }
+          }
+        }
+      }
+    } else if (m.type === 'user') {
+      // Resolve Read tool_results → extract file content as baseline
+      for (const block of content) {
+        if (block.type !== 'tool_result') continue
+        if (!pendingReadIds.has(block.tool_use_id)) continue
+        pendingReadIds.delete(block.tool_use_id)
+
+        const resultText = typeof block.content === 'string' ? block.content : null
+        if (!resultText) continue
+        // Skip "File unchanged" cache-hit responses
+        if (resultText.startsWith('File unchanged')) continue
+        // Strip line number prefixes (Read results: "1\tcontent\n2\t...")
+        trackedContent = stripLineNumbers(resultText)
+      }
+    }
+  }
+
+  return trackedContent ?? await getGitHeadContent(filePath)
+}
+
+/**
  * Compute diff context for a Write tool_use.
- * Uses git HEAD as the "old" version (before session modifications).
- * Mirrors Claude Code's approach: FileWriteTool reads oldContent from readFileState
- * cache, then uses getPatchForDisplay() to generate structuredPatch.
- * We use `git show HEAD:path` as our equivalent of the readFileState cache.
+ * If oldContent is provided (from session JSONL scan), uses that as baseline.
+ * Otherwise falls back to git HEAD.
  */
 export async function computeWriteDiffContext(
   filePath: string,
   newContent: string,
+  oldContent?: string | null,
 ): Promise<DiffContext | null> {
   try {
-    // Get the original file content from git HEAD
-    const oldContent = await getGitHeadContent(filePath)
-    if (!oldContent) return null // New file (not in git) → create mode
-    if (oldContent === newContent) return null // No changes
+    // Use provided baseline or fall back to git HEAD
+    const baseline = oldContent !== undefined ? oldContent : await getGitHeadContent(filePath)
+    if (!baseline) return null // New file → create mode
+    if (baseline === newContent) return null // No changes
 
-    // Use the diff library for proper unified diff
-    const patch = structuredPatch('', '', oldContent, newContent, '', '', { context: CONTEXT_LINES })
+    const patch = structuredPatch('', '', baseline, newContent, '', '', { context: CONTEXT_LINES })
     if (!patch.hunks || patch.hunks.length === 0) return null
 
     let totalAdded = 0

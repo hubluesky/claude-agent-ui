@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { SessionManager } from '../agent/manager.js'
-import { computeEditDiffContext, computeWriteDiffContext } from '../agent/diff-context.js'
+import { computeEditDiffContext, computeWriteDiffContext, computeWriteOldContent } from '../agent/diff-context.js'
 
 export function sessionRoutes(sessionManager: SessionManager) {
   return async function (app: FastifyInstance) {
@@ -118,15 +118,28 @@ export function sessionRoutes(sessionManager: SessionManager) {
 
     // POST /api/diff-context — compute diff with real line numbers for Edit tool
     // POST because old_string/new_string can be large (entire code blocks)
+    // Optional sessionId + toolUseId to reconstruct file state from JSONL for historical sessions
     app.post<{
-      Body: { file: string; old_string: string; new_string: string }
+      Body: { file: string; old_string: string; new_string: string; sessionId?: string; toolUseId?: string }
     }>('/api/diff-context', async (request, reply) => {
-      const { file, old_string, new_string } = request.body ?? {}
+      const { file, old_string, new_string, sessionId, toolUseId } = request.body ?? {}
       if (!file || old_string == null || new_string == null) {
         reply.status(400)
         return { error: 'file, old_string, and new_string are required' }
       }
-      const diff = await computeEditDiffContext(file, old_string, new_string)
+
+      // If session context provided, reconstruct file state from JSONL history
+      let fileContent: string | null | undefined = undefined
+      if (sessionId && toolUseId) {
+        fileContent = await computeWriteOldContent(
+          sessionManager.sessionStorage,
+          sessionId,
+          file,
+          toolUseId,
+        )
+      }
+
+      const diff = await computeEditDiffContext(file, old_string, new_string, fileContent)
       if (!diff) {
         reply.status(404)
         return { error: 'Could not compute diff (string not found in file)' }
@@ -135,18 +148,29 @@ export function sessionRoutes(sessionManager: SessionManager) {
     })
 
     // POST /api/write-diff-context — compute diff for Write tool (full file content)
-    // POST because content can be an entire file
+    // Optional sessionId + toolUseId to compute accurate baseline from JSONL history
     app.post<{
-      Body: { file: string; content: string }
+      Body: { file: string; content: string; sessionId?: string; toolUseId?: string }
     }>('/api/write-diff-context', async (request, reply) => {
-      const { file, content } = request.body ?? {}
+      const { file, content, sessionId, toolUseId } = request.body ?? {}
       if (!file || content == null) {
         reply.status(400)
         return { error: 'file and content are required' }
       }
-      const diff = await computeWriteDiffContext(file, content)
+
+      // If session context provided, compute accurate baseline from JSONL
+      let oldContent: string | null | undefined = undefined
+      if (sessionId && toolUseId) {
+        oldContent = await computeWriteOldContent(
+          sessionManager.sessionStorage,
+          sessionId,
+          file,
+          toolUseId,
+        )
+      }
+
+      const diff = await computeWriteDiffContext(file, content, oldContent)
       if (!diff) {
-        // File didn't exist → this is a create, not an update
         reply.status(404)
         return { type: 'create' }
       }

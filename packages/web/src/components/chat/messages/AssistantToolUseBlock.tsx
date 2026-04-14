@@ -4,6 +4,7 @@ import { ToolIcon, formatToolSummary } from '../tool-display'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import type { MessageLookups } from '../../../utils/messageLookups'
 import { AgentToolBlock } from './AgentToolBlock'
+import { useChatSession } from '../../../providers/ChatSessionContext'
 import hljs from 'highlight.js'
 
 interface Props {
@@ -44,6 +45,7 @@ function getDisplayPath(filePath: string | undefined): string {
 export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({ block, lookups }: Props) {
   const { name = 'tool', input, id } = block
   const [collapsed, setCollapsed] = useState(true)
+  const { sessionId } = useChatSession()
   const category = getToolCategory(name)
   const color = TOOL_COLORS[category]
   const displayName = getDisplayName(name, input)
@@ -66,7 +68,9 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({ block
 
   // Non-Edit detail (Bash command, Grep pattern, Write content, etc.)
   const staticDetail = name !== 'Edit' ? getToolDetail(name, input) : null
-  const resultText = resultBlock ? extractResultText(resultBlock) : null
+  // Skill tool: result contains the full skill prompt text — show only a short summary like CLI
+  const rawResultText = resultBlock ? extractResultText(resultBlock) : null
+  const resultText = name === 'Skill' ? (rawResultText ? 'Successfully loaded skill' : null) : rawResultText
 
   const isFileOp = name === 'Edit' || name === 'Write'
   const fileSummary = isFileOp ? getFileSummary(name, input) : null
@@ -106,14 +110,14 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({ block
       {/* Edit tool: lazy-loaded diff with real line numbers */}
       {!collapsed && name === 'Edit' && input?.file_path && input?.old_string != null && input?.new_string != null && (
         <div className="border-t border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2.5">
-          <LazyEditDiff filePath={input.file_path} oldString={input.old_string} newString={input.new_string} />
+          <LazyEditDiff filePath={input.file_path} oldString={input.old_string} newString={input.new_string} sessionId={sessionId ?? undefined} toolUseId={id} />
         </div>
       )}
 
       {/* Write tool: lazy-loaded — shows diff for update, content preview for create */}
       {!collapsed && name === 'Write' && input?.file_path && input?.content && (
         <div className="border-t border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2.5">
-          <LazyWriteDiff filePath={input.file_path} content={input.content as string} />
+          <LazyWriteDiff filePath={input.file_path} content={input.content as string} sessionId={sessionId ?? undefined} toolUseId={id} />
         </div>
       )}
 
@@ -226,7 +230,9 @@ function getToolDetail(toolName: string, input: any): React.ReactNode | null {
 
 // ─── LazyEditDiff: fetches real diff context from server on expand ──
 
-function LazyEditDiff({ filePath, oldString, newString }: { filePath: string; oldString: string; newString: string }) {
+function LazyEditDiff({ filePath, oldString, newString, sessionId, toolUseId }: {
+  filePath: string; oldString: string; newString: string; sessionId?: string; toolUseId?: string
+}) {
   const [diffData, setDiffData] = useState<{ hunks: DiffHunk[] } | null | 'loading' | 'error'>(null)
 
   useEffect(() => {
@@ -235,7 +241,7 @@ function LazyEditDiff({ filePath, oldString, newString }: { filePath: string; ol
     fetch('/api/diff-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: filePath, old_string: oldString, new_string: newString }),
+      body: JSON.stringify({ file: filePath, old_string: oldString, new_string: newString, sessionId, toolUseId }),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -262,7 +268,9 @@ function LazyEditDiff({ filePath, oldString, newString }: { filePath: string; ol
 
 // ─── LazyWriteDiff: fetches write diff context from server ──
 
-function LazyWriteDiff({ filePath, content }: { filePath: string; content: string }) {
+function LazyWriteDiff({ filePath, content, sessionId, toolUseId }: {
+  filePath: string; content: string; sessionId?: string; toolUseId?: string
+}) {
   const [state, setState] = useState<
     { type: 'loading' } | { type: 'create' } |
     { type: 'update'; hunks: DiffHunk[]; additions: number; deletions: number } |
@@ -273,7 +281,7 @@ function LazyWriteDiff({ filePath, content }: { filePath: string; content: strin
     fetch('/api/write-diff-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: filePath, content }),
+      body: JSON.stringify({ file: filePath, content, sessionId, toolUseId }),
     })
       .then(res => res.json())
       .then(data => {
@@ -284,7 +292,7 @@ function LazyWriteDiff({ filePath, content }: { filePath: string; content: strin
         }
       })
       .catch(() => setState({ type: 'create' }))
-  }, [filePath, content])
+  }, [filePath, content, sessionId, toolUseId])
 
   if (state.type === 'loading') {
     return <div className="text-[10px] text-[var(--text-muted)]">Loading...</div>

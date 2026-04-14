@@ -22,6 +22,7 @@ export const TOOL_CATEGORIES = {
   agent: ['Agent'],
   question: ['AskUserQuestion'],
   web: ['WebSearch', 'WebFetch'],
+  skill: ['Skill'],
 } as const
 
 export type ToolCategory = keyof typeof TOOL_CATEGORIES | 'default'
@@ -45,6 +46,7 @@ export const TOOL_COLORS: Record<ToolCategory, string> = {
   agent: '#a855f7',
   question: '#d97706',
   web: '#0ea5e9',
+  skill: '#f59e0b',
   default: '#6b7280',
 }
 

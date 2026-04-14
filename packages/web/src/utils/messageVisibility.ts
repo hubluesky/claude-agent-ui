@@ -74,6 +74,11 @@ function isAssistantBlockVisible(msg: NormalizedMessage): boolean {
 }
 
 function isUserBlockVisible(msg: NormalizedMessage): boolean {
+  // Hide SDK-injected skill prompt messages (Skill tool injects user messages
+  // with sourceToolUseID to carry the skill content — these are internal)
+  const original = msg.original as any
+  if (original.sourceToolUseID || original.message?.sourceToolUseID) return false
+
   const block = msg.block!
   switch (block.type) {
     case 'text': {

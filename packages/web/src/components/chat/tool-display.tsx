@@ -50,6 +50,12 @@ export function ToolIcon({ category }: { category: ToolCategory }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
         </svg>
       )
+    case 'skill':
+      return (
+        <svg className={cls} style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+        </svg>
+      )
     default:
       return <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
   }
@@ -71,6 +77,7 @@ export function formatToolSummary(toolName: string, input: Record<string, unknow
     case 'TaskCreate': return (input.subject as string) ?? ''
     case 'TaskUpdate': return `#${input.taskId} → ${input.status ?? ''}`
     case 'TodoWrite': return `${((input.todos as unknown[]) ?? []).length} items`
+    case 'Skill': return (input.skill as string) ?? ''
     default: return JSON.stringify(input).slice(0, 120)
   }
 }
