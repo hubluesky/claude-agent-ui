@@ -150,17 +150,23 @@ export class ChildProcessManager {
 
   // ─── 子进程管理核心 ───
 
-  /** 启动一个受管子进程（detached + unref 确保父进程退出时子进程继续存活） */
+  /**
+   * 启动一个受管子进程。
+   * - Windows: detached: false（因为 detached:true 会弹 console 窗口，且 tsx watch
+   *   用 tree-kill 会杀掉 detached 进程，没有实际收益）
+   * - Unix: detached: true + unref（vite 可存活过 tsx watch 的 SIGTERM 重启）
+   */
   private spawnChild(name: string, cmd: string, args: string[], opts: { cwd: string }): void {
     this.killChild(name)
 
+    const isWin = process.platform === 'win32'
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
       stdio: 'ignore',
-      detached: true,
+      detached: !isWin,
       windowsHide: true,
     })
-    child.unref()
+    if (!isWin) child.unref()
     this.children.set(name, child)
 
     child.on('exit', (code) => {

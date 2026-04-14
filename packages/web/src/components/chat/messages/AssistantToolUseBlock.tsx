@@ -448,33 +448,34 @@ function InlineDiff({ oldStr, newStr, filePath }: { oldStr: string; newStr: stri
   const prefixContext = oldLines.slice(Math.max(0, prefixLen - MAX_CONTEXT), prefixLen)
   const suffixContext = oldLines.slice(oldLines.length - suffixLen, oldLines.length - suffixLen + MAX_CONTEXT)
 
+  const lang = guessLanguage(filePath ?? undefined)
+
   return (
     <div className="font-mono text-[11px] leading-[1.6]">
       <div className="rounded overflow-hidden border border-[var(--border)]">
         {prefixContext.map((line, i) => (
-          <FallbackDiffLine key={`cp-${i}`} marker=" " text={line} type="context" />
+          <FallbackDiffLine key={`cp-${i}`} marker=" " text={line} type="context" lang={lang} />
         ))}
         {removedLines.map((line, i) => (
-          <FallbackDiffLine key={`rm-${i}`} marker="-" text={line} type="remove" />
+          <FallbackDiffLine key={`rm-${i}`} marker="-" text={line} type="remove" lang={lang} />
         ))}
         {addedLines.map((line, i) => (
-          <FallbackDiffLine key={`ad-${i}`} marker="+" text={line} type="add" />
+          <FallbackDiffLine key={`ad-${i}`} marker="+" text={line} type="add" lang={lang} />
         ))}
         {suffixContext.map((line, i) => (
-          <FallbackDiffLine key={`cs-${i}`} marker=" " text={line} type="context" />
+          <FallbackDiffLine key={`cs-${i}`} marker=" " text={line} type="context" lang={lang} />
         ))}
       </div>
     </div>
   )
 }
 
-function FallbackDiffLine({ marker, text, type }: { marker: string; text: string; type: 'context' | 'remove' | 'add' }) {
+function FallbackDiffLine({ marker, text, type, lang }: { marker: string; text: string; type: 'context' | 'remove' | 'add'; lang: string | null }) {
   const bg = type === 'remove' ? 'bg-[var(--error-subtle-bg)]' : type === 'add' ? 'bg-[#3fb95010]' : ''
-  const textColor = type === 'remove' ? 'text-[#f87171cc]' : type === 'add' ? 'text-[#3fb950cc]' : 'text-[var(--text-muted)]'
   return (
     <div className={`flex ${bg}`}>
-      <span className={`w-4 text-center shrink-0 ${textColor} select-none`}>{type === 'context' ? ' ' : marker}</span>
-      <span className={`px-1 ${textColor} whitespace-pre-wrap break-all`}>{text}</span>
+      <span className={`w-4 text-center shrink-0 ${type === 'remove' ? 'text-[#f8717166]' : type === 'add' ? 'text-[#3fb95066]' : 'text-[var(--text-dim)]'} select-none`}>{type === 'context' ? ' ' : marker}</span>
+      <HighlightedCode text={text} lang={lang} />
     </div>
   )
 }

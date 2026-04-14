@@ -20,6 +20,68 @@ const SDK_RESUME_PATTERNS = [
   /^No response requested\.?$/,
 ]
 
+/** Patterns that should be skipped as first prompt (system tags, interrupt markers). Aligned with CLI's SKIP_FIRST_PROMPT_PATTERN. */
+const SKIP_FIRST_PROMPT_PATTERN = /^<[a-z][\w-]*[\s>]|\[Request interrupted by user/
+
+/** Strip display-unfriendly tags from prompt text. */
+function stripDisplayTags(text: string): string {
+  return text
+    .replace(/<command-message>[\s\S]*?<\/command-message>/g, '')
+    .replace(/<command-name>[\s\S]*?<\/command-name>/g, '')
+    .replace(/<ide_opened_file>[\s\S]*?<\/ide_opened_file>/g, '')
+    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, '')
+    .replace(/<bash-input>([\s\S]*?)<\/bash-input>/g, '! $1')
+    .replace(/\n+/g, ' ')
+    .trim()
+}
+
+/**
+ * Extract the first meaningful user prompt from JSONL head text.
+ * Aligned with CLI's extractFirstPromptFromHead():
+ * - Parses lines as JSON, finds first type:"user" message
+ * - Skips tool_result, isMeta, isCompactSummary messages
+ * - Handles both string and array content
+ * - Truncates to 200 chars
+ */
+function extractFirstPromptFromHead(head: string): string {
+  const MAX_PROMPT_LEN = 200
+  let commandFallback = ''
+
+  for (const line of head.split('\n')) {
+    if (!line.trim()) continue
+    let obj: Record<string, unknown>
+    try {
+      obj = JSON.parse(line)
+    } catch {
+      continue
+    }
+
+    if (obj.type !== 'user') continue
+    if ((obj.message as Record<string, unknown> | undefined)?.role === 'tool_result') continue
+    if (obj.isMeta === true) continue
+    if (obj.isCompactSummary === true) continue
+
+    const text = extractMsgText(obj)
+    if (!text) continue
+
+    // Check for command-name tag → use as fallback
+    const cmdMatch = text.match(/<command-name>([\s\S]*?)<\/command-name>/)
+    if (cmdMatch && !commandFallback) {
+      commandFallback = cmdMatch[1].trim()
+    }
+
+    const stripped = stripDisplayTags(text)
+    if (!stripped) continue
+    if (SKIP_FIRST_PROMPT_PATTERN.test(stripped)) continue
+
+    return stripped.length > MAX_PROMPT_LEN
+      ? stripped.slice(0, MAX_PROMPT_LEN) + '\u2026'
+      : stripped
+  }
+
+  return commandFallback || ''
+}
+
 /** Extract plain text from a JSONL message object. */
 function extractMsgText(obj: Record<string, unknown>): string {
   const msg = obj.message as Record<string, unknown> | undefined
@@ -140,16 +202,20 @@ export class SessionStorage {
   }
 
   private parseSessionInfo(sessionId: string, head: string, tail: string, fileStat: { size: number; mtimeMs: number }, cwd?: string): SessionInfo | null {
-    if (head.includes('"isSidechain":true')) return null
+    if (head.includes('"isSidechain":true') || head.includes('"isSidechain": true')) return null
 
+    // Title priority aligned with CLI: customTitle > aiTitle > summary > firstPrompt > sessionId
     const customTitle = this.extractLastField(tail, 'customTitle') ?? this.extractLastField(head, 'customTitle')
     const aiTitle = this.extractLastField(tail, 'aiTitle') ?? this.extractLastField(head, 'aiTitle')
-    const firstPrompt = this.extractFirstField(head, 'content')
+    const sdkSummary = this.extractLastField(tail, 'summary')
+    // firstPrompt: try lastPrompt from tail first (CLI does this), then parse head line-by-line
+    const lastPrompt = this.extractLastField(tail, 'lastPrompt')
+    const firstPrompt = lastPrompt || extractFirstPromptFromHead(head) || this.extractFirstField(head, 'content') || ''
     const tag = this.extractLastField(tail, 'tag')
     const sessionCwd = this.extractFirstField(head, 'cwd') ?? cwd
     const timestamp = this.extractFirstField(head, 'timestamp')
 
-    const summary = customTitle ?? aiTitle ?? firstPrompt ?? ''
+    const summary = customTitle ?? aiTitle ?? sdkSummary ?? firstPrompt ?? ''
     if (!summary) return null
 
     return {
@@ -158,7 +224,7 @@ export class SessionStorage {
       lastModified: fileStat.mtimeMs,
       fileSize: fileStat.size,
       customTitle,
-      firstPrompt,
+      firstPrompt: firstPrompt || undefined,
       cwd: sessionCwd,
       tag,
       createdAt: timestamp ? new Date(timestamp).getTime() : undefined,

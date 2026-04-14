@@ -105,6 +105,9 @@ importers:
       '@claude-agent-ui/shared':
         specifier: workspace:*
         version: link:../shared
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.11.1
       react:
         specifier: ^19.0.0
         version: 19.2.4
