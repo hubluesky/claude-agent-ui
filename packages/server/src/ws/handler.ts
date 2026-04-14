@@ -88,7 +88,7 @@ export function createWsHandler(deps: HandlerDeps) {
         handleJoinSession(connectionId, msg.sessionId, msg.lastSeq)
         break
       case 'send-message':
-        await handleSendMessage(connectionId, msg.sessionId, msg.prompt, msg.options)
+        await handleSendMessage(connectionId, msg.sessionId, msg.prompt, msg.options, msg.sessionName)
         break
       case 'tool-approval-response':
         handleToolApprovalResponse(connectionId, msg.requestId, msg.decision)
@@ -270,11 +270,18 @@ export function createWsHandler(deps: HandlerDeps) {
     }
 
     let realSessionId = sessionId
+    let titleGenerated = false
 
     session.on('session-id-changed', (_oldId: string | null, newId: string) => {
       if (realSessionId.startsWith('pending-')) {
         // New session: register, acquire lock, join, broadcast deferred user message
         sessionManager.registerActive(newId, session)
+        // ── Named Session: set customTitle on newly created session ──
+        const pendingName = (session as any).__pendingSessionName as string | undefined
+        if (pendingName) {
+          sessionManager.sessionStorage.renameSession(newId, pendingName, session.projectCwd).catch(() => {})
+          delete (session as any).__pendingSessionName
+        }
         lockManager.acquire(newId, connectionId)
         wsHub.joinSession(connectionId, newId)
         wsHub.broadcast(newId, { type: 'lock-status', sessionId: newId, status: 'locked', holderId: connectionId })
@@ -341,6 +348,17 @@ export function createWsHandler(deps: HandlerDeps) {
 
       if (msg.type === 'assistant') {
         wsHub.clearStreamSnapshot(realSessionId)
+
+        // Trigger title generation on first assistant message (user+assistant >= 2 messages)
+        if (!titleGenerated && !realSessionId.startsWith('pending-')) {
+          titleGenerated = true
+          maybeGenerateTitle(realSessionId).then((title) => {
+            if (title) {
+              sessionManager.invalidateSessionsCache(session.projectCwd)
+              wsHub.broadcast(realSessionId, { type: 'session-title-updated', sessionId: realSessionId, title })
+            }
+          }).catch(() => {})
+        }
       }
 
       wsHub.broadcast(realSessionId, { type: 'agent-message', sessionId: realSessionId, message: msg })
@@ -452,9 +470,20 @@ export function createWsHandler(deps: HandlerDeps) {
     connectionId: string,
     sessionId: string | null,
     prompt: string,
-    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string }
+    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string },
+    sessionName?: string,
   ) {
     let effectiveSessionId = sessionId
+
+    // ── Named Session: resolve sessionName → sessionId via customTitle ──
+    if (!effectiveSessionId && sessionName && options?.cwd) {
+      const found = await sessionManager.sessionStorage.findByCustomTitle(options.cwd, sessionName)
+      if (found) {
+        effectiveSessionId = found.sessionId
+      }
+      // If not found, fall through to create a new session (existing logic below)
+    }
+
     let session: CliSession
 
     if (!effectiveSessionId) {
@@ -468,6 +497,10 @@ export function createWsHandler(deps: HandlerDeps) {
         thinking: options.thinkingMode,
         permissionMode: options.permissionMode as any,
       })
+      // Track sessionName for the pending session → will be set as customTitle after session-id-changed
+      if (sessionName) {
+        (session as any).__pendingSessionName = sessionName
+      }
       effectiveSessionId = `pending-${connectionId}`
     } else {
       const lockResult = lockManager.acquire(effectiveSessionId, connectionId)

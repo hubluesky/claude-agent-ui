@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
-import { fetchProjects, fetchSessions } from '../lib/api'
+import { fetchProjects, fetchSessions, findSessionByName, clearSessionTitle } from '../lib/api'
+import { useEmbedStore } from './embedStore'
 
 const CACHE_TTL_MS = 30_000 // 30 seconds
 
@@ -23,8 +24,10 @@ interface SessionActions {
   selectProject(cwd: string): void
   selectSession(sessionId: string, cwd: string): void
   setCurrentSessionId(id: string | null): void
+  startNewSession(): void
   renameSession(sessionId: string, title: string): Promise<void>
   setComposerDraft(text: string | null): void
+  initNamedSession(): Promise<void>
 }
 
 export const useSessionStore = create<SessionState & SessionActions>((set, get) => ({
@@ -117,7 +120,33 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
     set({ currentSessionId: id })
   },
 
+  startNewSession() {
+    const { sessionName } = useEmbedStore.getState()
+    const currentId = get().currentSessionId
+    // If there's an active named session, clear its title so the new session can claim it
+    if (sessionName && currentId && currentId !== '__new__') {
+      clearSessionTitle(currentId).catch(() => {})
+    }
+    set({ currentSessionId: '__new__' })
+  },
+
   setComposerDraft(text: string | null) {
     set({ composerDraft: text })
+  },
+
+  async initNamedSession() {
+    const { sessionName, embedCwd } = useEmbedStore.getState()
+    if (!sessionName) return
+
+    // Determine cwd: embedCwd for embed mode, or current project cwd
+    const cwd = embedCwd ?? get().currentProjectCwd
+    if (!cwd) return
+
+    const session = await findSessionByName(cwd, sessionName)
+    if (session) {
+      // Found existing named session — select it
+      set({ currentSessionId: session.sessionId, currentProjectCwd: cwd })
+    }
+    // If not found, do nothing — session will be created when user sends first message
   },
 }))

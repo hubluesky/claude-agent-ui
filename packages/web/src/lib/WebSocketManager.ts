@@ -116,9 +116,11 @@ class WebSocketManager {
       thinkingMode?: 'adaptive' | 'enabled' | 'disabled'
       effort?: 'low' | 'medium' | 'high' | 'max'
       permissionMode?: string
+      sessionName?: string
     }
   ) {
-    this.send({ type: 'send-message', sessionId, prompt, options: options as any })
+    const { sessionName, ...sendOptions } = options ?? {}
+    this.send({ type: 'send-message', sessionId, prompt, sessionName, options: sendOptions as any })
   }
 
   respondToolApproval(requestId: string, decision: ToolApprovalDecision) {

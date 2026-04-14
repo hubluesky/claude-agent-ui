@@ -25,6 +25,7 @@ export function App() {
 
   useEffect(() => {
     useEmbedStore.getState().initFromUrl()
+    useSessionStore.getState().initNamedSession()
     useCommandStore.getState().load()
   }, [])
 

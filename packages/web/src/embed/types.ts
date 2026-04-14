@@ -13,6 +13,8 @@ export interface EmbedOptions {
   maxWidth?: number
   /** localStorage key prefix. Default: 'claude-embed' */
   storageKey?: string
+  /** Named session: always resume this session by name */
+  sessionName?: string
 }
 
 export interface ClaudeEmbedAPI {

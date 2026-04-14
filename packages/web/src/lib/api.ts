@@ -19,6 +19,17 @@ export async function fetchSessions(
   return await res.json()
 }
 
+export async function findSessionByName(
+  cwd: string,
+  name: string,
+): Promise<SessionSummary | null> {
+  const params = new URLSearchParams({ cwd, name })
+  const res = await fetch(`${BASE}/api/sessions/by-name?${params}`)
+  if (res.status === 404) return null
+  if (!res.ok) return null
+  return await res.json()
+}
+
 export async function fetchSessionMessages(
   sessionId: string,
   options?: { limit?: number; offset?: number }
@@ -46,6 +57,14 @@ export interface BrowseDirectoryResult {
   currentPath: string
   parentPath: string | null
   dirs: { name: string; path: string }[]
+}
+
+export async function clearSessionTitle(sessionId: string): Promise<void> {
+  await fetch(`${BASE}/api/sessions/${sessionId}/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: '' }),
+  })
 }
 
 export async function browseDirectory(path?: string): Promise<BrowseDirectoryResult> {

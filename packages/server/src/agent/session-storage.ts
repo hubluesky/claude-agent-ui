@@ -342,6 +342,12 @@ export class SessionStorage {
           if (['custom-title', 'ai-title', 'tag', 'task-summary', 'pr-link', 'agent-name'].includes(obj.type as string)) continue
           // Filter SDK resume artifacts (e.g. "Continue from where you left off." / "No response requested.")
           if (isSDKResumeArtifact(obj)) continue
+          // Filter ephemeral system status messages that are only meaningful during live streaming
+          if (obj.type === 'system') {
+            const sub = obj.subtype as string
+            if (sub === 'api_retry') continue
+            if (sub === 'status' && (obj as any).status === 'compacting') continue
+          }
           messages.push(obj)
         } catch { continue }
       }
@@ -392,6 +398,26 @@ export class SessionStorage {
 
     const entry = JSON.stringify({ type: 'tag', tag, sessionId }) + '\n'
     await appendFile(filePath, entry, { mode: 0o600 })
+  }
+
+  /**
+   * Find a session by customTitle within a specific project directory.
+   * If multiple sessions share the same customTitle, returns the most recently modified one.
+   */
+  async findByCustomTitle(cwd: string, name: string): Promise<SessionInfo | null> {
+    const sessions = await this.listSessions(cwd)
+    const matches = sessions.filter(s => s.customTitle === name)
+    if (matches.length === 0) return null
+    // Already sorted by lastModified desc from listSessions
+    return matches[0]!
+  }
+
+  /**
+   * Clear the customTitle of a session (used during clear/transfer).
+   * Writes a custom-title entry with empty string to the JSONL file.
+   */
+  async clearCustomTitle(sessionId: string, dir?: string): Promise<void> {
+    await this.renameSession(sessionId, '', dir)
   }
 
   /**

@@ -71,6 +71,13 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   useLayoutEffect(() => {
     const el = textareaRef.current
     if (!el) return
+    if (!text && !images.length) {
+      // Empty content: remove forced height, let native rows={1} control height.
+      // Forcing pixel height on mount can fail in webviews where scrollHeight
+      // isn't ready yet (e.g. Cocos), causing the textarea to collapse.
+      el.style.height = ''
+      return
+    }
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [text, images])
@@ -255,7 +262,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
           useSessionContainerStore.getState().clearMessages(sid)
         }
         // Navigate to new session (like CLI behavior)
-        useSessionStore.getState().setCurrentSessionId('__new__')
+        useSessionStore.getState().startNewSession()
       }
       // Remove the /query portion from text
       if (slashCursorStart !== null) {
@@ -268,26 +275,33 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
         setText('')
       }
     } else {
-      // For agent commands: fill command into input, don't send yet.
+      // For agent commands: replace only the slash token in-place, preserving surrounding text.
       // User may want to add arguments after the command name.
-      let remaining = ''
       if (slashCursorStart !== null) {
         const cursorPos = textareaRef.current?.selectionStart ?? text.length
-        const before = text.slice(0, slashCursorStart).trim()
-        const after = text.slice(cursorPos).trim()
-        remaining = [before, after].filter(Boolean).join(' ')
+        const before = text.slice(0, slashCursorStart)
+        const after = text.slice(cursorPos)
+        const newText = before + '/' + cmd.name + ' ' + after
+        const newCursorPos = slashCursorStart + 1 + cmd.name.length + 1
+        setText(newText)
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            textareaRef.current.selectionStart = newCursorPos
+            textareaRef.current.selectionEnd = newCursorPos
+            textareaRef.current.focus()
+          }
+        })
+      } else {
+        const filled = `/${cmd.name} `
+        setText(filled)
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            textareaRef.current.selectionStart = filled.length
+            textareaRef.current.selectionEnd = filled.length
+            textareaRef.current.focus()
+          }
+        })
       }
-      const filled = remaining ? `/${cmd.name} ${remaining}` : `/${cmd.name} `
-      setText(filled)
-      // Move cursor to end so user can continue typing
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          const pos = filled.length
-          textareaRef.current.selectionStart = pos
-          textareaRef.current.selectionEnd = pos
-          textareaRef.current.focus()
-        }
-      })
     }
     setSelectedIndex(0)
     setSlashCursorStart(null)
@@ -389,8 +403,37 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
     if (showPopup) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex((prev) => (prev + 1) % filteredCommands.length); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length); return }
-      if (e.key === 'Escape') { e.preventDefault(); setText(''); setSelectedIndex(0); return }
-      if (e.key === 'Tab') { e.preventDefault(); setText('/' + filteredCommands[selectedIndex].name); setSelectedIndex(0); return }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        // Just close the popup, don't clear text
+        setSlashCursorStart(null)
+        setSlashQueryText(null)
+        setSelectedIndex(0)
+        return
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        // Replace only the slash token at cursor, preserving surrounding text
+        const cmd = filteredCommands[selectedIndex]
+        if (slashCursorStart !== null) {
+          const cursorPos = textareaRef.current?.selectionStart ?? text.length
+          const before = text.slice(0, slashCursorStart)
+          const after = text.slice(cursorPos)
+          const newText = before + '/' + cmd.name + ' ' + after
+          const newCursorPos = slashCursorStart + 1 + cmd.name.length + 1
+          setText(newText)
+          setSelectedIndex(0)
+          setSlashCursorStart(null)
+          setSlashQueryText(null)
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = newCursorPos
+              textareaRef.current.selectionEnd = newCursorPos
+            }
+          })
+        }
+        return
+      }
     }
     if (showFilePopup) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setFileSelectedIndex((prev) => (prev + 1) % fileResults.length); return }

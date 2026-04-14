@@ -19,7 +19,7 @@ export function useKeyboardShortcuts() {
         key: 'n', ctrl: true,
         label: '新建会话',
         action: () => {
-          useSessionStore.getState().setCurrentSessionId('__new__')
+          useSessionStore.getState().startNewSession()
         },
       },
       {

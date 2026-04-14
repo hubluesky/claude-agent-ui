@@ -6,6 +6,7 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { wsManager } from '../lib/WebSocketManager'
 import { fetchSessionMessages } from '../lib/api'
+import { useEmbedStore } from '../stores/embedStore'
 import type { AgentMessage } from '@claude-agent-ui/shared'
 
 interface ChatSessionProviderProps {
@@ -134,10 +135,12 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
         if (sessionId && sessionId !== '__new__') {
           useSessionContainerStore.getState().setSessionStatus(sessionId, 'running')
         }
+        const { sessionName } = useEmbedStore.getState()
         wsManager.sendMessage(prompt, isNew ? null : sessionId, {
           cwd: currentProjectCwd ?? undefined,
           thinkingMode,
           effort,
+          ...(isNew && sessionName ? { sessionName } : {}),
           ...options,
         })
       },

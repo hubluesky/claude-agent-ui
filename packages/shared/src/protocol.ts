@@ -16,6 +16,7 @@ export interface C2S_SendMessage {
   type: 'send-message'
   sessionId: string | null
   prompt: string
+  sessionName?: string
   options?: {
     cwd?: string
     images?: { data: string; mediaType: string }[]

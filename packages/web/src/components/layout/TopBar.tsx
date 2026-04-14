@@ -50,9 +50,9 @@ export function TopBar() {
 
   const handleNewSession = useCallback(() => {
     if (currentProjectCwd) {
-      selectSession('__new__', currentProjectCwd)
+      useSessionStore.getState().startNewSession()
     }
-  }, [currentProjectCwd, selectSession])
+  }, [currentProjectCwd])
 
   const handleSelectHistory = useCallback((sessionId: string) => {
     if (currentProjectCwd) {

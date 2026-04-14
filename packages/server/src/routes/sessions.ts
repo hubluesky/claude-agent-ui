@@ -185,5 +185,25 @@ export function sessionRoutes(sessionManager: SessionManager) {
         return { status: 'ok' }
       }
     )
+
+    // GET /api/sessions/by-name?cwd=<cwd>&name=<name>
+    app.get<{
+      Querystring: { cwd: string; name: string }
+    }>('/api/sessions/by-name', async (request, reply) => {
+      const { cwd, name } = request.query
+      if (!cwd || !name) {
+        reply.status(400)
+        return { error: 'cwd and name are required' }
+      }
+      const session = await sessionManager.sessionStorage.findByCustomTitle(
+        decodeURIComponent(cwd),
+        decodeURIComponent(name),
+      )
+      if (!session) {
+        reply.status(404)
+        return { error: 'No session found with that name' }
+      }
+      return session
+    })
   }
 }

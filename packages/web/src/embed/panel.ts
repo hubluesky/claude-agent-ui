@@ -14,7 +14,7 @@ interface PanelConfig {
 }
 
 export class EmbedPanel {
-  private opts: Required<Omit<EmbedOptions, 'container'>> & { container: HTMLElement }
+  private opts: Required<Omit<EmbedOptions, 'container' | 'sessionName'>> & { container: HTMLElement; sessionName?: string }
   private root: HTMLDivElement | null = null
   private panel: HTMLDivElement | null = null
   private iframe: HTMLIFrameElement | null = null
@@ -43,6 +43,7 @@ export class EmbedPanel {
       minWidth: options.minWidth ?? 200,
       maxWidth: options.maxWidth ?? Math.floor(window.innerWidth / 2),
       storageKey: options.storageKey ?? 'claude-embed',
+      sessionName: options.sessionName,
     }
     this.storageFullKey = `${this.opts.storageKey}:${hashStr(this.opts.cwd)}`
 
@@ -69,8 +70,10 @@ export class EmbedPanel {
     // Iframe
     this.iframe = document.createElement('iframe')
     this.iframe.allow = 'clipboard-read; clipboard-write'
-    this.iframe.src =
-      `${this.opts.serverUrl}?embed=true&cwd=${encodeURIComponent(this.opts.cwd)}`
+    const iframeUrl = `${this.opts.serverUrl}?embed=true&cwd=${encodeURIComponent(this.opts.cwd)}`
+    this.iframe.src = this.opts.sessionName
+      ? `${iframeUrl}&sessionName=${encodeURIComponent(this.opts.sessionName)}`
+      : iframeUrl
 
     // Hide panel until iframe loads to avoid white flash
     this.root.style.display = 'none'
