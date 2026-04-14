@@ -11,6 +11,7 @@
 import { useState, memo } from 'react'
 import { useChatSession } from '../../../providers/ChatSessionContext'
 import { MarkdownRenderer } from '../MarkdownRenderer'
+import { formatDuration, formatNumber } from '../../../lib/format'
 import type { MessageLookups, AgentToolStats, AgentProgressEntry } from '../../../utils/messageLookups'
 
 interface Props {
@@ -19,22 +20,6 @@ interface Props {
 }
 
 const MAX_PROGRESS_TO_SHOW = 3
-
-/** Format number with K/M suffix */
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return String(n)
-}
-
-/** Format duration ms → "Xs" or "Xm Ys" */
-function formatDuration(ms: number): string {
-  const s = ms / 1000
-  if (s < 60) return `${s.toFixed(1)}s`
-  const m = Math.floor(s / 60)
-  const rs = Math.round(s % 60)
-  return `${m}m ${rs}s`
-}
 
 export const AgentToolBlock = memo(function AgentToolBlock({ block, lookups }: Props) {
   const { id: toolUseId, input } = block
@@ -56,7 +41,7 @@ export const AgentToolBlock = memo(function AgentToolBlock({ block, lookups }: P
     completionParts.push(`${stats.totalToolUseCount} tool ${stats.totalToolUseCount === 1 ? 'use' : 'uses'}`)
   }
   if (stats?.totalTokens != null) {
-    completionParts.push(`${formatTokens(stats.totalTokens)} tokens`)
+    completionParts.push(`${formatNumber(stats.totalTokens)} tokens`)
   }
   if (stats?.totalDurationMs != null) {
     completionParts.push(formatDuration(stats.totalDurationMs))
@@ -64,8 +49,9 @@ export const AgentToolBlock = memo(function AgentToolBlock({ block, lookups }: P
   const completionSummary = completionParts.length > 0 ? `Done (${completionParts.join(' · ')})` : 'Done'
 
   // Last N progress entries for inline display
-  const recentProgress = progressEntries?.filter((e: AgentProgressEntry) => e.lastToolName || e.description).slice(-MAX_PROGRESS_TO_SHOW) ?? []
-  const hiddenCount = (progressEntries?.filter((e: AgentProgressEntry) => e.lastToolName || e.description).length ?? 0) - recentProgress.length
+  const filteredProgress = progressEntries?.filter((e: AgentProgressEntry) => e.lastToolName || e.description) ?? []
+  const recentProgress = filteredProgress.slice(-MAX_PROGRESS_TO_SHOW)
+  const hiddenCount = filteredProgress.length - recentProgress.length
 
   return (
     <div className="border border-[var(--border)] rounded-md overflow-hidden">
@@ -142,25 +128,14 @@ function AgentTranscript({ stats }: { stats?: AgentToolStats }) {
   const { getSubagentMessages, subagentMessages, sessionId } = useChatSession()
   const agentId = stats?.agentId
 
-  // Fetch messages on first render
+  const messages = agentId ? subagentMessages.get(agentId) ?? null : null
+
+  // Fetch on first expand, skip if already in store
   const [fetched, setFetched] = useState(false)
-  if (!fetched && agentId && sessionId && sessionId !== '__new__') {
+  if (!fetched && !messages && agentId && sessionId && sessionId !== '__new__') {
     setFetched(true)
     getSubagentMessages(agentId)
   }
-
-  // Current type is { agentId: string; messages: any[] } | null
-  // Will become Map<string, any[]> in Task 7. Handle both shapes.
-  const messages: any[] | null = (() => {
-    if (!subagentMessages || !agentId) return null
-    // Future Map shape
-    if (subagentMessages instanceof Map) {
-      return (subagentMessages as Map<string, any[]>).get(agentId) ?? null
-    }
-    // Current object shape: { agentId: string; messages: any[] }
-    const obj = subagentMessages as { agentId: string; messages: any[] }
-    return obj.agentId === agentId ? obj.messages : null
-  })()
 
   return (
     <div className="border-t border-[var(--border)] bg-[var(--bg-tertiary)] max-h-[400px] overflow-y-auto">
