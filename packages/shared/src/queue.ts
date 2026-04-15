@@ -44,15 +44,6 @@ export interface QueuedCommand {
     effort?: string
     permissionMode?: string
   }
-  /**
-   * Whether this command has been forwarded to the CLI process for mid-query injection.
-   * Forwarded commands should NOT be re-sent on session complete (CLI already has them).
-   * On abort, forwarded commands are NOT returned to the composer — they remain in
-   * the CLI's internal queue and will be processed in the next turn.
-   *
-   * @see Claude Code query.ts:1573-1593 getCommandsByMaxPriority() mid-query attachment
-   */
-  forwarded?: boolean
 }
 
 // ── Wire type for S2C queue-updated (subset — no connectionId/options) ──

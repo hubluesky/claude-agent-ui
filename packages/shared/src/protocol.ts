@@ -43,6 +43,11 @@ export interface C2S_Abort {
   sessionId: string
 }
 
+export interface C2S_PopQueue {
+  type: 'pop-queue'
+  sessionId: string
+}
+
 export interface C2S_SetMode {
   type: 'set-mode'
   sessionId: string
@@ -196,6 +201,12 @@ export interface S2C_SessionAborted {
   sessionId: string
   /** Only editable commands are popped back; system commands stay in queue */
   queuedCommands?: QueueItemWire[]
+}
+
+export interface S2C_QueuePopped {
+  type: 'queue-popped'
+  sessionId: string
+  commands: QueueItemWire[]
 }
 
 export interface S2C_QueueUpdated {
@@ -401,6 +412,7 @@ export type C2SMessage =
   | C2S_ToggleMcpServer
   | C2S_ReconnectMcpServer
   | C2S_GetSubagentMessages
+  | C2S_PopQueue
   | C2S_Pong
 
 export type S2CMessage =
@@ -430,4 +442,5 @@ export type S2CMessage =
   | S2C_SessionTitleUpdated
   | S2C_SyncResult
   | S2C_QueueUpdated
+  | S2C_QueuePopped
   | S2C_Error
