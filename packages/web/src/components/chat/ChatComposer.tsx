@@ -651,7 +651,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                     onPressEnd={handleVoicePressEnd}
                     voiceState={voiceState}
                     disabled={inputDisabled}
-                    audioLevel={audioLevels.length > 0 ? Math.max(...audioLevels) : 0}
+                    audioLevels={audioLevels}
                   />
                 </div>
               )}

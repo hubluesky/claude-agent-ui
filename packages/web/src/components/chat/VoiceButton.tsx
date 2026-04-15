@@ -5,7 +5,7 @@ interface VoiceButtonProps {
   onPressEnd: () => void
   voiceState: VoiceState
   disabled?: boolean
-  audioLevel?: number // 0~1, controls glow intensity during recording
+  audioLevels?: number[] // 0~1 array for waveform bars
 }
 
 const MicIcon = () => (
@@ -16,7 +16,30 @@ const MicIcon = () => (
   </svg>
 )
 
-export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled, audioLevel = 0 }: VoiceButtonProps) {
+/** 5 tiny vertical bars sampled from audioLevels */
+function MiniWaveform({ levels }: { levels: number[] }) {
+  // Sample 5 bars evenly from the full levels array
+  const barCount = 5
+  const step = Math.max(1, Math.floor(levels.length / barCount))
+  const bars: number[] = []
+  for (let i = 0; i < barCount; i++) {
+    bars.push(levels[Math.min(i * step, levels.length - 1)] || 0)
+  }
+
+  return (
+    <div className="flex items-center gap-[1px] h-4">
+      {bars.map((level, i) => (
+        <div
+          key={i}
+          className="w-[2px] rounded-full bg-white/80 transition-[height] duration-75"
+          style={{ height: `${Math.max(3, level * 16)}px` }}
+        />
+      ))}
+    </div>
+  )
+}
+
+export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled, audioLevels = [] }: VoiceButtonProps) {
   const isRecording = voiceState === 'recording'
   const isProcessing = voiceState === 'processing'
   const isActive = isRecording || isProcessing
@@ -34,32 +57,34 @@ export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled, au
     onPressEnd()
   }
 
-  // Dynamic glow based on audio level during recording
-  const glowSize = isRecording ? 4 + audioLevel * 12 : 0
-  const glowStyle = isRecording
-    ? { boxShadow: `0 0 ${glowSize}px rgba(239, 68, 68, ${0.3 + audioLevel * 0.4})` }
-    : undefined
+  const peakLevel = audioLevels.length > 0 ? Math.max(...audioLevels) : 0
+  const glowSize = isRecording ? 4 + peakLevel * 10 : 0
 
   return (
-    <button
-      type="button"
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      disabled={disabled}
-      style={glowStyle}
-      className={`w-7 h-7 flex items-center justify-center rounded-md shrink-0 transition-all select-none touch-none ${
-        isRecording
-          ? 'bg-[var(--error)] text-white'
-          : isProcessing
-            ? 'bg-[var(--accent)] text-white animate-pulse'
-            : disabled
-              ? 'text-[var(--text-muted)] opacity-40 cursor-default'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] cursor-pointer'
-      }`}
-      title={isRecording ? '松开停止录音' : isProcessing ? '正在处理...' : '按住说话'}
-    >
-      <MicIcon />
-    </button>
+    <div className="flex items-center gap-1">
+      {/* Mini waveform — only visible during recording */}
+      {isRecording && <MiniWaveform levels={audioLevels} />}
+
+      <button
+        type="button"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        disabled={disabled}
+        style={isRecording ? { boxShadow: `0 0 ${glowSize}px rgba(239,68,68,${0.3 + peakLevel * 0.4})` } : undefined}
+        className={`w-7 h-7 flex items-center justify-center rounded-md shrink-0 transition-all select-none touch-none ${
+          isRecording
+            ? 'bg-[var(--error)] text-white'
+            : isProcessing
+              ? 'bg-[var(--accent)] text-white animate-pulse'
+              : disabled
+                ? 'text-[var(--text-muted)] opacity-40 cursor-default'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] cursor-pointer'
+        }`}
+        title={isRecording ? '松开停止录音' : isProcessing ? '正在处理...' : '按住说话'}
+      >
+        <MicIcon />
+      </button>
+    </div>
   )
 }
