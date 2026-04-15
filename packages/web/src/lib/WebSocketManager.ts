@@ -158,6 +158,10 @@ class WebSocketManager {
     this.send({ type: 'abort', sessionId })
   }
 
+  popQueue(sessionId: string) {
+    this.send({ type: 'pop-queue', sessionId } as any)
+  }
+
   releaseLock(sessionId: string) {
     this.send({ type: 'release-lock', sessionId })
   }
@@ -589,6 +593,9 @@ class WebSocketManager {
       case 'queue-updated':
         this.handleQueueUpdated(msg)
         break
+      case 'queue-popped':
+        this.handleQueuePopped(msg)
+        break
       case 'ping':
         this.handlePing()
         break
@@ -986,14 +993,6 @@ class WebSocketManager {
     s.setQueue(sessionId, [])
     s.clearStreaming(sessionId)
     this.currentToolBlockIndex.delete(sessionId)
-    // Pop editable commands back to composer — only for lock holder (not readonly observers)
-    // Mirrors Claude Code messageQueueManager.ts popAllEditable()
-    const queuedCommands = (msg as any).queuedCommands as any[] | undefined
-    const container = s.containers.get(sessionId)
-    const amLockHolder = container?.lockStatus === 'locked_self'
-    if (queuedCommands && queuedCommands.length > 0 && amLockHolder) {
-      s.setPopBackCommands(sessionId, queuedCommands)
-    }
     // Refresh session list
     const sessStore = useSessionStore.getState()
     if (sessStore.currentProjectCwd) {
@@ -1119,6 +1118,12 @@ class WebSocketManager {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
     store().setQueue(sessionId, msg.queue ?? [])
+  }
+
+  private handleQueuePopped(msg: any) {
+    const sessionId = msg.sessionId as string | undefined
+    if (!sessionId) return
+    store().setPoppedCommands(sessionId, msg.commands ?? [])
   }
 
   private handleSyncResult(msg: any) {

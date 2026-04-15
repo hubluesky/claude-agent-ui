@@ -85,7 +85,7 @@ export interface SessionContainer {
   mcpServers: McpServerInfo[]
   subagentMessages: Map<string, any[]>
   queue: QueueItemWire[]
-  popBackCommands: QueueItemWire[] | null
+  poppedCommands: QueueItemWire[] | null
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
@@ -162,7 +162,7 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     mcpServers: [],
     subagentMessages: new Map(),
     queue: [],
-    popBackCommands: null,
+    poppedCommands: null,
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
@@ -231,7 +231,7 @@ interface SessionContainerActions {
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
   setSubagentMessages(sessionId: string, data: { agentId: string; messages: any[] }): void
   setQueue(sessionId: string, queue: QueueItemWire[]): void
-  setPopBackCommands(sessionId: string, commands: QueueItemWire[] | null): void
+  setPoppedCommands(sessionId: string, commands: QueueItemWire[] | null): void
   setSubscribed(sessionId: string, subscribed: boolean): void
   setLastSeq(sessionId: string, seq: number): void
   setNeedsFullSync(sessionId: string, needs: boolean): void
@@ -532,12 +532,12 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
-  setPopBackCommands(sessionId, commands) {
+  setPoppedCommands(sessionId, commands) {
     const { containers } = get()
     const c = containers.get(sessionId)
     if (!c) return
     const next = new Map(containers)
-    next.set(sessionId, { ...c, popBackCommands: commands })
+    next.set(sessionId, { ...c, poppedCommands: commands })
     set({ containers: next })
   },
 
