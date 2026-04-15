@@ -18,7 +18,6 @@ import type { LocalSlashCommand } from '../../stores/commandStore'
 import { useVoiceInput } from '../../hooks/useVoiceInput'
 import { useVoiceWaveform } from '../../hooks/useVoiceWaveform'
 import { VoiceButton } from './VoiceButton'
-import { VoiceOverlay } from './VoiceOverlay'
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5MB
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
@@ -153,31 +152,36 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const inputDisabled = isLocked
 
   // --- Voice input ---
-  const insertAtCursor = useCallback((voiceText: string) => {
-    const ta = textareaRef.current
-    if (!ta) {
-      setText((prev) => prev + voiceText)
-      return
-    }
-    const start = ta.selectionStart ?? ta.value.length
-    const end = ta.selectionEnd ?? ta.value.length
-    const before = ta.value.slice(0, start)
-    const after = ta.value.slice(end)
-    const newText = before + voiceText + after
-    setText(newText)
-    const newCursorPos = start + voiceText.length
-    requestAnimationFrame(() => {
-      ta.selectionStart = newCursorPos
-      ta.selectionEnd = newCursorPos
-      ta.focus()
-    })
-  }, [])
+  // Track text state before voice recording started, so we can splice voice text in
+  const voiceBaseTextRef = useRef('')
+  const voiceInsertPosRef = useRef(0)
 
   const { voiceState, interimText, accumulatedText: voiceAccumulatedText, error: voiceError, isSupported: isVoiceSupported, start: voiceStart, stop: voiceStop, cancel: voiceCancel } = useVoiceInput({
     lang: navigator.language,
-    onTranscript: insertAtCursor,
+    onTranscript: () => {}, // We handle text insertion via useEffect below
   })
   const { audioLevels, startCapture, stopCapture } = useVoiceWaveform()
+
+  // When recording starts, snapshot current text and cursor position
+  useEffect(() => {
+    if (voiceState === 'recording') {
+      const ta = textareaRef.current
+      voiceBaseTextRef.current = text
+      voiceInsertPosRef.current = ta?.selectionStart ?? text.length
+    }
+  }, [voiceState === 'recording']) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live-update textarea with interim + accumulated voice text
+  useEffect(() => {
+    if (voiceState === 'idle') return
+    const base = voiceBaseTextRef.current
+    const pos = voiceInsertPosRef.current
+    const voiceText = voiceAccumulatedText + interimText
+    const before = base.slice(0, pos)
+    const after = base.slice(pos)
+    const newText = before + voiceText + after
+    setText(newText)
+  }, [voiceState, voiceAccumulatedText, interimText])
 
   const handleVoicePressStart = useCallback(() => {
     // SpeechRecognition handles its own mic permission — start it directly.
@@ -617,7 +621,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
               <span className="text-[var(--error)]">Session locked by another client</span>
             </div>
           ) : (
-            <div className="relative flex items-end">
+            <div className="flex items-end">
               <textarea
                 ref={textareaRef}
                 data-composer=""
@@ -627,7 +631,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                 onPaste={handlePaste}
                 placeholder={
                   voiceState === 'recording'
-                    ? (voiceAccumulatedText + interimText) || '正在聆听...'
+                    ? '正在聆听...'
                     : voiceState === 'processing'
                       ? '正在处理...'
                       : 'Ask Claude anything...'
@@ -640,10 +644,6 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                 }`}
                 style={{ maxHeight: '200px' }}
               />
-              <VoiceOverlay
-                voiceState={voiceState}
-                audioLevels={audioLevels}
-              />
               {isVoiceSupported && (
                 <div className="pr-2 pb-2">
                   <VoiceButton
@@ -651,6 +651,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                     onPressEnd={handleVoicePressEnd}
                     voiceState={voiceState}
                     disabled={inputDisabled}
+                    audioLevel={audioLevels.length > 0 ? Math.max(...audioLevels) : 0}
                   />
                 </div>
               )}

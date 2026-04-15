@@ -5,6 +5,7 @@ interface VoiceButtonProps {
   onPressEnd: () => void
   voiceState: VoiceState
   disabled?: boolean
+  audioLevel?: number // 0~1, controls glow intensity during recording
 }
 
 const MicIcon = () => (
@@ -15,7 +16,7 @@ const MicIcon = () => (
   </svg>
 )
 
-export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled }: VoiceButtonProps) {
+export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled, audioLevel = 0 }: VoiceButtonProps) {
   const isRecording = voiceState === 'recording'
   const isProcessing = voiceState === 'processing'
   const isActive = isRecording || isProcessing
@@ -33,6 +34,12 @@ export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled }: 
     onPressEnd()
   }
 
+  // Dynamic glow based on audio level during recording
+  const glowSize = isRecording ? 4 + audioLevel * 12 : 0
+  const glowStyle = isRecording
+    ? { boxShadow: `0 0 ${glowSize}px rgba(239, 68, 68, ${0.3 + audioLevel * 0.4})` }
+    : undefined
+
   return (
     <button
       type="button"
@@ -40,9 +47,10 @@ export function VoiceButton({ onPressStart, onPressEnd, voiceState, disabled }: 
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       disabled={disabled}
+      style={glowStyle}
       className={`w-7 h-7 flex items-center justify-center rounded-md shrink-0 transition-all select-none touch-none ${
         isRecording
-          ? 'bg-[var(--error)] text-white shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse'
+          ? 'bg-[var(--error)] text-white'
           : isProcessing
             ? 'bg-[var(--accent)] text-white animate-pulse'
             : disabled
