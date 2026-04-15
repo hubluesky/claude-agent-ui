@@ -105,6 +105,7 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
     const contextUsage = container?.contextUsage ?? null
     const mcpServers = container?.mcpServers ?? []
     const subagentMessages = container?.subagentMessages ?? new Map<string, any[]>()
+    const queue = container?.queue ?? []
 
     return {
       sessionId,
@@ -127,6 +128,7 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
       contextUsage,
       mcpServers,
       subagentMessages,
+      queue,
 
       send(prompt, options) {
         const isNew = sessionId === '__new__' || !sessionId
@@ -159,6 +161,10 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
 
       abort() {
         if (sessionId && sessionId !== '__new__') wsManager.abort(sessionId)
+      },
+
+      popQueue() {
+        if (sessionId && sessionId !== '__new__') wsManager.popQueue(sessionId)
       },
 
       releaseLock() {

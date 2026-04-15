@@ -11,6 +11,7 @@ import type {
   PlanApprovalDecisionType,
   ContextUsageCategory,
   McpServerStatusInfo,
+  QueueItemWire,
 } from '@claude-agent-ui/shared'
 
 export interface ResolvedPlanState {
@@ -64,6 +65,7 @@ export interface ChatSessionContextValue {
   contextUsage: ContextUsage | null
   mcpServers: McpServerStatusInfo[]
   subagentMessages: Map<string, any[]>
+  queue: QueueItemWire[]
 
   // Actions
   send(prompt: string, options?: SendOptions): void
@@ -71,6 +73,7 @@ export interface ChatSessionContextValue {
   respondAskUser(requestId: string, answers: Record<string, string>): void
   respondPlanApproval(requestId: string, decision: PlanApprovalDecisionType, feedback?: string): void
   abort(): void
+  popQueue(): void
   releaseLock(): void
   setPlanModalOpen(open: boolean): void
   getContextUsage(): void

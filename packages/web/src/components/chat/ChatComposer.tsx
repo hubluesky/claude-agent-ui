@@ -117,21 +117,20 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
 
-  const popBackCommands = useSessionContainerStore(
-    (state) => sessionId ? state.containers.get(sessionId)?.popBackCommands ?? null : null
+  const poppedCommands = useSessionContainerStore(
+    (state) => sessionId ? state.containers.get(sessionId)?.poppedCommands ?? null : null
   )
 
-  // Consume popBackCommands: merge editable command values into textarea when abort pops queue
-  // Mirrors Claude Code messageQueueManager.ts popAllEditable() → restore to input
+  // Consume poppedCommands: merge editable command values into textarea
+  // Mirrors Claude Code messageQueueManager.ts popAllEditable() → [...queuedTexts, currentInput].join('\n')
   useEffect(() => {
-    if (!popBackCommands || popBackCommands.length === 0 || !sessionId) return
-    const queuedText = popBackCommands.map(cmd => cmd.value).join('\n')
+    if (!poppedCommands || poppedCommands.length === 0 || !sessionId) return
+    const poppedTexts = poppedCommands.map(cmd => cmd.value)
     setText(prev => {
-      const combined = prev ? [queuedText, prev].join('\n') : queuedText
-      return combined
+      return [...poppedTexts, prev].filter(Boolean).join('\n')
     })
-    useSessionContainerStore.getState().setPopBackCommands(sessionId, null)
-  }, [popBackCommands, sessionId])
+    useSessionContainerStore.getState().setPoppedCommands(sessionId, null)
+  }, [poppedCommands, sessionId])
 
   // Consume composerDraft from store
   const composerDraft = useSessionStore((s) => s.composerDraft)

@@ -154,7 +154,7 @@ export function ChatInterface({
   }, [ctx.pendingAskUser, ctx.pendingApproval, ctx.pendingPlanApproval,
       ctx.respondToolApproval, ctx.respondAskUser, ctx.respondPlanApproval])
 
-  // Esc handler: abort running AI session (like Claude Code CLI Esc)
+  // Esc handler: pop queue first, abort second (mirrors Claude Code PromptInput.tsx + useCancelRequest.ts)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -163,6 +163,16 @@ export function ChatInterface({
       // Allow ESC from textarea (composer) but not from other inputs (search box etc.)
       const tag = (document.activeElement as HTMLElement)?.tagName
       if (tag === 'INPUT') return
+
+      // Phase 1: pop editable commands from queue (mirrors Claude Code popAllCommandsFromQueue)
+      const hasEditable = ctx.queue.some(item => item.editable)
+      if (hasEditable) {
+        e.preventDefault()
+        ctx.popQueue()
+        return
+      }
+
+      // Phase 2: abort running session (no queue items to pop)
       if (ctx.sessionStatus === 'running') {
         e.preventDefault()
         ctx.abort()
