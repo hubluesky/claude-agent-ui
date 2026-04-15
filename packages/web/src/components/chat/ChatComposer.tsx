@@ -181,11 +181,11 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
 
   const handleVoicePressStart = useCallback(async () => {
     // Must get mic permission (getUserMedia) BEFORE starting SpeechRecognition
-    const granted = await startCapture()
-    if (granted) {
+    const result = await startCapture()
+    if (result.ok) {
       voiceStart()
     } else {
-      useToastStore.getState().add('请在浏览器设置中允许麦克风权限', 'error')
+      useToastStore.getState().add(result.reason, 'error')
     }
   }, [voiceStart, startCapture])
 

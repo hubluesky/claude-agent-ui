@@ -7,7 +7,7 @@ const SMOOTHING = 0.7
 
 interface UseVoiceWaveformReturn {
   audioLevels: number[]
-  startCapture: () => Promise<boolean>
+  startCapture: () => Promise<{ ok: true } | { ok: false; reason: string }>
   stopCapture: () => void
 }
 
@@ -40,7 +40,10 @@ export function useVoiceWaveform(): UseVoiceWaveformReturn {
     rafIdRef.current = requestAnimationFrame(sample)
   }, [])
 
-  const startCapture = useCallback(async (): Promise<boolean> => {
+  const startCapture = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return { ok: false, reason: '当前浏览器不支持麦克风访问（需要 HTTPS）' }
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
@@ -58,9 +61,16 @@ export function useVoiceWaveform(): UseVoiceWaveformReturn {
       dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount)
 
       rafIdRef.current = requestAnimationFrame(sample)
-      return true
-    } catch {
-      return false
+      return { ok: true }
+    } catch (e: any) {
+      const name = e?.name || ''
+      if (name === 'NotAllowedError') {
+        return { ok: false, reason: '麦克风权限被拒绝，请在浏览器设置中允许' }
+      }
+      if (name === 'NotFoundError') {
+        return { ok: false, reason: '未找到麦克风设备' }
+      }
+      return { ok: false, reason: `麦克风错误: ${name || e?.message || '未知错误'}` }
     }
   }, [sample])
 
