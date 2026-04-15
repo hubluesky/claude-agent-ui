@@ -557,11 +557,13 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   }
 
   // --- Border style based on state ---
-  const borderClass = isRunning
-    ? 'border-[var(--accent)] animate-[glow_2s_ease-in-out_infinite]'
-    : isLocked
-      ? 'border-[var(--error)]'
-      : 'border-[var(--border)]'
+  const borderClass = voiceState !== 'idle'
+    ? 'border-[var(--error)] shadow-[0_0_8px_rgba(239,68,68,0.3)]'
+    : isRunning
+      ? 'border-[var(--accent)] animate-[glow_2s_ease-in-out_infinite]'
+      : isLocked
+        ? 'border-[var(--error)]'
+        : 'border-[var(--border)]'
 
   return (
     <div className="px-4 py-3 shrink-0" data-composer-wrapper="">
@@ -604,14 +606,8 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
           </div>
         )}
 
-        {/* Voice overlay + Textarea */}
+        {/* Textarea + Voice overlay (absolute positioned inside) */}
         <div>
-          <VoiceOverlay
-            voiceState={voiceState}
-            interimText={interimText}
-            audioLevels={audioLevels}
-            accumulatedText={voiceAccumulatedText}
-          />
           {inputDisabled ? (
             <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[var(--text-muted)]">
               <svg className="w-3.5 h-3.5 shrink-0 text-[var(--error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -621,7 +617,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
               <span className="text-[var(--error)]">Session locked by another client</span>
             </div>
           ) : (
-            <div className="flex items-end">
+            <div className="relative flex items-end">
               <textarea
                 ref={textareaRef}
                 data-composer=""
@@ -629,10 +625,24 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                 onChange={handleInput}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder="Ask Claude anything..."
+                placeholder={
+                  voiceState === 'recording'
+                    ? (voiceAccumulatedText + interimText) || '正在聆听...'
+                    : voiceState === 'processing'
+                      ? '正在处理...'
+                      : 'Ask Claude anything...'
+                }
                 rows={1}
-                className="flex-1 bg-transparent px-3.5 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] resize-none outline-none"
+                className={`flex-1 bg-transparent px-3.5 py-2.5 text-sm text-[var(--text-primary)] resize-none outline-none ${
+                  voiceState !== 'idle'
+                    ? 'placeholder-[var(--error)]'
+                    : 'placeholder-[var(--text-muted)]'
+                }`}
                 style={{ maxHeight: '200px' }}
+              />
+              <VoiceOverlay
+                voiceState={voiceState}
+                audioLevels={audioLevels}
               />
               {isVoiceSupported && (
                 <div className="pr-2 pb-2">
