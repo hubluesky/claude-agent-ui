@@ -156,9 +156,29 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const voiceBaseTextRef = useRef('')
   const voiceInsertPosRef = useRef(0)
 
+  // onTranscript: Whisper final result replaces the interim text at the insertion point
+  const handleWhisperTranscript = useCallback((whisperText: string) => {
+    const base = voiceBaseTextRef.current
+    const pos = voiceInsertPosRef.current
+    const before = base.slice(0, pos)
+    const after = base.slice(pos)
+    const newText = before + whisperText + after
+    setText(newText)
+    // Move cursor after inserted text
+    const newCursorPos = pos + whisperText.length
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) {
+        ta.selectionStart = newCursorPos
+        ta.selectionEnd = newCursorPos
+        ta.focus()
+      }
+    })
+  }, [])
+
   const { voiceState, interimText, accumulatedText: voiceAccumulatedText, error: voiceError, isSupported: isVoiceSupported, start: voiceStart, stop: voiceStop, cancel: voiceCancel } = useVoiceInput({
     lang: navigator.language,
-    onTranscript: () => {}, // We handle text insertion via useEffect below
+    onTranscript: handleWhisperTranscript,
   })
   const { audioLevels, startCapture, stopCapture } = useVoiceWaveform()
 
@@ -171,9 +191,9 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
     }
   }, [voiceState === 'recording']) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live-update textarea with interim + accumulated voice text
+  // Live-update textarea with Web Speech interim preview during recording
   useEffect(() => {
-    if (voiceState === 'idle') return
+    if (voiceState !== 'recording') return
     const base = voiceBaseTextRef.current
     const pos = voiceInsertPosRef.current
     const voiceText = voiceAccumulatedText + interimText

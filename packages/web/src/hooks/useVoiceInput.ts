@@ -23,145 +23,220 @@ const SpeechRecognitionClass =
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     : null
 
-const END_PUNCT = /[。．.！!？?，,；;：:、…—\-\n]$/
-const CN_QUESTION_WORDS = /[吗嘛呢啊呀吧哪谁什么怎么为什么多少几何如何是否能否可否]$/
-
-/** Add punctuation to a final speech segment if missing */
-function addPunctuation(text: string): string {
-  const trimmed = text.trim()
-  if (!trimmed) return text
-  if (END_PUNCT.test(trimmed)) return text
-  // Detect questions
-  if (CN_QUESTION_WORDS.test(trimmed)) return text + '？'
-  return text + '。'
-}
-
+/**
+ * Dual-engine voice input:
+ * 1. Web Speech API — real-time interim preview (low latency, lower quality)
+ * 2. MediaRecorder + Whisper API — final transcription (high quality, with punctuation)
+ *
+ * Flow: press→start both engines → interim shows live → release→stop both →
+ *       send audio to /api/transcribe → Whisper result replaces Web Speech result
+ */
 export function useVoiceInput({ lang, onTranscript }: UseVoiceInputOptions): UseVoiceInputReturn {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [interimText, setInterimText] = useState('')
   const [accumulatedText, setAccumulatedText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  // Web Speech API refs
   const recognitionRef = useRef<any>(null)
-  const accumulatedFinalsRef = useRef('')
+  const speechFinalsRef = useRef('')
+
+  // MediaRecorder refs (for Whisper)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+
   const onTranscriptRef = useRef(onTranscript)
   onTranscriptRef.current = onTranscript
-
-  const stoppingRef = useRef(false)
   const cancelledRef = useRef(false)
+  const langRef = useRef(lang)
+  langRef.current = lang
 
-  const isSupported = !!SpeechRecognitionClass
+  const isSupported = typeof MediaRecorder !== 'undefined'
 
   const start = useCallback(() => {
-    if (!SpeechRecognitionClass) return
-    if (recognitionRef.current) return
+    if (mediaRecorderRef.current) return
 
     setError(null)
     setInterimText('')
     setAccumulatedText('')
-    accumulatedFinalsRef.current = ''
-    stoppingRef.current = false
+    speechFinalsRef.current = ''
+    audioChunksRef.current = []
     cancelledRef.current = false
 
-    const recognition = new SpeechRecognitionClass()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = lang || navigator.language
-    recognition.maxAlternatives = 1
-    recognitionRef.current = recognition
+    // Start MediaRecorder for Whisper (primary)
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      mediaStreamRef.current = stream
 
-    recognition.onstart = () => {
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+      })
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      recorder.start(250) // collect chunks every 250ms
       setVoiceState('recording')
-    }
 
-    recognition.onresult = (event: any) => {
-      // Rebuild from scratch each time — event.results contains ALL results
-      // from the start, not just new ones. Accumulating causes duplication.
-      let finals = ''
-      let interim = ''
-      for (let i = 0; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          let seg = event.results[i][0].transcript
-          // Web Speech API often omits punctuation for Chinese.
-          // Add sentence-ending punctuation if missing.
-          seg = addPunctuation(seg)
-          finals += seg
-        } else {
-          interim += event.results[i][0].transcript
+      // Start Web Speech API for interim preview (secondary, best-effort)
+      if (SpeechRecognitionClass) {
+        try {
+          const recognition = new SpeechRecognitionClass()
+          recognition.continuous = true
+          recognition.interimResults = true
+          recognition.lang = lang || navigator.language
+          recognition.maxAlternatives = 1
+          recognitionRef.current = recognition
+
+          recognition.onresult = (event: any) => {
+            let finals = ''
+            let interim = ''
+            for (let i = 0; i < event.results.length; i++) {
+              if (event.results[i].isFinal) {
+                finals += event.results[i][0].transcript
+              } else {
+                interim += event.results[i][0].transcript
+              }
+            }
+            speechFinalsRef.current = finals
+            setAccumulatedText(finals)
+            setInterimText(interim)
+          }
+
+          recognition.onerror = () => {
+            // Web Speech errors are non-fatal — Whisper is the primary engine
+          }
+
+          recognition.start()
+        } catch {
+          // Web Speech API not available — no interim preview, Whisper still works
         }
       }
-      accumulatedFinalsRef.current = finals
-      setAccumulatedText(finals)
-      setInterimText(interim)
-    }
-
-    recognition.onerror = (event: any) => {
-      const errorMessages: Record<string, string> = {
-        'not-allowed': '请在浏览器设置中允许麦克风权限',
-        'network': '网络连接失败，请检查网络',
-        'no-speech': '未检测到语音，请重试',
-        'service-not-allowed': '语音识别服务不可用',
-        'aborted': '',
+    }).catch((e: any) => {
+      const name = e?.name || ''
+      if (name === 'NotAllowedError') {
+        setError('麦克风权限被拒绝，请在浏览器设置中允许')
+      } else if (name === 'NotFoundError') {
+        setError('未找到麦克风设备')
+      } else {
+        setError(`麦克风错误: ${name || e?.message || '未知错误'}`)
       }
-      const msg = errorMessages[event.error] || `语音识别错误: ${event.error}`
-      if (msg) setError(msg)
+    })
+  }, [lang])
+
+  const stop = useCallback(() => {
+    if (!mediaRecorderRef.current || cancelledRef.current) return
+
+    setVoiceState('processing')
+
+    // Stop Web Speech API
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch {}
+      recognitionRef.current = null
     }
 
-    recognition.onend = () => {
-      const finalText = accumulatedFinalsRef.current.trim()
-      recognitionRef.current = null
+    // Stop MediaRecorder and send to Whisper
+    const recorder = mediaRecorderRef.current
+    recorder.onstop = async () => {
+      // Release mic
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop())
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
 
-      if (!cancelledRef.current && finalText) {
-        onTranscriptRef.current(finalText)
+      if (cancelledRef.current) {
+        setVoiceState('idle')
+        return
+      }
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType })
+      audioChunksRef.current = []
+
+      // Skip if too short (< 0.5s of audio ≈ very small blob)
+      if (audioBlob.size < 1000) {
+        setVoiceState('idle')
+        setInterimText('')
+        setAccumulatedText('')
+        return
+      }
+
+      try {
+        const formData = new FormData()
+        formData.append('audio', audioBlob, 'recording.webm')
+
+        const langCode = langRef.current || navigator.language
+        const url = `/api/transcribe?lang=${encodeURIComponent(langCode)}`
+        const response = await fetch(url, { method: 'POST', body: formData })
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ error: 'Unknown error' }))
+          // Fallback to Web Speech result if Whisper fails
+          const fallback = speechFinalsRef.current.trim()
+          if (fallback) {
+            onTranscriptRef.current(fallback)
+          } else {
+            setError(`转写失败: ${err.error || response.statusText}`)
+          }
+        } else {
+          const result = await response.json() as { text: string }
+          const whisperText = result.text?.trim()
+          if (whisperText) {
+            onTranscriptRef.current(whisperText)
+          }
+        }
+      } catch (e: any) {
+        // Network error — fallback to Web Speech result
+        const fallback = speechFinalsRef.current.trim()
+        if (fallback) {
+          onTranscriptRef.current(fallback)
+        } else {
+          setError(`转写失败: ${e.message}`)
+        }
       }
 
       setVoiceState('idle')
       setInterimText('')
       setAccumulatedText('')
-      accumulatedFinalsRef.current = ''
-      stoppingRef.current = false
     }
 
-    try {
-      recognition.start()
-    } catch (e) {
-      setError('无法启动语音识别')
-      recognitionRef.current = null
-    }
-  }, [lang])
-
-  const stop = useCallback(() => {
-    if (!recognitionRef.current) return
-    stoppingRef.current = true
-    setVoiceState('processing')
-    try {
-      recognitionRef.current.stop()
-    } catch {
-      // Already stopped
-    }
+    recorder.stop()
   }, [])
 
   const cancel = useCallback(() => {
-    if (!recognitionRef.current) return
     cancelledRef.current = true
-    try {
-      recognitionRef.current.abort()
-    } catch {
-      // Already stopped
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort() } catch {}
+      recognitionRef.current = null
     }
+
+    if (mediaRecorderRef.current) {
+      try { mediaRecorderRef.current.stop() } catch {}
+      mediaRecorderRef.current = null
+    }
+
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop())
+    mediaStreamRef.current = null
+    audioChunksRef.current = []
+
     setVoiceState('idle')
     setInterimText('')
     setAccumulatedText('')
-    accumulatedFinalsRef.current = ''
-    recognitionRef.current = null
   }, [])
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
         try { recognitionRef.current.abort() } catch {}
-        recognitionRef.current = null
       }
+      if (mediaRecorderRef.current) {
+        try { mediaRecorderRef.current.stop() } catch {}
+      }
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop())
     }
   }, [])
 

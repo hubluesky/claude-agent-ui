@@ -23,6 +23,8 @@ import { createTray } from './tray.js'
 import { managementRoutes } from './routes/management.js'
 import { AuthManager } from './auth.js'
 import { adminRoutes } from './routes/admin.js'
+import { transcribeRoutes } from './routes/transcribe.js'
+import fastifyMultipart from '@fastify/multipart'
 import { ChildProcessManager } from './child-process-manager.js'
 
 // 子进程生命周期管理（vite、systray、restart 统一收敛于此）
@@ -39,6 +41,7 @@ const server = Fastify({ logger: true })
 await server.register(fastifyCors, { origin: config.corsOrigin })
 await server.register(fastifyCookie)
 await server.register(fastifyWebsocket)
+await server.register(fastifyMultipart, { limits: { fileSize: 25 * 1024 * 1024 } }) // 25MB max audio
 
 if (config.staticDir) {
   await server.register(fastifyStatic, { root: config.staticDir, index: ['index.html'] })
@@ -75,6 +78,7 @@ await server.register(sessionRoutes(sessionManager))
 await server.register(commandRoutes(sessionManager))
 await server.register(fileRoutes)
 await server.register(browseRoutes)
+await server.register(transcribeRoutes)
 if (db) {
   await server.register(settingsRoutes(db))
 }
