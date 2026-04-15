@@ -152,63 +152,32 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const inputDisabled = isLocked
 
   // --- Voice input ---
-  // Track text state before voice recording started, so we can splice voice text in
-  const voiceBaseTextRef = useRef('')
-  const voiceInsertPosRef = useRef(0)
-
-  // onTranscript: Whisper final result replaces the interim text at the insertion point
-  const handleWhisperTranscript = useCallback((whisperText: string) => {
-    const base = voiceBaseTextRef.current
-    const pos = voiceInsertPosRef.current
-    const before = base.slice(0, pos)
-    const after = base.slice(pos)
-    const newText = before + whisperText + after
-    setText(newText)
-    // Move cursor after inserted text
-    const newCursorPos = pos + whisperText.length
+  const insertAtCursor = useCallback((voiceText: string) => {
+    const ta = textareaRef.current
+    const start = ta?.selectionStart ?? text.length
+    const end = ta?.selectionEnd ?? text.length
+    const before = text.slice(0, start)
+    const after = text.slice(end)
+    setText(before + voiceText + after)
+    const newPos = start + voiceText.length
     requestAnimationFrame(() => {
-      const ta = textareaRef.current
       if (ta) {
-        ta.selectionStart = newCursorPos
-        ta.selectionEnd = newCursorPos
+        ta.selectionStart = newPos
+        ta.selectionEnd = newPos
         ta.focus()
       }
     })
-  }, [])
+  }, [text])
 
-  const { voiceState, interimText, accumulatedText: voiceAccumulatedText, error: voiceError, isSupported: isVoiceSupported, start: voiceStart, stop: voiceStop, cancel: voiceCancel } = useVoiceInput({
+  const { voiceState, error: voiceError, isSupported: isVoiceSupported, start: voiceStart, stop: voiceStop, cancel: voiceCancel } = useVoiceInput({
     lang: navigator.language,
-    onTranscript: handleWhisperTranscript,
+    onTranscript: insertAtCursor,
   })
   const { audioLevels, startCapture, stopCapture } = useVoiceWaveform()
 
-  // When recording starts, snapshot current text and cursor position
-  useEffect(() => {
-    if (voiceState === 'recording') {
-      const ta = textareaRef.current
-      voiceBaseTextRef.current = text
-      voiceInsertPosRef.current = ta?.selectionStart ?? text.length
-    }
-  }, [voiceState === 'recording']) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Live-update textarea with Web Speech interim preview during recording
-  useEffect(() => {
-    if (voiceState !== 'recording') return
-    const base = voiceBaseTextRef.current
-    const pos = voiceInsertPosRef.current
-    const voiceText = voiceAccumulatedText + interimText
-    const before = base.slice(0, pos)
-    const after = base.slice(pos)
-    const newText = before + voiceText + after
-    setText(newText)
-  }, [voiceState, voiceAccumulatedText, interimText])
-
   const handleVoicePressStart = useCallback(() => {
-    // SpeechRecognition handles its own mic permission — start it directly.
-    // Waveform capture (getUserMedia) is optional — start it in parallel,
-    // if it fails the waveform just won't show but STT still works.
     voiceStart()
-    startCapture() // fire-and-forget: waveform is best-effort
+    startCapture()
   }, [voiceStart, startCapture])
 
   const handleVoicePressEnd = useCallback(() => {
