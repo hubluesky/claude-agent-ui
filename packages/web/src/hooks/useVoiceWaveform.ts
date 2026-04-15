@@ -18,7 +18,7 @@ export function useVoiceWaveform(): UseVoiceWaveformReturn {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafIdRef = useRef<number>(0)
-  const dataArrayRef = useRef<Uint8Array | null>(null)
+  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
 
   const sample = useCallback(() => {
     const analyser = analyserRef.current

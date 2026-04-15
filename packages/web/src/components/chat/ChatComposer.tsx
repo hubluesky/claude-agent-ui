@@ -15,6 +15,10 @@ import { ModesPopup } from './ModesPopup'
 import type { FileItem } from './FileReferencePopup'
 import type { AttachedImage } from './ImagePreviewBar'
 import type { LocalSlashCommand } from '../../stores/commandStore'
+import { useVoiceInput } from '../../hooks/useVoiceInput'
+import { useVoiceWaveform } from '../../hooks/useVoiceWaveform'
+import { VoiceButton } from './VoiceButton'
+import { VoiceOverlay } from './VoiceOverlay'
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5MB
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
@@ -147,6 +151,80 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const isRunning = sessionStatus !== 'idle'
   const isLockHolder = lockStatus === 'locked_self'
   const inputDisabled = isLocked
+
+  // --- Voice input ---
+  const insertAtCursor = useCallback((voiceText: string) => {
+    const ta = textareaRef.current
+    if (!ta) {
+      setText((prev) => prev + voiceText)
+      return
+    }
+    const start = ta.selectionStart ?? ta.value.length
+    const end = ta.selectionEnd ?? ta.value.length
+    const before = ta.value.slice(0, start)
+    const after = ta.value.slice(end)
+    const newText = before + voiceText + after
+    setText(newText)
+    const newCursorPos = start + voiceText.length
+    requestAnimationFrame(() => {
+      ta.selectionStart = newCursorPos
+      ta.selectionEnd = newCursorPos
+      ta.focus()
+    })
+  }, [])
+
+  const { voiceState, interimText, accumulatedText: voiceAccumulatedText, error: voiceError, isSupported: isVoiceSupported, start: voiceStart, stop: voiceStop, cancel: voiceCancel } = useVoiceInput({
+    lang: navigator.language,
+    onTranscript: insertAtCursor,
+  })
+  const { audioLevels, startCapture, stopCapture } = useVoiceWaveform()
+
+  const handleVoicePressStart = useCallback(() => {
+    voiceStart()
+    startCapture()
+  }, [voiceStart, startCapture])
+
+  const handleVoicePressEnd = useCallback(() => {
+    voiceStop()
+    stopCapture()
+  }, [voiceStop, stopCapture])
+
+  // Voice error → toast
+  useEffect(() => {
+    if (voiceError) {
+      useToastStore.getState().add(voiceError, 'error')
+    }
+  }, [voiceError])
+
+  // Keyboard shortcut: Right Alt (AltGraph) push-to-talk
+  useEffect(() => {
+    if (!isVoiceSupported) return
+
+    const handleVoiceKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'AltGraph' && !e.repeat && voiceState === 'idle' && !inputDisabled) {
+        e.preventDefault()
+        handleVoicePressStart()
+      }
+      if (e.key === 'Escape' && voiceState !== 'idle') {
+        e.preventDefault()
+        voiceCancel()
+        stopCapture()
+      }
+    }
+    const handleVoiceKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'AltGraph' && voiceState === 'recording') {
+        e.preventDefault()
+        handleVoicePressEnd()
+      }
+    }
+
+    window.addEventListener('keydown', handleVoiceKeyDown)
+    window.addEventListener('keyup', handleVoiceKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleVoiceKeyDown)
+      window.removeEventListener('keyup', handleVoiceKeyUp)
+    }
+  }, [isVoiceSupported, voiceState, inputDisabled, handleVoicePressStart, handleVoicePressEnd, voiceCancel, stopCapture])
 
   const handleReleaseLock = useCallback(() => {
     if (isLockHolder) {
@@ -523,8 +601,14 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
           </div>
         )}
 
-        {/* Textarea */}
+        {/* Voice overlay + Textarea */}
         <div>
+          <VoiceOverlay
+            voiceState={voiceState}
+            interimText={interimText}
+            audioLevels={audioLevels}
+            accumulatedText={voiceAccumulatedText}
+          />
           {inputDisabled ? (
             <div className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-[var(--text-muted)]">
               <svg className="w-3.5 h-3.5 shrink-0 text-[var(--error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -534,18 +618,30 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
               <span className="text-[var(--error)]">Session locked by another client</span>
             </div>
           ) : (
-            <textarea
-              ref={textareaRef}
-              data-composer=""
-              value={text}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder="Ask Claude anything..."
-              rows={1}
-              className="w-full bg-transparent px-3.5 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] resize-none outline-none"
-              style={{ maxHeight: '200px' }}
-            />
+            <div className="flex items-end">
+              <textarea
+                ref={textareaRef}
+                data-composer=""
+                value={text}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder="Ask Claude anything..."
+                rows={1}
+                className="flex-1 bg-transparent px-3.5 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] resize-none outline-none"
+                style={{ maxHeight: '200px' }}
+              />
+              {isVoiceSupported && (
+                <div className="pr-2 pb-2">
+                  <VoiceButton
+                    onPressStart={handleVoicePressStart}
+                    onPressEnd={handleVoicePressEnd}
+                    voiceState={voiceState}
+                    disabled={inputDisabled}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
 
