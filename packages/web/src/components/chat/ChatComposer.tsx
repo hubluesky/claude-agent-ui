@@ -179,14 +179,12 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   })
   const { audioLevels, startCapture, stopCapture } = useVoiceWaveform()
 
-  const handleVoicePressStart = useCallback(async () => {
-    // Must get mic permission (getUserMedia) BEFORE starting SpeechRecognition
-    const result = await startCapture()
-    if (result.ok) {
-      voiceStart()
-    } else {
-      useToastStore.getState().add(result.reason, 'error')
-    }
+  const handleVoicePressStart = useCallback(() => {
+    // SpeechRecognition handles its own mic permission — start it directly.
+    // Waveform capture (getUserMedia) is optional — start it in parallel,
+    // if it fails the waveform just won't show but STT still works.
+    voiceStart()
+    startCapture() // fire-and-forget: waveform is best-effort
   }, [voiceStart, startCapture])
 
   const handleVoicePressEnd = useCallback(() => {
