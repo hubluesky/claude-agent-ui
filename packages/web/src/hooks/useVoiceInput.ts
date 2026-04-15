@@ -62,16 +62,19 @@ export function useVoiceInput({ lang, onTranscript }: UseVoiceInputOptions): Use
     }
 
     recognition.onresult = (event: any) => {
+      // Rebuild from scratch each time — event.results contains ALL results
+      // from the start, not just new ones. Accumulating causes duplication.
+      let finals = ''
       let interim = ''
       for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          accumulatedFinalsRef.current += result[0].transcript
-          setAccumulatedText(accumulatedFinalsRef.current)
+        if (event.results[i].isFinal) {
+          finals += event.results[i][0].transcript
         } else {
-          interim += result[0].transcript
+          interim += event.results[i][0].transcript
         }
       }
+      accumulatedFinalsRef.current = finals
+      setAccumulatedText(finals)
       setInterimText(interim)
     }
 

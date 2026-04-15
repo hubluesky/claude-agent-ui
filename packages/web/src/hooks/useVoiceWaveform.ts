@@ -27,12 +27,26 @@ export function useVoiceWaveform(): UseVoiceWaveformReturn {
 
     analyser.getByteFrequencyData(dataArray)
 
+    // Voice energy is concentrated in bins 1~40 (roughly 60Hz~2500Hz at 16kHz context).
+    // Use logarithmic distribution so all bars show activity, not just the first.
+    const voiceStart = 1
+    const voiceEnd = Math.min(40, dataArray.length)
+    const voiceRange = voiceEnd - voiceStart
     const levels: number[] = []
-    const binCount = dataArray.length
-    const step = Math.floor(binCount / BAR_COUNT)
 
     for (let i = 0; i < BAR_COUNT; i++) {
-      const raw = dataArray[i * step] / 255
+      // Logarithmic distribution: more bins for lower frequencies
+      const t0 = i / BAR_COUNT
+      const t1 = (i + 1) / BAR_COUNT
+      const binStart = voiceStart + Math.floor(t0 * t0 * voiceRange)
+      const binEnd = voiceStart + Math.floor(t1 * t1 * voiceRange)
+      // Average bins in this range
+      let sum = 0
+      const count = Math.max(1, binEnd - binStart)
+      for (let b = binStart; b < binEnd; b++) {
+        sum += dataArray[b]
+      }
+      const raw = (sum / count) / 255
       levels.push(Math.min(raw * GAIN, 1))
     }
 
