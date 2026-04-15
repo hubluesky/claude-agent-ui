@@ -7,7 +7,7 @@ const SMOOTHING = 0.7
 
 interface UseVoiceWaveformReturn {
   audioLevels: number[]
-  startCapture: () => Promise<void>
+  startCapture: () => Promise<boolean>
   stopCapture: () => void
 }
 
@@ -40,7 +40,7 @@ export function useVoiceWaveform(): UseVoiceWaveformReturn {
     rafIdRef.current = requestAnimationFrame(sample)
   }, [])
 
-  const startCapture = useCallback(async () => {
+  const startCapture = useCallback(async (): Promise<boolean> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
@@ -58,8 +58,9 @@ export function useVoiceWaveform(): UseVoiceWaveformReturn {
       dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount)
 
       rafIdRef.current = requestAnimationFrame(sample)
+      return true
     } catch {
-      // getUserMedia failed — error handled by useVoiceInput's SpeechRecognition onerror
+      return false
     }
   }, [sample])
 
