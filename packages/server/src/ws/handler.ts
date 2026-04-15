@@ -99,6 +99,9 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'abort':
         await handleAbort(connectionId, msg.sessionId)
         break
+      case 'pop-queue':
+        handlePopQueue(connectionId, (msg as any).sessionId)
+        break
       case 'set-mode':
         await handleSetMode(connectionId, msg.sessionId, msg.mode)
         break
@@ -437,37 +440,28 @@ export function createWsHandler(deps: HandlerDeps) {
         }).catch(() => {})
       }
 
-      // ── Input Queue: clear forwarded items + process remaining ──
-      // Forwarded items were already sent to CLI for mid-query injection (query.ts:1573-1593).
-      // They've been consumed by the CLI's internal queue — just remove from display queue.
-      // Non-forwarded items (if any) are processed normally via QueueProcessor.
+      // ── Input Queue: process remaining items after turn completes ──
       setImmediate(() => {
         const q = sessionQueues.get(realSessionId)
         if (!q || q.isEmpty) return
-        q.clearForwarded()
-        if (!q.isEmpty) {
-          processQueue(q, {
-            executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
-            isSessionBusy: () => session.status !== 'idle',
-          })
-        }
+        processQueue(q, {
+          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
+          isSessionBusy: () => session.status !== 'idle',
+        })
       })
     })
 
     session.on('error', (err: Error) => {
       wsHub.broadcast(realSessionId, { type: 'error', message: err.message, code: 'internal' })
 
-      // ── Input Queue: clear forwarded + try dequeue on error ──
+      // ── Input Queue: try dequeue on error ──
       setImmediate(() => {
         const q = sessionQueues.get(realSessionId)
         if (!q || q.isEmpty) return
-        q.clearForwarded()
-        if (!q.isEmpty) {
-          processQueue(q, {
-            executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
-            isSessionBusy: () => session.status !== 'idle',
-          })
-        }
+        processQueue(q, {
+          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
+          isSessionBusy: () => session.status !== 'idle',
+        })
       })
     })
   }
@@ -543,15 +537,9 @@ export function createWsHandler(deps: HandlerDeps) {
 
     const sessionBusy = session.status === 'running' || session.status === 'awaiting_approval' || session.status === 'awaiting_user_input'
     if (sessionBusy && effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
-      // ── Mid-query injection: forward to CLI immediately ──
-      // Mirrors Claude Code print.ts:4099-4106 — stdin messages are enqueued into
-      // the CLI's internal commandQueue immediately. The CLI's query loop picks them
-      // up between tool use cycles via getCommandsByMaxPriority() (query.ts:1573-1593)
-      // and converts them to attachment messages injected into the conversation.
-      //
-      // We ALSO add to server-side display queue (for UI badge + abort recovery).
-      // The `forwarded` flag prevents re-sending on session complete.
-      command.forwarded = true
+      // ── Deferred queue: enqueue only, do NOT forward to CLI ──
+      // Messages sit in queue until current turn completes, then processQueue() sends them.
+      // ESC can pop them back to the composer before they are consumed.
       const q = getOrCreateQueue(effectiveSessionId)
       q.enqueue(command)
 
@@ -570,13 +558,6 @@ export function createWsHandler(deps: HandlerDeps) {
         sessionId: effectiveSessionId,
         message: { type: 'user', uuid: command.id, message: { role: 'user', content: broadcastContent } },
       } as any)
-
-      // Forward to CLI process — CLI enqueues internally for mid-query processing
-      session.send(command.value, {
-        cwd: command.options?.cwd,
-        images: command.images,
-        priority: command.priority,
-      })
       return
     }
     // Session idle → execute directly via executeCommands
@@ -762,37 +743,39 @@ export function createWsHandler(deps: HandlerDeps) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
-    // Pop only NON-forwarded editable commands — return them to the composer.
-    // Forwarded commands are already in the CLI's internal queue and will be
-    // processed in the next turn after abort (they cannot be recalled since
-    // the CLI process owns them). This matches the architectural constraint
-    // of our process-based model.
-    //
-    // In Claude Code (same-process), popAllEditable() removes from the
-    // in-process queue before the query loop can consume them. We can't do
-    // that across process boundaries, so forwarded items stay in CLI.
-    //
-    // @see Claude Code messageQueueManager.ts popAllEditable()
-    const q = sessionQueues.get(sessionId)
-    const editableCommands = q?.popAllNonForwardedEditable() ?? []
-    const queuedCommands = editableCommands.length > 0
-      ? editableCommands.map(cmd => ({
-          id: cmd.id,
-          value: cmd.value,
-          mode: cmd.mode,
-          priority: cmd.priority,
-          editable: cmd.editable,
-          addedAt: cmd.addedAt,
-          images: cmd.images,
-        }))
-      : undefined
 
-    // Also clear forwarded items from display queue (they're in CLI, no UI needed)
-    q?.clearForwarded()
-
+    // Pure abort — no queue popping. ESC pop is handled separately via pop-queue.
     const session = sessionManager.getActive(sessionId)
     if (session) await session.abort()
-    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId, queuedCommands } as any)
+
+    wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId } as any)
+  }
+
+  function handlePopQueue(connectionId: string, sessionId: string) {
+    if (!lockManager.isHolder(sessionId, connectionId)) {
+      wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
+      return
+    }
+
+    const q = sessionQueues.get(sessionId)
+    const editableCommands = q?.popAllEditable() ?? []
+    if (editableCommands.length === 0) return
+
+    // Send popped commands to requester only (lock holder merges into composer)
+    wsHub.sendTo(connectionId, {
+      type: 'queue-popped',
+      sessionId,
+      commands: editableCommands.map(cmd => ({
+        id: cmd.id,
+        value: cmd.value,
+        mode: cmd.mode,
+        priority: cmd.priority,
+        editable: cmd.editable,
+        addedAt: cmd.addedAt,
+        images: cmd.images,
+      })),
+    } as any)
+    // queue-updated is auto-broadcast via queue's 'changed' event listener
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: PermissionMode) {
