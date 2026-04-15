@@ -23,6 +23,19 @@ const SpeechRecognitionClass =
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     : null
 
+const END_PUNCT = /[。．.！!？?，,；;：:、…—\-\n]$/
+const CN_QUESTION_WORDS = /[吗嘛呢啊呀吧哪谁什么怎么为什么多少几何如何是否能否可否]$/
+
+/** Add punctuation to a final speech segment if missing */
+function addPunctuation(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return text
+  if (END_PUNCT.test(trimmed)) return text
+  // Detect questions
+  if (CN_QUESTION_WORDS.test(trimmed)) return text + '？'
+  return text + '。'
+}
+
 export function useVoiceInput({ lang, onTranscript }: UseVoiceInputOptions): UseVoiceInputReturn {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [interimText, setInterimText] = useState('')
@@ -68,7 +81,11 @@ export function useVoiceInput({ lang, onTranscript }: UseVoiceInputOptions): Use
       let interim = ''
       for (let i = 0; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
-          finals += event.results[i][0].transcript
+          let seg = event.results[i][0].transcript
+          // Web Speech API often omits punctuation for Chinese.
+          // Add sentence-ending punctuation if missing.
+          seg = addPunctuation(seg)
+          finals += seg
         } else {
           interim += event.results[i][0].transcript
         }
