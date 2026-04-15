@@ -14,6 +14,8 @@ export interface PanelSummary {
 interface MultiPanelState {
   panelSessionIds: string[]
   panelSummaries: Map<string, PanelSummary>
+  /** Sessions that completed (running→idle) but user hasn't viewed yet. In-memory only. */
+  completedSessionIds: Set<string>
 }
 
 interface MultiPanelActions {
@@ -22,6 +24,10 @@ interface MultiPanelActions {
   hasPanel(sessionId: string): boolean
   updateSummary(sessionId: string, update: Partial<PanelSummary>): void
   getPanels(): PanelSummary[]
+  /** Mark a background session as completed (AI finished, user hasn't viewed) */
+  markCompleted(sessionId: string): void
+  /** Clear completed mark when user enters the session */
+  clearCompleted(sessionId: string): void
 }
 
 const STORAGE_KEY = 'claude-agent-ui-panels'
@@ -60,6 +66,7 @@ const persisted = loadPersisted()
 export const useMultiPanelStore = create<MultiPanelState & MultiPanelActions>((set, get) => ({
   panelSessionIds: persisted.ids,
   panelSummaries: new Map(persisted.summaries),
+  completedSessionIds: new Set<string>(),
 
   addPanel(sessionId, summary) {
     const { panelSessionIds, panelSummaries } = get()
@@ -99,5 +106,19 @@ export const useMultiPanelStore = create<MultiPanelState & MultiPanelActions>((s
     return panelSessionIds
       .map((id) => panelSummaries.get(id))
       .filter((s): s is PanelSummary => s !== undefined)
+  },
+
+  markCompleted(sessionId) {
+    const next = new Set(get().completedSessionIds)
+    next.add(sessionId)
+    set({ completedSessionIds: next })
+  },
+
+  clearCompleted(sessionId) {
+    const prev = get().completedSessionIds
+    if (!prev.has(sessionId)) return
+    const next = new Set(prev)
+    next.delete(sessionId)
+    set({ completedSessionIds: next })
   },
 }))

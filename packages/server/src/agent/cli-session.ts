@@ -284,7 +284,7 @@ export class CliSession extends AgentSession {
       content,
       message: { role: 'user', content: content.length === 1 ? prompt : content },
       uuid: randomUUID(),
-      priority: 'next',
+      priority: options?.priority ?? 'next',
     })
   }
 

@@ -1,4 +1,5 @@
 import type { EffortLevel } from './constants.js'
+import type { QueuePriority } from './queue.js'
 
 export interface ProjectInfo {
   cwd: string
@@ -23,6 +24,15 @@ export interface SendOptions {
   effort?: EffortLevel
   maxBudgetUsd?: number
   maxTurns?: number
+  /**
+   * Message priority for the CLI's internal queue.
+   * - 'now':  Interrupt current query and process immediately
+   * - 'next': Process between tool use cycles (mid-query attachment) or next turn
+   * - 'later': Process only when queue is fully drained
+   *
+   * @see Claude Code messageQueueManager.ts PRIORITY_ORDER
+   */
+  priority?: QueuePriority
 }
 
 export interface SessionResult {

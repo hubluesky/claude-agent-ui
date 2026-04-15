@@ -16,6 +16,7 @@ import { useChatSession } from '../../providers/ChatSessionContext'
 
 // Block components
 import { AssistantTextBlock } from './messages/AssistantTextBlock'
+import { AssistantThinkingBlock } from './messages/AssistantThinkingBlock'
 import { AssistantToolUseBlock } from './messages/AssistantToolUseBlock'
 import { UserTextBlock } from './messages/UserTextBlock'
 import { UserImageBlock } from './messages/UserImageBlock'
@@ -71,7 +72,9 @@ function AssistantBlockDispatch({ msg, lookups }: { msg: NormalizedMessage; look
       {(block.type === 'tool_use' || block.type === 'server_tool_use') && (
         <AssistantToolUseBlock block={block} lookups={lookups} />
       )}
-      {/* thinking/redacted_thinking: hidden by default (filtered in pipeline) */}
+      {(block.type === 'thinking' || block.type === 'redacted_thinking') && (
+        <AssistantThinkingBlock block={block} />
+      )}
     </>
   )
 

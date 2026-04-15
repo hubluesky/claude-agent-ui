@@ -146,6 +146,55 @@ export class MessageQueueManager extends EventEmitter {
     return editable
   }
 
+  /**
+   * Pop only editable commands that have NOT been forwarded to the CLI process.
+   * Forwarded commands are already in the CLI's internal queue and cannot be
+   * recalled — they will be processed in the next turn after abort.
+   *
+   * Used by handleAbort to return only reclaimable commands to the composer.
+   */
+  popAllNonForwardedEditable(): QueuedCommand[] {
+    if (this.queue.length === 0) return []
+
+    const reclaimable: QueuedCommand[] = []
+    const remaining: QueuedCommand[] = []
+    for (const cmd of this.queue) {
+      if (cmd.editable && !cmd.forwarded) {
+        reclaimable.push(cmd)
+      } else {
+        remaining.push(cmd)
+      }
+    }
+
+    if (reclaimable.length === 0) return []
+
+    this.queue.length = 0
+    this.queue.push(...remaining)
+    this.notify()
+    return reclaimable
+  }
+
+  // ── Forwarded item cleanup ──
+
+  /**
+   * Remove all commands marked as `forwarded` from the display queue.
+   * These have already been sent to the CLI process for mid-query injection
+   * and are tracked here only for UI display purposes.
+   *
+   * Called after session completes, errors, or aborts to clean up the
+   * display queue since the CLI has consumed (or will consume) these items.
+   */
+  clearForwarded(): void {
+    if (this.queue.length === 0) return
+
+    const remaining = this.queue.filter(cmd => !cmd.forwarded)
+    if (remaining.length === this.queue.length) return
+
+    this.queue.length = 0
+    this.queue.push(...remaining)
+    this.notify()
+  }
+
   // ── Remove by ID ──
 
   removeById(id: string): boolean {

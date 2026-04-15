@@ -437,29 +437,37 @@ export function createWsHandler(deps: HandlerDeps) {
         }).catch(() => {})
       }
 
-      // ── Input Queue: process next command(s) via QueueProcessor ──
-      // Mirrors Claude Code print.ts:2485-2493 post-run recheck pattern
+      // ── Input Queue: clear forwarded items + process remaining ──
+      // Forwarded items were already sent to CLI for mid-query injection (query.ts:1573-1593).
+      // They've been consumed by the CLI's internal queue — just remove from display queue.
+      // Non-forwarded items (if any) are processed normally via QueueProcessor.
       setImmediate(() => {
         const q = sessionQueues.get(realSessionId)
         if (!q || q.isEmpty) return
-        processQueue(q, {
-          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
-          isSessionBusy: () => session.status !== 'idle',
-        })
+        q.clearForwarded()
+        if (!q.isEmpty) {
+          processQueue(q, {
+            executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
+            isSessionBusy: () => session.status !== 'idle',
+          })
+        }
       })
     })
 
     session.on('error', (err: Error) => {
       wsHub.broadcast(realSessionId, { type: 'error', message: err.message, code: 'internal' })
 
-      // ── Input Queue: also try dequeue on error ──
+      // ── Input Queue: clear forwarded + try dequeue on error ──
       setImmediate(() => {
         const q = sessionQueues.get(realSessionId)
         if (!q || q.isEmpty) return
-        processQueue(q, {
-          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
-          isSessionBusy: () => session.status !== 'idle',
-        })
+        q.clearForwarded()
+        if (!q.isEmpty) {
+          processQueue(q, {
+            executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
+            isSessionBusy: () => session.status !== 'idle',
+          })
+        }
       })
     })
   }
@@ -535,8 +543,40 @@ export function createWsHandler(deps: HandlerDeps) {
 
     const sessionBusy = session.status === 'running' || session.status === 'awaiting_approval' || session.status === 'awaiting_user_input'
     if (sessionBusy && effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
+      // ── Mid-query injection: forward to CLI immediately ──
+      // Mirrors Claude Code print.ts:4099-4106 — stdin messages are enqueued into
+      // the CLI's internal commandQueue immediately. The CLI's query loop picks them
+      // up between tool use cycles via getCommandsByMaxPriority() (query.ts:1573-1593)
+      // and converts them to attachment messages injected into the conversation.
+      //
+      // We ALSO add to server-side display queue (for UI badge + abort recovery).
+      // The `forwarded` flag prevents re-sending on session complete.
+      command.forwarded = true
       const q = getOrCreateQueue(effectiveSessionId)
       q.enqueue(command)
+
+      // Broadcast user message to all clients (so it appears in chat immediately)
+      const broadcastContent: any[] = []
+      if (command.images) {
+        for (const img of command.images) {
+          broadcastContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })
+        }
+      }
+      if (command.value) {
+        broadcastContent.push({ type: 'text', text: command.value })
+      }
+      wsHub.broadcast(effectiveSessionId, {
+        type: 'agent-message',
+        sessionId: effectiveSessionId,
+        message: { type: 'user', uuid: command.id, message: { role: 'user', content: broadcastContent } },
+      } as any)
+
+      // Forward to CLI process — CLI enqueues internally for mid-query processing
+      session.send(command.value, {
+        cwd: command.options?.cwd,
+        images: command.images,
+        priority: command.priority,
+      })
       return
     }
     // Session idle → execute directly via executeCommands
@@ -722,10 +762,19 @@ export function createWsHandler(deps: HandlerDeps) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
-    // Pop only editable commands — non-editable (task-notification) stay in queue
-    // Mirrors Claude Code messageQueueManager.ts popAllEditable()
+    // Pop only NON-forwarded editable commands — return them to the composer.
+    // Forwarded commands are already in the CLI's internal queue and will be
+    // processed in the next turn after abort (they cannot be recalled since
+    // the CLI process owns them). This matches the architectural constraint
+    // of our process-based model.
+    //
+    // In Claude Code (same-process), popAllEditable() removes from the
+    // in-process queue before the query loop can consume them. We can't do
+    // that across process boundaries, so forwarded items stay in CLI.
+    //
+    // @see Claude Code messageQueueManager.ts popAllEditable()
     const q = sessionQueues.get(sessionId)
-    const editableCommands = q?.popAllEditable() ?? []
+    const editableCommands = q?.popAllNonForwardedEditable() ?? []
     const queuedCommands = editableCommands.length > 0
       ? editableCommands.map(cmd => ({
           id: cmd.id,
@@ -737,6 +786,9 @@ export function createWsHandler(deps: HandlerDeps) {
           images: cmd.images,
         }))
       : undefined
+
+    // Also clear forwarded items from display queue (they're in CLI, no UI needed)
+    q?.clearForwarded()
 
     const session = sessionManager.getActive(sessionId)
     if (session) await session.abort()

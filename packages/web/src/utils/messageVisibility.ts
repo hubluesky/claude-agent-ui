@@ -55,12 +55,8 @@ function isAssistantBlockVisible(msg: NormalizedMessage): boolean {
       if (isSDKInternalText(block.text as string)) return false
       return true
     case 'thinking':
-      // Thinking blocks are hidden by default (matching Claude Code behavior).
-      // They become visible only in verbose/transcript mode, which is handled
-      // at the component level, not the visibility filter.
-      return false
     case 'redacted_thinking':
-      return false // Same as thinking — hidden by default
+      return true
     case 'tool_use':
     case 'server_tool_use':
       return true

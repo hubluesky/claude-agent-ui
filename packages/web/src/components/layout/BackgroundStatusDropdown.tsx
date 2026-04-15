@@ -8,14 +8,15 @@ interface BackgroundStatusDropdownProps {
   onClose: () => void
 }
 
-type StatusGroup = '需要注意' | '进行中' | '空闲'
+type StatusGroup = '需要注意' | '已完成' | '进行中' | '空闲'
 
-const STATUS_GROUP_ORDER: StatusGroup[] = ['需要注意', '进行中', '空闲']
+const STATUS_GROUP_ORDER: StatusGroup[] = ['需要注意', '已完成', '进行中', '空闲']
 
-function getStatusGroup(item: PanelSummary): StatusGroup {
+function getStatusGroup(item: PanelSummary, completedIds: Set<string>): StatusGroup {
   if (item.hasApproval || item.status === 'awaiting_approval' || item.status === 'awaiting_user_input') {
     return '需要注意'
   }
+  if (completedIds.has(item.sessionId)) return '已完成'
   if (item.status === 'running') return '进行中'
   return '空闲'
 }
@@ -32,6 +33,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
   const viewMode = useSettingsStore((s) => s.viewMode)
   const setViewMode = useSettingsStore((s) => s.setViewMode)
   const containers = useSessionContainerStore((s) => s.containers)
+  const completedSessionIds = useMultiPanelStore((s) => s.completedSessionIds)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
   const grouped = useMemo(() => {
     const map = new Map<StatusGroup, PanelSummary[]>()
     for (const item of items) {
-      const group = getStatusGroup(item)
+      const group = getStatusGroup(item, completedSessionIds)
       if (!map.has(group)) map.set(group, [])
       map.get(group)!.push(item)
     }
@@ -81,7 +83,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
       if (list?.length) ordered.set(key, list)
     }
     return ordered
-  }, [items])
+  }, [items, completedSessionIds])
 
   const handleClick = (summary: PanelSummary) => {
     selectSession(summary.sessionId, summary.projectCwd)
@@ -170,6 +172,7 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
             <div key={groupName} className="mb-1">
               <div className={`px-2.5 py-1 text-[8px] font-semibold uppercase tracking-wider ${
                 groupName === '需要注意' ? 'text-[var(--warning)]'
+                  : groupName === '已完成' ? 'text-[var(--success)]'
                   : groupName === '进行中' ? 'text-[var(--success)]'
                   : 'text-[var(--text-muted)]'
               }`}>
@@ -177,12 +180,15 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
               </div>
               {sessions.map((item) => {
                 const isWaiting = item.hasApproval || item.status === 'awaiting_approval' || item.status === 'awaiting_user_input'
+                const isCompleted = completedSessionIds.has(item.sessionId)
                 const isRunning = item.status === 'running'
                 const dotClass = isWaiting
                   ? 'bg-[var(--warning)] animate-pulse'
-                  : isRunning
-                    ? 'bg-[var(--success)] shadow-[0_0_3px_rgba(34,197,94,0.3)]'
-                    : 'bg-[var(--border)]'
+                  : isCompleted
+                    ? 'bg-[var(--success)]'
+                    : isRunning
+                      ? 'bg-[var(--success)] shadow-[0_0_3px_rgba(34,197,94,0.3)]'
+                      : 'bg-[var(--border)]'
                 const inPanel = panelIds.includes(item.sessionId)
 
                 return (
@@ -190,7 +196,9 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
                     key={item.sessionId}
                     onClick={() => handleClick(item)}
                     className={`flex items-center gap-2 px-2.5 py-[7px] rounded-[7px] cursor-pointer mb-0.5 transition-all ${
-                      isWaiting ? 'bg-[var(--warning-subtle-bg)] hover:bg-[var(--warning-subtle-border)]' : 'hover:bg-[var(--bg-secondary)]'
+                      isWaiting ? 'bg-[var(--warning-subtle-bg)] hover:bg-[var(--warning-subtle-border)]'
+                        : isCompleted ? 'bg-[var(--success-subtle-bg)] hover:bg-[var(--success-subtle-border)]'
+                        : 'hover:bg-[var(--bg-secondary)]'
                     }`}
                   >
                     <div className={`w-[7px] h-[7px] rounded-full shrink-0 ${dotClass}`} />
@@ -203,6 +211,9 @@ export function BackgroundStatusDropdown({ onClose }: BackgroundStatusDropdownPr
                     </div>
                     {isWaiting && (
                       <span className="text-[7px] bg-[var(--warning)] text-[var(--bg-primary)] px-1.5 rounded font-bold">审批</span>
+                    )}
+                    {isCompleted && !isWaiting && (
+                      <span className="text-[7px] bg-[var(--success)] text-[var(--bg-primary)] px-1.5 rounded font-bold">完成</span>
                     )}
                     {inPanel ? (
                       <button

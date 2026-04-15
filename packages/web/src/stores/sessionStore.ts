@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
 import { fetchProjects, fetchSessions, findSessionByName, clearSessionTitle } from '../lib/api'
 import { useEmbedStore } from './embedStore'
+import { useMultiPanelStore } from './multiPanelStore'
 
 const CACHE_TTL_MS = 30_000 // 30 seconds
 
@@ -96,6 +97,8 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   selectSession(sessionId: string, cwd: string) {
     set({ currentSessionId: sessionId, currentProjectCwd: cwd })
+    // Clear "completed" notification when user enters the session
+    useMultiPanelStore.getState().clearCompleted(sessionId)
     // Ensure sessions list is loaded so TopBar can find the title
     get().loadProjectSessions(cwd)
   },

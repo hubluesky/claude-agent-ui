@@ -21,6 +21,7 @@ import type {
 } from '@claude-agent-ui/shared'
 import { useSessionContainerStore } from '../stores/sessionContainerStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useMultiPanelStore } from '../stores/multiPanelStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { fetchSessionMessages } from './api'
 import { useToastStore } from '../components/chat/Toast'
@@ -44,7 +45,7 @@ class WebSocketManager {
 
   // ── Heartbeat ────────────────────────────────────────────────
   private heartbeatTimer = 0
-  private readonly HEARTBEAT_TIMEOUT = 90_000 // 3x server ping interval (30s) to tolerate delays
+  private readonly HEARTBEAT_TIMEOUT = 45_000 // 1.5x server ping interval (30s) — tighter for mobile
 
   // ── Reconnection ─────────────────────────────────────────────
   private reconnectTimer = 0
@@ -52,15 +53,26 @@ class WebSocketManager {
   private reconnectingBannerTimer = 0
   private readonly MAX_RECONNECT_DELAY = 30_000
 
+  // ── Client keepalive ──────────────────────────────────────────
+  private keepaliveTimer = 0
+  private readonly KEEPALIVE_INTERVAL = 20_000 // Send keepalive every 20s to keep NAT alive
+  private lastReceivedAt = 0
+
   // ── Page visibility ──────────────────────────────────────────
   private visibilityHandler: (() => void) | null = null
   private lastBackgroundTime = 0
+
+  // ── Network events ──────────────────────────────────────────
+  private onlineHandler: (() => void) | null = null
+  private offlineHandler: (() => void) | null = null
+  private connectionChangeHandler: (() => void) | null = null
 
   // ── Streaming ────────────────────────────────────────────────
   private currentToolBlockIndex = new Map<string, number>()
 
   constructor() {
     this.setupVisibilityListener()
+    this.setupNetworkListeners()
   }
 
   // ════════════════════════════════════════════════════════════
@@ -237,10 +249,16 @@ class WebSocketManager {
       }
 
       this.resubscribeAll()
+      this.startKeepalive()
       this.resetHeartbeat()
     }
 
     socket.onmessage = (event) => {
+      // Any received message proves the connection is alive — reset heartbeat.
+      // Previously only reset on server 'ping'; now catches zombie connections
+      // much faster (agent messages, lock updates, etc. all count).
+      this.lastReceivedAt = Date.now()
+      this.resetHeartbeat()
       try {
         const msg: S2CMessage = JSON.parse(event.data)
         this.handleMessage(msg)
@@ -258,6 +276,7 @@ class WebSocketManager {
 
       this.ws = null
       this.stopHeartbeat()
+      this.stopKeepalive()
 
       // Delay showing "reconnecting" banner by 1.5s to avoid flash on fast reconnect
       if (this.reconnectingBannerTimer) clearTimeout(this.reconnectingBannerTimer)
@@ -333,8 +352,9 @@ class WebSocketManager {
     this.visibilityHandler = () => {
       if (document.visibilityState === 'hidden') {
         this.lastBackgroundTime = Date.now()
-        // Pause heartbeat — browsers throttle background timers, causing false timeouts
+        // Pause heartbeat + keepalive — browsers throttle background timers
         this.stopHeartbeat()
+        this.stopKeepalive()
       } else if (document.visibilityState === 'visible') {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
           // Dead connection — reconnect immediately, skip backoff
@@ -345,10 +365,22 @@ class WebSocketManager {
           this.reconnectAttempt = 0
           this.doConnect()
         } else {
-          // Still open — restart heartbeat monitoring
+          const bgDuration = Date.now() - this.lastBackgroundTime
+          const silenceDuration = this.lastReceivedAt ? Date.now() - this.lastReceivedAt : 0
+
+          // Zombie detection: WS appears open but no messages received for >35s
+          // after being in background for >30s. On mobile, the OS can kill the
+          // TCP connection while the browser still reports readyState === OPEN.
+          if (bgDuration > 30_000 && silenceDuration > 35_000) {
+            console.warn('[WSManager] Zombie connection detected after background — forcing reconnect')
+            this.ws.close()
+            return
+          }
+
+          // Still genuinely open — restart monitoring
+          this.startKeepalive()
           this.resetHeartbeat()
           // Long background (>5min) — resubscribe all to catch up on missed messages
-          const bgDuration = Date.now() - this.lastBackgroundTime
           if (bgDuration > 5 * 60 * 1000) {
             this.resubscribeAll()
           }
@@ -366,6 +398,89 @@ class WebSocketManager {
   }
 
   // ════════════════════════════════════════════════════════════
+  // Internal: Client keepalive (prevents mobile NAT from killing the connection)
+  // ════════════════════════════════════════════════════════════
+
+  private startKeepalive() {
+    this.stopKeepalive()
+    this.keepaliveTimer = window.setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        // Send 'pong' as keepalive — the server already handles this message type
+        // (wsHub.recordPong). This keeps NAT mappings alive on mobile networks
+        // and Tailscale WireGuard tunnels, preventing silent connection drops.
+        this.ws.send(JSON.stringify({ type: 'pong' }))
+      }
+    }, this.KEEPALIVE_INTERVAL)
+  }
+
+  private stopKeepalive() {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer)
+      this.keepaliveTimer = 0
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // Internal: Network event listeners (instant detection on mobile)
+  // ════════════════════════════════════════════════════════════
+
+  private setupNetworkListeners() {
+    if (typeof window === 'undefined') return
+
+    this.offlineHandler = () => {
+      console.warn('[WSManager] Browser offline event — closing WebSocket')
+      this.ws?.close()
+    }
+
+    this.onlineHandler = () => {
+      console.info('[WSManager] Browser online event — reconnecting')
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer)
+          this.reconnectTimer = 0
+        }
+        this.reconnectAttempt = 0
+        this.doConnect()
+      }
+    }
+
+    window.addEventListener('offline', this.offlineHandler)
+    window.addEventListener('online', this.onlineHandler)
+
+    // Mobile network change detection (WiFi ↔ cellular transitions)
+    const nav = navigator as any
+    if (nav.connection) {
+      this.connectionChangeHandler = () => {
+        console.info('[WSManager] Network type changed — checking connection health')
+        // If no message received in 30s+ after a network change, the connection
+        // is likely stale from the old network path — force reconnect.
+        if (this.lastReceivedAt && Date.now() - this.lastReceivedAt > 30_000) {
+          console.warn('[WSManager] Stale connection after network change — forcing reconnect')
+          this.ws?.close()
+        }
+      }
+      nav.connection.addEventListener('change', this.connectionChangeHandler)
+    }
+  }
+
+  private removeNetworkListeners() {
+    if (typeof window === 'undefined') return
+    if (this.offlineHandler) {
+      window.removeEventListener('offline', this.offlineHandler)
+      this.offlineHandler = null
+    }
+    if (this.onlineHandler) {
+      window.removeEventListener('online', this.onlineHandler)
+      this.onlineHandler = null
+    }
+    if (this.connectionChangeHandler) {
+      const nav = navigator as any
+      nav.connection?.removeEventListener('change', this.connectionChangeHandler)
+      this.connectionChangeHandler = null
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════
   // Internal: Cleanup
   // ════════════════════════════════════════════════════════════
 
@@ -379,6 +494,7 @@ class WebSocketManager {
       this.reconnectingBannerTimer = 0
     }
     this.stopHeartbeat()
+    this.stopKeepalive()
   }
 
   // ════════════════════════════════════════════════════════════
@@ -845,8 +961,13 @@ class WebSocketManager {
       s.clearStreaming(sessionId)
     }
     this.currentToolBlockIndex.delete(sessionId)
-    // Refresh session list in sidebar
+    // Mark as completed if this is a background session (not currently viewed)
     const sessStore = useSessionStore.getState()
+    const mpStore = useMultiPanelStore.getState()
+    if (sessionId !== sessStore.currentSessionId && mpStore.hasPanel(sessionId)) {
+      mpStore.markCompleted(sessionId)
+    }
+    // Refresh session list in sidebar
     if (sessStore.currentProjectCwd) {
       sessStore.invalidateProjectSessions(sessStore.currentProjectCwd)
       sessStore.loadProjectSessions(sessStore.currentProjectCwd, true)
@@ -1013,7 +1134,8 @@ class WebSocketManager {
 
   private handlePing() {
     this.send({ type: 'pong' } as any)
-    this.resetHeartbeat()
+    // Note: resetHeartbeat() is now called in onmessage for ALL messages,
+    // so we don't need to call it here specifically.
   }
 
   private handleError(msg: any) {
