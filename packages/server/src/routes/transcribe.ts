@@ -1,41 +1,57 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { FastifyInstance } from 'fastify'
 
-const WHISPER_URL = process.env.WHISPER_API_URL || 'https://api.openai.com/v1/audio/transcriptions'
+/** Read OPENAI_API_KEY from env or ~/.claude/settings.json (same as Claude Code switch config) */
+function getOpenAIKey(): string | null {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY
+  try {
+    const settings = JSON.parse(readFileSync(join(homedir(), '.claude', 'settings.json'), 'utf-8'))
+    return settings.env?.OPENAI_API_KEY || null
+  } catch {
+    return null
+  }
+}
+
+function getWhisperUrl(): string {
+  if (process.env.WHISPER_API_URL) return process.env.WHISPER_API_URL
+  try {
+    const settings = JSON.parse(readFileSync(join(homedir(), '.claude', 'settings.json'), 'utf-8'))
+    return settings.env?.WHISPER_API_URL || 'https://api.openai.com/v1/audio/transcriptions'
+  } catch {
+    return 'https://api.openai.com/v1/audio/transcriptions'
+  }
+}
 
 export async function transcribeRoutes(app: FastifyInstance) {
   app.post('/api/transcribe', async (request, reply) => {
-    const apiKey = process.env.OPENAI_API_KEY
+    const apiKey = getOpenAIKey()
     if (!apiKey) {
-      return reply.status(500).send({ error: 'OPENAI_API_KEY not configured' })
+      return reply.status(500).send({ error: 'OPENAI_API_KEY not configured (set env var or in ~/.claude/settings.json env field)' })
     }
 
-    // Expect multipart form with audio file
     const data = await request.file()
     if (!data) {
       return reply.status(400).send({ error: 'No audio file provided' })
     }
 
     const audioBuffer = await data.toBuffer()
-
-    // Build form data for Whisper API
-    const formData = new FormData()
-    // Convert Node Buffer to ArrayBuffer for Blob compatibility
     const arrayBuf = audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength) as ArrayBuffer
+
+    const formData = new FormData()
     formData.append('file', new Blob([arrayBuf], { type: data.mimetype }), data.filename || 'audio.webm')
     formData.append('model', 'whisper-1')
-    // Auto-detect language, or pass from client
+
     const lang = (request.query as any)?.lang
     if (lang) {
-      // Whisper uses ISO 639-1 codes (e.g. 'zh', 'en', 'ja')
       formData.append('language', lang.split('-')[0])
     }
 
     try {
-      const response = await fetch(WHISPER_URL, {
+      const response = await fetch(getWhisperUrl(), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-        },
+        headers: { 'Authorization': `Bearer ${apiKey}` },
         body: formData,
       })
 
