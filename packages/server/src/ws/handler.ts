@@ -514,6 +514,22 @@ export function createWsHandler(deps: HandlerDeps) {
     })
 
     session.on('message', (msg: any) => {
+      // Detect resumption of a new turn without an explicit session_state_changed(running)
+      // from CLI. This happens for queued (priority:'next') messages where CLI consumes
+      // the queued prompt internally after the previous turn's result but doesn't emit
+      // a new state-change event. Without this synthetic broadcast, clients stay at
+      // sessionStatus='idle' during the whole queued turn and render nothing.
+      const isTurnActivityMsg =
+        msg.type === 'stream_event' ||
+        msg.type === 'assistant' ||
+        msg.type === 'user' ||
+        msg.type === 'tool_progress'
+      if (isTurnActivityMsg && session.status !== 'running' && session.status !== 'awaiting_approval' && session.status !== 'awaiting_user_input') {
+        // Promote locally so subsequent messages see the consistent state, then broadcast.
+        ;(session as any)._status = 'running'
+        wsHub.broadcast(realSessionId, { type: 'session-state-change', sessionId: realSessionId, state: 'running' } as any)
+        lockManager.cancelTimeout(realSessionId)
+      }
       if (msg.type === 'stream_event') {
         const event = msg.event
         if (event?.type === 'content_block_start') {
