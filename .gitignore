@@ -4,6 +4,6 @@ dist/
 *.db
 .env
 /.superpowers
-/Python/
+Python/
 *.tgz
 logs/
