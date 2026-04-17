@@ -51,7 +51,7 @@ function findSlashTrigger(text: string, cursorPos: number): { start: number; que
 let imageIdCounter = 0
 
 interface ChatComposerProps {
-  onSend: (prompt: string, images?: { data: string; mediaType: string }[]) => void
+  onSend: (prompt: string, images?: { data: string; mediaType: string }[]) => boolean
   onAbort: () => void
   minimal?: boolean
 }
@@ -66,7 +66,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const ctx = useChatSession()
-  const { lockStatus, sessionStatus, sessionId } = ctx
+  const { lockStatus, sessionStatus, sessionId, interruptRequested } = ctx
 
   // Auto-resize textarea: runs synchronously after React commits value changes
   // but BEFORE browser paint. This ensures cursor/scroll position set by React
@@ -116,21 +116,6 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
   const [slashQueryText, setSlashQueryText] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentProjectCwd = useSessionStore((s) => s.currentProjectCwd)
-
-  const poppedCommands = useSessionContainerStore(
-    (state) => sessionId ? state.containers.get(sessionId)?.poppedCommands ?? null : null
-  )
-
-  // Consume poppedCommands: merge editable command values into textarea
-  // Mirrors Claude Code messageQueueManager.ts popAllEditable() → [...queuedTexts, currentInput].join('\n')
-  useEffect(() => {
-    if (!poppedCommands || poppedCommands.length === 0 || !sessionId) return
-    const poppedTexts = poppedCommands.map(cmd => cmd.value)
-    setText(prev => {
-      return [...poppedTexts, prev].filter(Boolean).join('\n')
-    })
-    useSessionContainerStore.getState().setPoppedCommands(sessionId, null)
-  }, [poppedCommands, sessionId])
 
   // Consume composerDraft from store
   const composerDraft = useSessionStore((s) => s.composerDraft)
@@ -396,7 +381,8 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
           return { data: base64, mediaType: img.mediaType }
         })
       : undefined
-    onSend(text.trim(), sendImages)
+    const sent = onSend(text.trim(), sendImages)
+    if (!sent) return
     setText('')
     setImages([])
     setSelectedIndex(0)
@@ -667,8 +653,13 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
                 </button>
                 <button
                   onClick={onAbort}
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors bg-[var(--error)] text-white hover:bg-[var(--error-hover)] cursor-pointer"
-                  title="Stop"
+                  disabled={interruptRequested}
+                  className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
+                    interruptRequested
+                      ? 'bg-[var(--warning)] text-white cursor-wait opacity-80'
+                      : 'bg-[var(--error)] text-white hover:bg-[var(--error-hover)] cursor-pointer'
+                  }`}
+                  title={interruptRequested ? 'Interrupting...' : 'Stop'}
                 >
                   ■
                 </button>
@@ -700,6 +691,7 @@ export function ChatComposer({ onSend, onAbort, minimal }: ChatComposerProps) {
               fileRefs={fileRefs}
               isLocked={inputDisabled}
               isRunning={isRunning}
+              isInterrupting={interruptRequested}
               isLockHolder={isLockHolder}
               onReleaseLock={handleReleaseLock}
               showModes={showModes}

@@ -17,6 +17,7 @@ interface ComposerToolbarProps {
   fileRefs: string[]
   isLocked: boolean
   isRunning: boolean
+  isInterrupting: boolean
   isLockHolder: boolean
   onReleaseLock: () => void
 }
@@ -32,7 +33,7 @@ const modeColorClass: Record<string, { text: string; hover: string; hoverBg: str
 
 export function ComposerToolbar({
   onUpload, onSlashClick, onAtClick, onSend, onAbort,
-  canSend, fileRefs, isLocked, isRunning, isLockHolder, onReleaseLock,
+  canSend, fileRefs, isLocked, isRunning, isInterrupting, isLockHolder, onReleaseLock,
   showModes, setShowModes,
 }: ComposerToolbarProps & { showModes: boolean; setShowModes: (v: boolean) => void }) {
   const [showPlusMenu, setShowPlusMenu] = useState(false)
@@ -53,7 +54,9 @@ export function ComposerToolbar({
 
   const statusInfo = isDisconnected
     ? { color: 'bg-[var(--text-muted)]', text: connectionStatus, pulse: connectionStatus === 'connecting' || connectionStatus === 'reconnecting' }
-    : statusConfig[sessionStatus]
+    : sessionStatus === 'running' && isInterrupting
+      ? { color: 'bg-[var(--warning)]', text: 'Interrupting', pulse: true }
+      : statusConfig[sessionStatus]
 
   const currentModeInfo = MODES.find((m) => m.mode === permissionMode) ?? MODES[0]
 
@@ -192,8 +195,11 @@ export function ComposerToolbar({
           ) : (
             <button
               onClick={onAbort}
-              className="w-7 h-7 rounded-md bg-[var(--error)] flex items-center justify-center shrink-0"
-              title="Stop"
+              disabled={isInterrupting}
+              className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
+                isInterrupting ? 'bg-[var(--warning)] cursor-wait opacity-80' : 'bg-[var(--error)]'
+              }`}
+              title={isInterrupting ? 'Interrupting...' : 'Stop'}
             >
               <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="6" y="6" width="12" height="12" rx="1" />

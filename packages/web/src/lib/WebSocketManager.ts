@@ -18,6 +18,7 @@ import type {
   ToolApprovalDecision,
   PlanApprovalDecisionType,
   AgentMessage,
+  LocalPendingItem,
 } from '@claude-agent-ui/shared'
 import { useSessionContainerStore } from '../stores/sessionContainerStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -28,6 +29,28 @@ import { useToastStore } from '../components/chat/Toast'
 import { useCommandStore } from '../stores/commandStore'
 
 const CONNECTION_ID_KEY = 'claude-agent-ui-connection-id'
+
+// crypto.randomUUID() only exists in secure contexts (HTTPS or localhost).
+// When served over HTTP via LAN IP, it throws — fall back to a manual v4 UUID.
+function safeRandomUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const b = new Uint8Array(16)
+    crypto.getRandomValues(b)
+    b[6] = (b[6] & 0x0f) | 0x40
+    b[8] = (b[8] & 0x3f) | 0x80
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, '0'))
+    return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`
+  }
+  // Last-resort pseudo-random fallback (sufficient for client message IDs)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
@@ -90,9 +113,21 @@ class WebSocketManager {
     this.setState('disconnected')
   }
 
-  send(msg: C2SMessage) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+  send(msg: C2SMessage): boolean {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+        this.doConnect()
+      }
+      return false
+    }
+
+    try {
       this.ws.send(JSON.stringify(msg))
+      return true
+    } catch (err) {
+      console.error('[WSManager] Failed to send message', err)
+      this.ws.close()
+      return false
     }
   }
 
@@ -130,9 +165,41 @@ class WebSocketManager {
       permissionMode?: string
       sessionName?: string
     }
-  ) {
+  ): boolean {
+    const clientMessageId = safeRandomUUID()
     const { sessionName, ...sendOptions } = options ?? {}
-    this.send({ type: 'send-message', sessionId, prompt, sessionName, options: sendOptions as any })
+    const container = sessionId ? store().containers.get(sessionId) : null
+    const sessionBusy = container?.sessionStatus === 'running'
+      || container?.sessionStatus === 'awaiting_approval'
+      || container?.sessionStatus === 'awaiting_user_input'
+
+    const sent = this.send({
+      type: 'send-message',
+      sessionId,
+      clientMessageId,
+      prompt,
+      sessionName,
+      options: sendOptions as any,
+    })
+
+    if (!sent) {
+      useToastStore.getState().add('Not connected to server. Message was not sent.', 'error')
+      return false
+    }
+
+    if (sessionId) {
+      if (sessionBusy) {
+        const optimisticPending: LocalPendingItem = {
+          id: clientMessageId,
+          value: prompt,
+          status: 'pending',
+          addedAt: Date.now(),
+        }
+        store().addOptimisticLocalPending(sessionId, optimisticPending)
+      }
+    }
+
+    return true
   }
 
   respondToolApproval(requestId: string, decision: ToolApprovalDecision) {
@@ -158,8 +225,12 @@ class WebSocketManager {
     this.send({ type: 'abort', sessionId })
   }
 
-  popQueue(sessionId: string) {
-    this.send({ type: 'pop-queue', sessionId } as any)
+  retryLocalPending(sessionId: string, id: string) {
+    this.send({ type: 'retry-local-pending', sessionId, id } as any)
+  }
+
+  dismissLocalPending(sessionId: string, id: string) {
+    this.send({ type: 'dismiss-local-pending', sessionId, id } as any)
   }
 
   releaseLock(sessionId: string) {
@@ -307,7 +378,7 @@ class WebSocketManager {
   private resubscribeAll() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const { containers } = useSessionContainerStore.getState()
-    const activeId = useSessionStore.getState().currentSessionId
+    const { currentSessionId: activeId } = useSessionStore.getState()
 
     for (const [sessionId, container] of containers) {
       if (!container.subscribed) continue
@@ -590,11 +661,8 @@ class WebSocketManager {
       case 'sync-result':
         this.handleSyncResult(msg)
         break
-      case 'queue-updated':
-        this.handleQueueUpdated(msg)
-        break
-      case 'queue-popped':
-        this.handleQueuePopped(msg)
+      case 'local-pending-sync':
+        this.handleLocalPendingSync(msg)
         break
       case 'ping':
         this.handlePing()
@@ -627,6 +695,9 @@ class WebSocketManager {
     if (!container) return
 
     s.setSessionStatus(sessionId, msg.sessionStatus)
+    if (msg.sessionStatus !== 'running') {
+      s.setInterruptRequested(sessionId, false)
+    }
     s.setLockStatus(
       sessionId,
       msg.lockStatus === 'idle' ? 'idle'
@@ -935,6 +1006,8 @@ class WebSocketManager {
     // Clear previous turn summary when a new turn starts running
     if (msg.state === 'running') {
       s.setTurnSummary(sessionId, null)
+    } else {
+      s.setInterruptRequested(sessionId, false)
     }
     s.setSessionStatus(sessionId, msg.state)
   }
@@ -947,13 +1020,13 @@ class WebSocketManager {
     const sessionId = (msg as any).sessionId as string | undefined
     if (!sessionId) return
     const s = store()
+    s.setInterruptRequested(sessionId, false)
     s.setSessionStatus(sessionId, 'idle')
     // Clear pending requests but preserve lock status
     s.setApproval(sessionId, null)
     s.setAskUser(sessionId, null)
     s.setPlanApproval(sessionId, null)
     s.setPlanModalOpen(sessionId, false)
-    s.setQueue(sessionId, [])
     // Snapshot turn summary from result, then clear streaming state
     const result = (msg as any).result
     if (result && typeof result.duration_ms === 'number') {
@@ -985,20 +1058,10 @@ class WebSocketManager {
     const sessionId = (msg as any).sessionId as string | undefined
     if (!sessionId) return
     const s = store()
-    s.setSessionStatus(sessionId, 'idle')
-    s.setApproval(sessionId, null)
-    s.setAskUser(sessionId, null)
-    s.setPlanApproval(sessionId, null)
-    s.setPlanModalOpen(sessionId, false)
-    s.setQueue(sessionId, [])
-    s.clearStreaming(sessionId)
-    this.currentToolBlockIndex.delete(sessionId)
-    // Refresh session list
-    const sessStore = useSessionStore.getState()
-    if (sessStore.currentProjectCwd) {
-      sessStore.invalidateProjectSessions(sessStore.currentProjectCwd)
-      sessStore.loadProjectSessions(sessStore.currentProjectCwd, true)
-    }
+    // Claude Code latches cancel locally first, then waits for the real
+    // session state transition before returning to idle. Keep streaming
+    // visible until the backend reports the turn is actually over.
+    s.setInterruptRequested(sessionId, true)
   }
 
   private handleSessionForked(msg: any) {
@@ -1114,16 +1177,10 @@ class WebSocketManager {
     useSessionStore.setState({ sessions })
   }
 
-  private handleQueueUpdated(msg: any) {
+  private handleLocalPendingSync(msg: any) {
     const sessionId = msg.sessionId as string | undefined
     if (!sessionId) return
-    store().setQueue(sessionId, msg.queue ?? [])
-  }
-
-  private handleQueuePopped(msg: any) {
-    const sessionId = msg.sessionId as string | undefined
-    if (!sessionId) return
-    store().setPoppedCommands(sessionId, msg.commands ?? [])
+    store().setLocalPending(sessionId, msg.items ?? [])
   }
 
   private handleSyncResult(msg: any) {

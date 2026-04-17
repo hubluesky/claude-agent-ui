@@ -39,6 +39,7 @@ export class ProcessManager {
       '-p',
       '--input-format', 'stream-json',
       '--output-format', 'stream-json',
+      '--replay-user-messages',
       '--include-partial-messages',
       '--verbose',
       // Enable stdio-based permission prompts so the parent process can handle

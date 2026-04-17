@@ -2,7 +2,7 @@ import type { SessionStatus, PermissionMode, EffortLevel, LockStatus } from './c
 import type { ToolApprovalDecision, AskUserQuestion, PlanApprovalDecisionType } from './tools.js'
 import type { AgentMessage } from './messages.js'
 import type { SessionResult } from './session.js'
-import type { QueueItemWire } from './queue.js'
+import type { LocalPendingItem } from './queue.js'
 
 // ============ Client → Server (C2S) ============
 
@@ -15,6 +15,7 @@ export interface C2S_JoinSession {
 export interface C2S_SendMessage {
   type: 'send-message'
   sessionId: string | null
+  clientMessageId: string
   prompt: string
   sessionName?: string
   options?: {
@@ -43,9 +44,16 @@ export interface C2S_Abort {
   sessionId: string
 }
 
-export interface C2S_PopQueue {
-  type: 'pop-queue'
+export interface C2S_RetryLocalPending {
+  type: 'retry-local-pending'
   sessionId: string
+  id: string
+}
+
+export interface C2S_DismissLocalPending {
+  type: 'dismiss-local-pending'
+  sessionId: string
+  id: string
 }
 
 export interface C2S_SetMode {
@@ -199,20 +207,12 @@ export interface S2C_SessionComplete {
 export interface S2C_SessionAborted {
   type: 'session-aborted'
   sessionId: string
-  /** Only editable commands are popped back; system commands stay in queue */
-  queuedCommands?: QueueItemWire[]
 }
 
-export interface S2C_QueuePopped {
-  type: 'queue-popped'
+export interface S2C_LocalPendingSync {
+  type: 'local-pending-sync'
   sessionId: string
-  commands: QueueItemWire[]
-}
-
-export interface S2C_QueueUpdated {
-  type: 'queue-updated'
-  sessionId: string
-  queue: QueueItemWire[]
+  items: LocalPendingItem[]
 }
 
 export interface SlashCommandInfo {
@@ -412,7 +412,8 @@ export type C2SMessage =
   | C2S_ToggleMcpServer
   | C2S_ReconnectMcpServer
   | C2S_GetSubagentMessages
-  | C2S_PopQueue
+  | C2S_RetryLocalPending
+  | C2S_DismissLocalPending
   | C2S_Pong
 
 export type S2CMessage =
@@ -441,6 +442,5 @@ export type S2CMessage =
   | S2C_StreamSnapshot
   | S2C_SessionTitleUpdated
   | S2C_SyncResult
-  | S2C_QueueUpdated
-  | S2C_QueuePopped
+  | S2C_LocalPendingSync
   | S2C_Error

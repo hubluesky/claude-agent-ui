@@ -95,6 +95,7 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
     const isLoadingMore = container?.isLoadingMore ?? false
     const hasMore = container?.hasMore ?? false
     const sessionStatus = container?.sessionStatus ?? 'idle'
+    const interruptRequested = container?.interruptRequested ?? false
     const lockStatus = container?.lockStatus ?? 'idle'
     const lockHolderId = container?.lockHolder ?? null
     const pendingApproval = container?.pendingApproval ?? null
@@ -105,7 +106,7 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
     const contextUsage = container?.contextUsage ?? null
     const mcpServers = container?.mcpServers ?? []
     const subagentMessages = container?.subagentMessages ?? new Map<string, any[]>()
-    const queue = container?.queue ?? []
+    const localPending = container?.localPending ?? []
 
     return {
       sessionId,
@@ -118,6 +119,7 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
       loadMore,
 
       sessionStatus,
+      interruptRequested,
       lockStatus,
       lockHolderId,
       pendingApproval,
@@ -128,23 +130,40 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
       contextUsage,
       mcpServers,
       subagentMessages,
-      queue,
+      localPending,
 
       send(prompt, options) {
         const isNew = sessionId === '__new__' || !sessionId
         const { thinkingMode, effort } = useSettingsStore.getState()
-        // Optimistic: set session status running immediately
-        if (sessionId && sessionId !== '__new__') {
-          useSessionContainerStore.getState().setSessionStatus(sessionId, 'running')
-        }
         const { sessionName } = useEmbedStore.getState()
-        wsManager.sendMessage(prompt, isNew ? null : sessionId, {
+        const state = useSessionContainerStore.getState()
+        const current = sessionId && sessionId !== '__new__'
+          ? state.containers.get(sessionId)
+          : null
+        const sessionBusy = current?.sessionStatus === 'running'
+          || current?.sessionStatus === 'awaiting_approval'
+          || current?.sessionStatus === 'awaiting_user_input'
+
+        const sent = wsManager.sendMessage(prompt, isNew ? null : sessionId, {
           cwd: currentProjectCwd ?? undefined,
           thinkingMode,
           effort,
           ...(isNew && sessionName ? { sessionName } : {}),
           ...options,
         })
+        if (!sent) return false
+
+        // Optimistic running state is only for the idle-send path. Set it after
+        // the websocket send so sendMessage() can still see the pre-submit state
+        // and avoid fabricating a local pending item for idle turns.
+        if (sessionId && sessionId !== '__new__') {
+          state.setInterruptRequested(sessionId, false)
+          if (!sessionBusy) {
+            state.setSessionStatus(sessionId, 'running')
+          }
+        }
+
+        return true
       },
 
       respondToolApproval(requestId, decision) {
@@ -160,11 +179,20 @@ export function ChatSessionProvider({ sessionId, children }: ChatSessionProvider
       },
 
       abort() {
-        if (sessionId && sessionId !== '__new__') wsManager.abort(sessionId)
+        if (!sessionId || sessionId === '__new__') return
+        const state = useSessionContainerStore.getState()
+        const current = state.containers.get(sessionId)
+        if (current?.interruptRequested) return
+        state.setInterruptRequested(sessionId, true)
+        wsManager.abort(sessionId)
       },
 
-      popQueue() {
-        if (sessionId && sessionId !== '__new__') wsManager.popQueue(sessionId)
+      retryLocalPending(id) {
+        if (sessionId && sessionId !== '__new__') wsManager.retryLocalPending(sessionId, id)
+      },
+
+      dismissLocalPending(id) {
+        if (sessionId && sessionId !== '__new__') wsManager.dismissLocalPending(sessionId, id)
       },
 
       releaseLock() {

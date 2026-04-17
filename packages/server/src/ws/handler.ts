@@ -1,13 +1,17 @@
 import { randomUUID } from 'crypto'
 import type { WebSocket } from 'ws'
-import type { C2SMessage, PermissionMode, PlanApprovalDecision, QueuedCommand, CommandMode } from '@claude-agent-ui/shared'
+import type {
+  C2SMessage,
+  LocalPendingItem,
+  PermissionMode,
+  PlanApprovalDecision,
+} from '@claude-agent-ui/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'
 import { CliSession } from '../agent/cli-session.js'
 import { maybeGenerateTitle } from '../agent/title-generator.js'
 import { getKnownModels } from '../agent/known-models.js'
-import { MessageQueueManager, processQueue, joinPromptValues } from '../queue/index.js'
 
 export interface HandlerDeps {
   wsHub: WSHub
@@ -24,28 +28,212 @@ export function createWsHandler(deps: HandlerDeps) {
     toolName?: string
     payload: Record<string, unknown>
   }
-  const pendingRequestMap = new Map<string, PendingRequest>()
 
-  // ── Input Queue: per-session priority queue (mirrors Claude Code messageQueueManager.ts) ──
-  const sessionQueues = new Map<string, MessageQueueManager>()
-
-  function getOrCreateQueue(sessionId: string): MessageQueueManager {
-    let q = sessionQueues.get(sessionId)
-    if (!q) {
-      q = new MessageQueueManager()
-      sessionQueues.set(sessionId, q)
-      q.on('changed', () => {
-        wsHub.broadcast(sessionId, {
-          type: 'queue-updated',
-          sessionId,
-          queue: q!.toWireArray(),
-        } as any)
-      })
-    }
-    return q
+  interface MessageOptions {
+    cwd?: string
+    images?: { data: string; mediaType: string }[]
+    thinkingMode?: string
+    effort?: string
+    permissionMode?: string
   }
 
+  interface UserCommand {
+    id: string
+    value: string
+    images?: { data: string; mediaType: string }[]
+    options?: MessageOptions
+  }
+
+  interface LocalPendingSubmission {
+    id: string
+    sessionId: string
+    connectionId: string
+    value: string
+    addedAt: number
+    status: 'pending' | 'failed'
+    errorMessage?: string
+    options?: MessageOptions
+  }
+
+  const pendingRequestMap = new Map<string, PendingRequest>()
+  const localPendingBySession = new Map<string, Map<string, LocalPendingSubmission>>()
+  // Grace window between WS close and forced lock release. If the same
+  // connectionId comes back via `reconnect` (handleReconnect transfers lock
+  // to the new connection), the scheduled release is cancelled.
+  const pendingLockReleaseByConnection = new Map<string, ReturnType<typeof setTimeout>>()
+  const CLOSE_LOCK_RELEASE_GRACE_MS = 15_000
+
   wsHub.startHeartbeat()
+
+  function scheduleLockReleaseOnClose(connectionId: string): void {
+    const locked = lockManager.getLockedSessions(connectionId)
+    if (locked.length === 0) return
+    const existing = pendingLockReleaseByConnection.get(connectionId)
+    if (existing) clearTimeout(existing)
+    const timer = setTimeout(() => {
+      pendingLockReleaseByConnection.delete(connectionId)
+      for (const sid of locked) {
+        // Only release if this connection still owns the lock (no reconnect/transfer happened)
+        if (lockManager.isHolder(sid, connectionId)) {
+          lockManager.release(sid)
+        }
+      }
+    }, CLOSE_LOCK_RELEASE_GRACE_MS)
+    pendingLockReleaseByConnection.set(connectionId, timer)
+  }
+
+  function cancelPendingLockRelease(previousConnectionId: string): void {
+    const timer = pendingLockReleaseByConnection.get(previousConnectionId)
+    if (timer) {
+      clearTimeout(timer)
+      pendingLockReleaseByConnection.delete(previousConnectionId)
+    }
+  }
+
+  function toLocalPendingItem(item: LocalPendingSubmission): LocalPendingItem {
+    return {
+      id: item.id,
+      value: item.value,
+      status: item.status,
+      addedAt: item.addedAt,
+      ...(item.errorMessage ? { errorMessage: item.errorMessage } : {}),
+    }
+  }
+
+  function getLocalPendingSnapshot(sessionId: string, connectionId: string): LocalPendingItem[] {
+    const items = localPendingBySession.get(sessionId)
+    if (!items) return []
+    return [...items.values()]
+      .filter(item => item.connectionId === connectionId)
+      .sort((a, b) => a.addedAt - b.addedAt)
+      .map(toLocalPendingItem)
+  }
+
+  function syncLocalPending(sessionId: string, connectionId: string): void {
+    wsHub.sendTo(connectionId, {
+      type: 'local-pending-sync',
+      sessionId,
+      items: getLocalPendingSnapshot(sessionId, connectionId),
+    } as any)
+  }
+
+  function storeLocalPending(sessionId: string, item: LocalPendingSubmission): void {
+    let items = localPendingBySession.get(sessionId)
+    if (!items) {
+      items = new Map()
+      localPendingBySession.set(sessionId, items)
+    }
+    items.set(item.id, item)
+    syncLocalPending(sessionId, item.connectionId)
+  }
+
+  function removeLocalPending(sessionId: string, id: string): LocalPendingSubmission | undefined {
+    const items = localPendingBySession.get(sessionId)
+    if (!items) return undefined
+    const item = items.get(id)
+    if (!item) return undefined
+    items.delete(id)
+    if (items.size === 0) {
+      localPendingBySession.delete(sessionId)
+    }
+    syncLocalPending(sessionId, item.connectionId)
+    return item
+  }
+
+  function markLocalPendingFailed(sessionId: string, id: string, errorMessage: string): LocalPendingSubmission | undefined {
+    const items = localPendingBySession.get(sessionId)
+    if (!items) return undefined
+    const item = items.get(id)
+    if (!item) return undefined
+    item.status = 'failed'
+    item.errorMessage = errorMessage
+    syncLocalPending(sessionId, item.connectionId)
+    return item
+  }
+
+  function resolveLocalPendingAck(sessionId: string, id: string): LocalPendingSubmission | undefined {
+    return removeLocalPending(sessionId, id)
+  }
+
+  async function cancelLocalPendingAfterAbort(
+    session: CliSession,
+    sessionId: string,
+    connectionId: string,
+  ): Promise<void> {
+    const items = localPendingBySession.get(sessionId)
+    if (!items) return
+
+    const pendingItems = [...items.values()].filter(
+      item => item.connectionId === connectionId && item.status === 'pending',
+    )
+    if (pendingItems.length === 0) return
+
+    await Promise.all(
+      pendingItems.map(async (item) => {
+        const cancelled = await session.cancelAsyncMessage(item.id).catch(() => false)
+        if (!cancelled) return
+
+        session.clearForwardedMessage(item.id)
+        markLocalPendingFailed(
+          sessionId,
+          item.id,
+          'Interrupted before Claude Code confirmed this message',
+        )
+      }),
+    )
+  }
+
+  function markAllLocalPendingFailed(sessionId: string, errorMessage: string): void {
+    const items = localPendingBySession.get(sessionId)
+    if (!items) return
+    const affectedConnections = new Set<string>()
+    for (const item of items.values()) {
+      item.status = 'failed'
+      item.errorMessage = errorMessage
+      affectedConnections.add(item.connectionId)
+    }
+    for (const connectionId of affectedConnections) {
+      syncLocalPending(sessionId, connectionId)
+    }
+  }
+
+  function transferLocalPending(previousConnectionId: string, connectionId: string): void {
+    for (const [sessionId, items] of localPendingBySession) {
+      let changed = false
+      for (const item of items.values()) {
+        if (item.connectionId === previousConnectionId) {
+          item.connectionId = connectionId
+          changed = true
+        }
+      }
+      if (changed) {
+        syncLocalPending(sessionId, connectionId)
+      }
+    }
+  }
+
+  function migrateLocalPendingSession(oldSessionId: string, newSessionId: string): void {
+    const items = localPendingBySession.get(oldSessionId)
+    if (!items) return
+    const affectedConnectionIds = [...new Set([...items.values()].map(item => item.connectionId))]
+    localPendingBySession.delete(oldSessionId)
+    for (const connectionId of affectedConnectionIds) {
+      wsHub.sendTo(connectionId, {
+        type: 'local-pending-sync',
+        sessionId: oldSessionId,
+        items: [],
+      } as any)
+    }
+    const target = localPendingBySession.get(newSessionId) ?? new Map<string, LocalPendingSubmission>()
+    for (const item of items.values()) {
+      item.sessionId = newSessionId
+      target.set(item.id, item)
+    }
+    localPendingBySession.set(newSessionId, target)
+    for (const connectionId of affectedConnectionIds) {
+      syncLocalPending(newSessionId, connectionId)
+    }
+  }
 
   function resendPendingRequests(sessionId: string, connectionId: string, readonly: boolean) {
     for (const [, entry] of pendingRequestMap) {
@@ -79,6 +267,9 @@ export function createWsHandler(deps: HandlerDeps) {
 
     ws.on('close', () => {
       wsHub.unregister(connectionId)
+      // Schedule lock release if this connection held any locks. Cancelled
+      // if a reconnect with this connectionId as previousConnectionId arrives.
+      scheduleLockReleaseOnClose(connectionId)
     })
   }
 
@@ -88,7 +279,14 @@ export function createWsHandler(deps: HandlerDeps) {
         handleJoinSession(connectionId, msg.sessionId, msg.lastSeq)
         break
       case 'send-message':
-        await handleSendMessage(connectionId, msg.sessionId, msg.prompt, msg.options, msg.sessionName)
+        await handleSendMessage(
+          connectionId,
+          msg.sessionId,
+          msg.clientMessageId,
+          msg.prompt,
+          msg.options,
+          msg.sessionName,
+        )
         break
       case 'tool-approval-response':
         handleToolApprovalResponse(connectionId, msg.requestId, msg.decision)
@@ -99,8 +297,11 @@ export function createWsHandler(deps: HandlerDeps) {
       case 'abort':
         await handleAbort(connectionId, msg.sessionId)
         break
-      case 'pop-queue':
-        handlePopQueue(connectionId, (msg as any).sessionId)
+      case 'retry-local-pending':
+        await handleRetryLocalPending(connectionId, msg.sessionId, msg.id)
+        break
+      case 'dismiss-local-pending':
+        handleDismissLocalPending(connectionId, msg.sessionId, msg.id)
         break
       case 'set-mode':
         await handleSetMode(connectionId, msg.sessionId, msg.mode)
@@ -218,12 +419,7 @@ export function createWsHandler(deps: HandlerDeps) {
 
     const readonly = lockHolder !== null && lockHolder !== connectionId
     resendPendingRequests(sessionId, connectionId, readonly)
-
-    // Send current queue state
-    const q = sessionQueues.get(sessionId)
-    if (q && !q.isEmpty) {
-      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: q.toWireArray() } as any)
-    }
+    syncLocalPending(sessionId, connectionId)
   }
 
   function handleSubscribeSession(connectionId: string, sessionId: string, lastSeq?: number) {
@@ -249,17 +445,17 @@ export function createWsHandler(deps: HandlerDeps) {
 
     wsHub.sendTo(connectionId, { type: 'sync-result', sessionId, replayed: syncResult.replayed, hasGap: syncResult.hasGap, gapRange: syncResult.gapRange } as any)
     resendPendingRequests(sessionId, connectionId, true)
-
-    // Send current queue state
-    const q = sessionQueues.get(sessionId)
-    if (q && !q.isEmpty) {
-      wsHub.sendTo(connectionId, { type: 'queue-updated', sessionId, queue: q.toWireArray() } as any)
-    }
+    syncLocalPending(sessionId, connectionId)
   }
 
   // ======== Session event binding ========
 
-  function bindSessionEvents(session: CliSession, sessionId: string, connectionId: string, pendingUserMsg?: { prompt: string; content: unknown[] }) {
+  function bindSessionEvents(
+    session: CliSession,
+    sessionId: string,
+    connectionId: string,
+    pendingUserMsg?: { prompt: string; content: unknown[]; uuid: string },
+  ) {
     session.removeAllListeners()
 
     // Clean up stale pending requests
@@ -277,7 +473,8 @@ export function createWsHandler(deps: HandlerDeps) {
 
     session.on('session-id-changed', (_oldId: string | null, newId: string) => {
       if (realSessionId.startsWith('pending-')) {
-        // New session: register, acquire lock, join, broadcast deferred user message
+        // New session: register, acquire lock, join, then replace the
+        // optimistic first user message once the real session id exists.
         sessionManager.registerActive(newId, session)
         // ── Named Session: set customTitle on newly created session ──
         const pendingName = (session as any).__pendingSessionName as string | undefined
@@ -297,7 +494,7 @@ export function createWsHandler(deps: HandlerDeps) {
           wsHub.broadcast(newId, {
             type: 'agent-message',
             sessionId: newId,
-            message: { type: 'user', uuid: randomUUID(), message: { role: 'user', content: pendingUserMsg.content } },
+            message: { type: 'user', uuid: pendingUserMsg.uuid, message: { role: 'user', content: pendingUserMsg.content } },
           } as any)
         }
       } else if (realSessionId !== newId) {
@@ -312,12 +509,7 @@ export function createWsHandler(deps: HandlerDeps) {
         wsHub.joinSession(connectionId, newId)
         wsHub.broadcast(newId, { type: 'lock-status', sessionId: newId, status: 'locked', holderId: connectionId })
       }
-      // Migrate queue to new session ID
-      const oldQ = sessionQueues.get(realSessionId)
-      if (oldQ) {
-        sessionQueues.delete(realSessionId)
-        sessionQueues.set(newId, oldQ)
-      }
+      migrateLocalPendingSession(realSessionId, newId)
       realSessionId = newId
     })
 
@@ -362,6 +554,10 @@ export function createWsHandler(deps: HandlerDeps) {
             }
           }).catch(() => {})
         }
+      }
+
+      if (msg.type === 'user' && typeof msg.uuid === 'string') {
+        resolveLocalPendingAck(realSessionId, msg.uuid)
       }
 
       wsHub.broadcast(realSessionId, { type: 'agent-message', sessionId: realSessionId, message: msg })
@@ -440,29 +636,19 @@ export function createWsHandler(deps: HandlerDeps) {
         }).catch(() => {})
       }
 
-      // ── Input Queue: process remaining items after turn completes ──
-      setImmediate(() => {
-        const q = sessionQueues.get(realSessionId)
-        if (!q || q.isEmpty) return
-        processQueue(q, {
-          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
-          isSessionBusy: () => session.status !== 'idle',
-        })
-      })
+      // Forwarded busy-turn messages stay local-only until Claude Code
+      // replays the same uuid back to us.
+
     })
 
     session.on('error', (err: Error) => {
       wsHub.broadcast(realSessionId, { type: 'error', message: err.message, code: 'internal' })
-
-      // ── Input Queue: try dequeue on error ──
-      setImmediate(() => {
-        const q = sessionQueues.get(realSessionId)
-        if (!q || q.isEmpty) return
-        processQueue(q, {
-          executeInput: (cmds) => executeCommands(connectionId, realSessionId, session, cmds),
-          isSessionBusy: () => session.status !== 'idle',
-        })
-      })
+      // A process/transport failure means any still-unconfirmed local pending
+      // message can no longer be promoted into shared session history.
+      markAllLocalPendingFailed(
+        realSessionId,
+        'Claude Code exited before pending messages were confirmed',
+      )
     })
   }
 
@@ -471,11 +657,13 @@ export function createWsHandler(deps: HandlerDeps) {
   async function handleSendMessage(
     connectionId: string,
     sessionId: string | null,
+    clientMessageId: string,
     prompt: string,
-    options?: { cwd?: string; images?: any[]; thinkingMode?: string; effort?: string; permissionMode?: string },
+    options?: MessageOptions,
     sessionName?: string,
   ) {
     let effectiveSessionId = sessionId
+    const messageId = clientMessageId || randomUUID()
 
     // ── Named Session: resolve sessionName → sessionId via customTitle ──
     if (!effectiveSessionId && sessionName && options?.cwd) {
@@ -516,56 +704,42 @@ export function createWsHandler(deps: HandlerDeps) {
       if (existing) {
         session = existing as CliSession
       } else {
-        session = await sessionManager.resumeSession(effectiveSessionId)
+        session = await sessionManager.resumeSession(effectiveSessionId, options?.cwd)
       }
     }
 
-    // ── Input Queue: classify command and enqueue ──
-    // Mirrors Claude Code handlePromptSubmit.ts:313-351
-    const mode: CommandMode = prompt.trim().startsWith('/') ? 'slash' : 'prompt'
-    const command: QueuedCommand = {
-      id: randomUUID(),
+    const command: UserCommand = {
+      id: messageId,
       value: prompt,
-      mode,
-      priority: 'next',
-      editable: true,
-      connectionId,
-      addedAt: Date.now(),
       images: options?.images,
       options,
     }
 
     const sessionBusy = session.status === 'running' || session.status === 'awaiting_approval' || session.status === 'awaiting_user_input'
     if (sessionBusy && effectiveSessionId && !effectiveSessionId.startsWith('pending-')) {
-      // ── Deferred queue: enqueue only, do NOT forward to CLI ──
-      // Messages sit in queue until current turn completes, then processQueue() sends them.
-      // ESC can pop them back to the composer before they are consumed.
-      const q = getOrCreateQueue(effectiveSessionId)
-      q.enqueue(command)
-
-      // Broadcast user message to all clients (so it appears in chat immediately)
-      const broadcastContent: any[] = []
-      if (command.images) {
-        for (const img of command.images) {
-          broadcastContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })
-        }
-      }
-      if (command.value) {
-        broadcastContent.push({ type: 'text', text: command.value })
-      }
-      wsHub.broadcast(effectiveSessionId, {
-        type: 'agent-message',
+      // Busy-turn submissions remain local-only in the UI until Claude Code
+      // replays the same uuid, but we still forward them immediately so the
+      // CLI stays authoritative about what was actually consumed.
+      const pendingSubmission: LocalPendingSubmission = {
+        id: messageId,
         sessionId: effectiveSessionId,
-        message: { type: 'user', uuid: command.id, message: { role: 'user', content: broadcastContent } },
-      } as any)
+        connectionId,
+        value: prompt,
+        addedAt: Date.now(),
+        status: 'pending',
+        options,
+      }
+      storeLocalPending(effectiveSessionId, pendingSubmission)
+      forwardLocalPendingSubmission(connectionId, effectiveSessionId, session, pendingSubmission)
       return
     }
-    // Session idle → execute directly via executeCommands
+
+    // Idle path keeps the existing optimistic shared user-message behavior.
     executeCommands(connectionId, effectiveSessionId!, session, [command])
   }
 
   /**
-   * Execute queued commands as a single turn.
+   * Execute one or more user commands as a single turn.
    * Each command is broadcast as a separate user message with its own UUID.
    * Only the first command applies options (permissionMode, thinkingMode, effort).
    *
@@ -576,7 +750,7 @@ export function createWsHandler(deps: HandlerDeps) {
     connectionId: string,
     sessionId: string,
     session: CliSession,
-    commands: QueuedCommand[],
+    commands: UserCommand[],
   ) {
     if (commands.length === 0) return
 
@@ -611,7 +785,12 @@ export function createWsHandler(deps: HandlerDeps) {
 
       // Bind events only on first command
       if (isFirst) {
-        bindSessionEvents(session, sessionId, connectionId, isPending ? { prompt: cmd.value, content: broadcastContent } : undefined)
+        bindSessionEvents(
+          session,
+          sessionId,
+          connectionId,
+          isPending ? { prompt: cmd.value, content: broadcastContent, uuid: cmd.id } : undefined,
+        )
       }
 
       // Broadcast user message (each command keeps its own UUID)
@@ -628,25 +807,42 @@ export function createWsHandler(deps: HandlerDeps) {
       // For single commands, send as-is
     }
 
-    // Send to CLI: if multiple prompt commands batched, join their values
-    // Mirrors Claude Code print.ts joinPromptValues (line 422-427)
     const firstCmd = commands[0]!
-    if (commands.length > 1) {
-      const joinedValue = joinPromptValues(commands.map(c => c.value))
-      session.send(joinedValue, {
-        cwd: firstCmd.options?.cwd,
-        images: firstCmd.images,
-        effort: firstCmd.options?.effort as any,
-        thinkingMode: firstCmd.options?.thinkingMode as any,
-      })
-    } else {
-      session.send(firstCmd.value, {
-        cwd: firstCmd.options?.cwd,
-        images: firstCmd.images,
-        effort: firstCmd.options?.effort as any,
-        thinkingMode: firstCmd.options?.thinkingMode as any,
-      })
+    const promptValue = commands.length === 1
+      ? firstCmd.value
+      : commands.map(cmd => cmd.value).join('\n')
+    session.send(promptValue, {
+      cwd: firstCmd.options?.cwd,
+      images: firstCmd.images,
+      effort: firstCmd.options?.effort as any,
+      thinkingMode: firstCmd.options?.thinkingMode as any,
+      uuid: firstCmd.id,
+    })
+  }
+
+  function forwardLocalPendingSubmission(
+    connectionId: string,
+    sessionId: string,
+    session: CliSession,
+    submission: LocalPendingSubmission,
+  ): void {
+    if (session.status === 'idle') {
+      bindSessionEvents(session, sessionId, connectionId)
     }
+
+    const sent = session.send(submission.value, {
+      cwd: submission.options?.cwd,
+      images: submission.options?.images,
+      priority: 'next',
+      uuid: submission.id,
+    })
+
+    if (!sent) {
+      markLocalPendingFailed(sessionId, submission.id, 'Failed to deliver message to Claude Code')
+      return
+    }
+
+    session.trackForwardedMessage(submission.id)
   }
 
   // ======== Approval responses ========
@@ -717,6 +913,7 @@ export function createWsHandler(deps: HandlerDeps) {
         if (state !== 'idle') return
         session.removeListener('state-change', onStateChange)
 
+        markAllLocalPendingFailed(entry.sessionId, 'Session was replaced before pending messages were confirmed')
         session.close()
         sessionManager.removeActive(entry.sessionId)
 
@@ -743,39 +940,54 @@ export function createWsHandler(deps: HandlerDeps) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
-
-    // Pure abort — no queue popping. ESC pop is handled separately via pop-queue.
-    const session = sessionManager.getActive(sessionId)
-    if (session) await session.abort()
-
+    // Interrupt the active turn first, then try to retract any still-local
+    // async messages from Claude Code's internal queue. Items that were
+    // already consumed will simply continue toward replay/ack.
+    const session = sessionManager.getActive(sessionId) as CliSession | undefined
+    if (session) {
+      await session.abort()
+      void cancelLocalPendingAfterAbort(session, sessionId, connectionId)
+    }
     wsHub.broadcast(sessionId, { type: 'session-aborted', sessionId } as any)
   }
 
-  function handlePopQueue(connectionId: string, sessionId: string) {
+  async function handleRetryLocalPending(connectionId: string, sessionId: string, id: string) {
+    const items = localPendingBySession.get(sessionId)
+    const existing = items?.get(id)
+    if (!existing || existing.connectionId !== connectionId || existing.status !== 'failed') {
+      return
+    }
     if (!lockManager.isHolder(sessionId, connectionId)) {
       wsHub.sendTo(connectionId, { type: 'error', message: 'Not lock holder', code: 'not_lock_holder' })
       return
     }
 
-    const q = sessionQueues.get(sessionId)
-    const editableCommands = q?.popAllEditable() ?? []
-    if (editableCommands.length === 0) return
+    const session = (sessionManager.getActive(sessionId) as CliSession | undefined)
+      ?? await sessionManager.resumeSession(sessionId, existing.options?.cwd)
 
-    // Send popped commands to requester only (lock holder merges into composer)
-    wsHub.sendTo(connectionId, {
-      type: 'queue-popped',
+    const newId = randomUUID()
+    removeLocalPending(sessionId, id)
+
+    const retrySubmission: LocalPendingSubmission = {
+      ...existing,
+      id: newId,
       sessionId,
-      commands: editableCommands.map(cmd => ({
-        id: cmd.id,
-        value: cmd.value,
-        mode: cmd.mode,
-        priority: cmd.priority,
-        editable: cmd.editable,
-        addedAt: cmd.addedAt,
-        images: cmd.images,
-      })),
-    } as any)
-    // queue-updated is auto-broadcast via queue's 'changed' event listener
+      connectionId,
+      addedAt: Date.now(),
+      status: 'pending',
+      errorMessage: undefined,
+    }
+    storeLocalPending(sessionId, retrySubmission)
+    forwardLocalPendingSubmission(connectionId, sessionId, session, retrySubmission)
+  }
+
+  function handleDismissLocalPending(connectionId: string, sessionId: string, id: string) {
+    const items = localPendingBySession.get(sessionId)
+    const existing = items?.get(id)
+    if (!existing || existing.connectionId !== connectionId) {
+      return
+    }
+    removeLocalPending(sessionId, id)
   }
 
   async function handleSetMode(connectionId: string, sessionId: string, mode: PermissionMode) {
@@ -827,6 +1039,9 @@ export function createWsHandler(deps: HandlerDeps) {
 
   function handleReconnect(connectionId: string, previousConnectionId: string) {
     if (connectionId === previousConnectionId) return
+    // Cancel any pending close-triggered release so the lock can be transferred
+    cancelPendingLockRelease(previousConnectionId)
+    transferLocalPending(previousConnectionId, connectionId)
     const lockedSessions = lockManager.getLockedSessions(previousConnectionId)
     for (const sid of lockedSessions) {
       // Transfer lock to new connection, preserving timeout state

@@ -31,6 +31,9 @@ export class CliSession extends AgentSession {
    *  resolvePlanApproval can include updatedInput (required by SDK Zod schema). */
   private _planApprovalInputs = new Map<string, Record<string, unknown>>()
 
+  /** UUIDs forwarded mid-turn that should be replayed back to the UI on ack. */
+  private _pendingForwardedUuids = new Set<string>()
+
   constructor(processManager: ProcessManager, cwd: string, options?: {
     resumeSessionId?: string
     forkSession?: boolean
@@ -55,6 +58,16 @@ export class CliSession extends AgentSession {
   get status(): SessionStatus { return this._status }
   get model(): string | undefined { return this._model }
   get permissionMode(): PermissionMode { return this._permissionMode }
+
+  /** Mark that a message was forwarded to CLI for mid-query injection. */
+  trackForwardedMessage(uuid: string): void {
+    this._pendingForwardedUuids.add(uuid)
+  }
+
+  /** Stop treating a forwarded uuid as awaiting CLI replay. */
+  clearForwardedMessage(uuid: string): void {
+    this._pendingForwardedUuids.delete(uuid)
+  }
 
   /** Ensure a CLI process is running, spawn if needed */
   private ensureProcess(): CliProcess {
@@ -132,17 +145,23 @@ export class CliSession extends AgentSession {
 
       case 'user': {
         // The server already broadcasts the human user's text message when it
-        // receives send-message from the WebSocket client.  CLI echoes that same
-        // message back — we skip the echo to avoid duplicates.
+        // receives send-message from the WebSocket client (idle path).
+        // CLI echoes that same message back — we skip the echo to avoid duplicates.
         //
-        // BUT the SDK also emits internal user messages that contain tool_result
-        // blocks (the results of tool executions).  These are NEVER broadcast by
-        // the server, so we MUST forward them.  Without them the frontend sees
-        // consecutive assistant messages with no separation between turns.
+        // EXCEPT: for mid-query forwarded messages (busy path), the server does NOT
+        // broadcast the user message (it only shows in queue UI). When CLI echoes
+        // those back, we MUST emit them so they appear in chat after queue consumption.
+        //
+        // Also: the SDK emits internal user messages with tool_result blocks (results
+        // of tool executions). These are NEVER broadcast by the server, so we forward them.
         const userContent = (msg as any).message?.content
         const blocks = Array.isArray(userContent) ? userContent : []
         const hasToolResult = blocks.some((b: any) => b.type === 'tool_result')
         if (hasToolResult) {
+          this.emit('message', msg)
+        } else if (typeof msg.uuid === 'string' && this._pendingForwardedUuids.has(msg.uuid)) {
+          // This is the CLI replay of a mid-query forwarded message.
+          this._pendingForwardedUuids.delete(msg.uuid)
           this.emit('message', msg)
         }
         break
@@ -259,7 +278,7 @@ export class CliSession extends AgentSession {
 
   // ======== AgentSession interface ========
 
-  send(prompt: string, options?: SendOptions): void {
+  send(prompt: string, options?: SendOptions): boolean {
     const proc = this.ensureProcess()
 
     // Immediately mark as running so subsequent sends get queued
@@ -279,11 +298,11 @@ export class CliSession extends AgentSession {
     }
     content.push({ type: 'text', text: prompt })
 
-    proc.send({
+    return proc.send({
       type: 'user',
       content,
       message: { role: 'user', content: content.length === 1 ? prompt : content },
-      uuid: randomUUID(),
+      uuid: options?.uuid ?? randomUUID(),
       priority: options?.priority ?? 'next',
     })
   }
@@ -453,6 +472,19 @@ export class CliSession extends AgentSession {
   async getContextUsage(): Promise<unknown> {
     if (!this._process || this._process.status === 'dead') return null
     return this._processManager.sendControlRequest(this._process.sessionId, { subtype: 'get_context_usage' })
+  }
+
+  async cancelAsyncMessage(messageId: string, timeoutMs = 2500): Promise<boolean> {
+    if (!this._process || this._process.status === 'dead') return false
+    const resp = await this._processManager.sendControlRequest(
+      this._process.sessionId,
+      {
+        subtype: 'cancel_async_message',
+        message_uuid: messageId,
+      },
+      timeoutMs,
+    ).catch(() => null) as any
+    return resp?.subtype === 'success' && resp?.response?.cancelled === true
   }
 
   async getMcpStatus(): Promise<unknown[]> {

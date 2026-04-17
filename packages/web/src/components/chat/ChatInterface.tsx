@@ -92,16 +92,29 @@ export function ChatInterface({
     if (prompt) {
       contentBlocks.push({ type: 'text', text: prompt })
     }
+    const store = useSessionContainerStore.getState()
+    const currentContainer = ctx.sessionId ? store.containers.get(ctx.sessionId) : null
+    const sessionBusy = currentContainer?.sessionStatus === 'running'
+      || currentContainer?.sessionStatus === 'awaiting_approval'
+      || currentContainer?.sessionStatus === 'awaiting_user_input'
+
+    const { maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
+    const sent = ctx.send(prompt, {
+      images,
+      permissionMode,
+      ...(maxBudgetUsd ? { maxBudgetUsd } : {}),
+      ...(maxTurns ? { maxTurns } : {}),
+    })
+
+    if (!sent) return false
+
     if (ctx.sessionId) {
-      const store = useSessionContainerStore.getState()
       // Ensure container exists for __new__ so optimistic message is visible immediately
       if (ctx.sessionId === '__new__') {
         store.getOrCreate('__new__', currentProjectCwd ?? '')
       }
-      // Only add optimistic user message if session is idle (not queued).
-      // When session is busy, the message is queued server-side and will be
-      // broadcast as a user message when it is actually dequeued and sent.
-      const sessionBusy = ctx.sessionStatus === 'running' || ctx.sessionStatus === 'awaiting_approval' || ctx.sessionStatus === 'awaiting_user_input'
+      // Idle turns stay optimistic in chat.
+      // Busy turns use local pending and become shared only after CLI ack.
       if (!sessionBusy) {
         store.pushMessage(ctx.sessionId, {
           type: 'user',
@@ -111,14 +124,8 @@ export function ChatInterface({
       }
     }
 
-    const { maxBudgetUsd, maxTurns, permissionMode } = useSettingsStore.getState()
-    ctx.send(prompt, {
-      images,
-      permissionMode,
-      ...(maxBudgetUsd ? { maxBudgetUsd } : {}),
-      ...(maxTurns ? { maxTurns } : {}),
-    })
-  }, [ctx])
+    return true
+  }, [ctx, currentProjectCwd])
 
   const handleAbort = useCallback(() => ctx.abort(), [ctx])
 
@@ -154,26 +161,24 @@ export function ChatInterface({
   }, [ctx.pendingAskUser, ctx.pendingApproval, ctx.pendingPlanApproval,
       ctx.respondToolApproval, ctx.respondAskUser, ctx.respondPlanApproval])
 
-  // Esc handler: pop queue first, abort second (mirrors Claude Code PromptInput.tsx + useCancelRequest.ts)
+  // Esc handler — mirrors Claude Code useCancelRequest.ts handleCancel():
+  // Running sessions are interruptible with Escape; idle sessions are not.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      if (e.defaultPrevented) return
       if (ctx.planModalOpen) return
       if (searchOpen || helpOpen) return
-      // Allow ESC from textarea (composer) but not from other inputs (search box etc.)
       const tag = (document.activeElement as HTMLElement)?.tagName
       if (tag === 'INPUT') return
 
-      // Phase 1: pop editable commands from queue (mirrors Claude Code popAllCommandsFromQueue)
-      const hasEditable = ctx.queue.some(item => item.editable)
-      if (hasEditable) {
-        e.preventDefault()
-        ctx.popQueue()
-        return
-      }
+      // Only the lock holder can interrupt the running session.
+      if (!ctx.sessionId) return
+      const container = useSessionContainerStore.getState().containers.get(ctx.sessionId)
+      if (!container) return
+      if (container.lockStatus !== 'locked_self') return
 
-      // Phase 2: abort running session (no queue items to pop)
-      if (ctx.sessionStatus === 'running') {
+      if (container.sessionStatus === 'running' && !container.interruptRequested) {
         e.preventDefault()
         ctx.abort()
       }

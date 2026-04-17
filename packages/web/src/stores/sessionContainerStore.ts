@@ -8,7 +8,7 @@ import type {
   PlanApprovalRequest,
   ContextUsageCategory,
   McpServerStatusInfo,
-  QueueItemWire,
+  LocalPendingItem,
 } from '@claude-agent-ui/shared'
 
 // ─── Types migrated from connectionStore ───
@@ -79,13 +79,13 @@ export interface SessionContainer {
   resolvedPlanApproval: ResolvedPlanApproval | null
   planModalOpen: boolean
   sessionStatus: SessionStatus
+  interruptRequested: boolean
   lockStatus: ClientLockStatus
   lockHolder: string | null
   contextUsage: ContextUsage | null
   mcpServers: McpServerInfo[]
   subagentMessages: Map<string, any[]>
-  queue: QueueItemWire[]
-  poppedCommands: QueueItemWire[] | null
+  localPending: LocalPendingItem[]
   subscribed: boolean
   lastSeq: number
   needsFullSync: boolean
@@ -156,13 +156,13 @@ function createContainer(sessionId: string, cwd: string): SessionContainer {
     resolvedPlanApproval: null,
     planModalOpen: false,
     sessionStatus: 'idle',
+    interruptRequested: false,
     lockStatus: 'idle',
     lockHolder: null,
     contextUsage: null,
     mcpServers: [],
     subagentMessages: new Map(),
-    queue: [],
-    poppedCommands: null,
+    localPending: [],
     subscribed: false,
     lastSeq: 0,
     needsFullSync: false,
@@ -226,12 +226,13 @@ interface SessionContainerActions {
   setResolvedPlanApproval(sessionId: string, req: ResolvedPlanApproval | null): void
   setPlanModalOpen(sessionId: string, open: boolean): void
   setSessionStatus(sessionId: string, status: SessionStatus): void
+  setInterruptRequested(sessionId: string, requested: boolean): void
   setLockStatus(sessionId: string, status: ClientLockStatus, holder?: string | null): void
   setContextUsage(sessionId: string, usage: ContextUsage | null): void
   setMcpServers(sessionId: string, servers: McpServerInfo[]): void
   setSubagentMessages(sessionId: string, data: { agentId: string; messages: any[] }): void
-  setQueue(sessionId: string, queue: QueueItemWire[]): void
-  setPoppedCommands(sessionId: string, commands: QueueItemWire[] | null): void
+  addOptimisticLocalPending(sessionId: string, item: LocalPendingItem): void
+  setLocalPending(sessionId: string, items: LocalPendingItem[]): void
   setSubscribed(sessionId: string, subscribed: boolean): void
   setLastSeq(sessionId: string, seq: number): void
   setNeedsFullSync(sessionId: string, needs: boolean): void
@@ -484,6 +485,15 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
+  setInterruptRequested(sessionId, requested) {
+    const { containers } = get()
+    const c = containers.get(sessionId)
+    if (!c || c.interruptRequested === requested) return
+    const next = new Map(containers)
+    next.set(sessionId, { ...c, interruptRequested: requested })
+    set({ containers: next })
+  },
+
   setLockStatus(sessionId, status, holder = null) {
     const { containers } = get()
     const c = containers.get(sessionId)
@@ -523,21 +533,25 @@ export const useSessionContainerStore = create<SessionContainerState & SessionCo
     set({ containers: next })
   },
 
-  setQueue(sessionId, queue) {
+  addOptimisticLocalPending(sessionId, item) {
     const { containers } = get()
     const c = containers.get(sessionId)
     if (!c) return
+    if (c.localPending.some(existing => existing.id === item.id)) return
     const next = new Map(containers)
-    next.set(sessionId, { ...c, queue })
+    next.set(sessionId, {
+      ...c,
+      localPending: [...c.localPending, item].sort((a, b) => a.addedAt - b.addedAt),
+    })
     set({ containers: next })
   },
 
-  setPoppedCommands(sessionId, commands) {
+  setLocalPending(sessionId, items) {
     const { containers } = get()
     const c = containers.get(sessionId)
     if (!c) return
     const next = new Map(containers)
-    next.set(sessionId, { ...c, poppedCommands: commands })
+    next.set(sessionId, { ...c, localPending: items })
     set({ containers: next })
   },
 

@@ -119,6 +119,10 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 - `dist/embed.js` — 独立嵌入小部件（`ClaudeEmbedAPI` 全局导出）
 - `dist/assets/*.js` — code-split bundles
 
+## 核心原则：与 Claude Code CLI 行为一致
+
+本项目的所有交互机制必须与 Claude Code CLI 源代码的行为**完全一致**。不做简化、不做"差不多"的近似实现。实现前必须读 CLI 源代码确认真实行为，而不是凭猜测。CLI 源代码位于 `E:\projects\claude-code`。
+
 ## Key Patterns
 
 - **WebSocket 协议**：自定义 C2S/S2C 消息类型，按 session 发布-订阅（非全局广播）

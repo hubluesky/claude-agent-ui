@@ -21,7 +21,7 @@ export abstract class AgentSession extends EventEmitter {
   abstract get status(): SessionStatus
   abstract get permissionMode(): PermissionMode
 
-  abstract send(prompt: string, options?: SendOptions): void
+  abstract send(prompt: string, options?: SendOptions): boolean
   abstract abort(): Promise<void>
   abstract close(): void
 

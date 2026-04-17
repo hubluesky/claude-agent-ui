@@ -128,14 +128,14 @@ export class SessionManager {
     return new CliSession(this.processManager, cwd, options)
   }
 
-  async resumeSession(sessionId: string): Promise<CliSession> {
+  async resumeSession(sessionId: string, cwd?: string): Promise<CliSession> {
     const existing = this.activeSessions.get(sessionId)
     if (existing) return existing as CliSession
 
-    const info = await this.sessionStorage.getSessionInfo(sessionId)
+    const info = await this.sessionStorage.getSessionInfo(sessionId, cwd)
     if (!info) throw new Error(`Session ${sessionId} not found`)
 
-    const session = new CliSession(this.processManager, info.cwd ?? '.', { resumeSessionId: sessionId })
+    const session = new CliSession(this.processManager, info.cwd ?? cwd ?? '.', { resumeSessionId: sessionId })
     this.activeSessions.set(sessionId, session)
     return session
   }

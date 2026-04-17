@@ -33,6 +33,8 @@ export interface SendOptions {
    * @see Claude Code messageQueueManager.ts PRIORITY_ORDER
    */
   priority?: QueuePriority
+  /** Stable client-generated UUID used for replay/ack correlation. */
+  uuid?: string
 }
 
 export interface SessionResult {

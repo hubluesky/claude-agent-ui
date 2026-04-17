@@ -11,7 +11,7 @@ import type {
   PlanApprovalDecisionType,
   ContextUsageCategory,
   McpServerStatusInfo,
-  QueueItemWire,
+  LocalPendingItem,
 } from '@claude-agent-ui/shared'
 
 export interface ResolvedPlanState {
@@ -55,6 +55,7 @@ export interface ChatSessionContextValue {
 
   // Session state
   sessionStatus: SessionStatus
+  interruptRequested: boolean
   lockStatus: ClientLockStatus
   lockHolderId: string | null
   pendingApproval: (ToolApprovalRequest & { readonly: boolean }) | null
@@ -65,15 +66,16 @@ export interface ChatSessionContextValue {
   contextUsage: ContextUsage | null
   mcpServers: McpServerStatusInfo[]
   subagentMessages: Map<string, any[]>
-  queue: QueueItemWire[]
+  localPending: LocalPendingItem[]
 
   // Actions
-  send(prompt: string, options?: SendOptions): void
+  send(prompt: string, options?: SendOptions): boolean
   respondToolApproval(requestId: string, decision: ToolApprovalDecision): void
   respondAskUser(requestId: string, answers: Record<string, string>): void
   respondPlanApproval(requestId: string, decision: PlanApprovalDecisionType, feedback?: string): void
   abort(): void
-  popQueue(): void
+  retryLocalPending(id: string): void
+  dismissLocalPending(id: string): void
   releaseLock(): void
   setPlanModalOpen(open: boolean): void
   getContextUsage(): void

@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from 'fs'
-import { join } from 'path'
+import { join, basename } from 'path'
 import { homedir } from 'os'
 import type { SlashCommandInfo } from '@claude-agent-ui/shared'
 
@@ -10,13 +10,16 @@ interface EnabledPlugins {
 /**
  * Scan all skill sources and return a merged list.
  * Sources (matching Claude Code CLI discovery order):
- *   1. User skills:    ~/.claude/skills/<name>/SKILL.md
- *   2. Project skills:  <cwd>/.claude/skills/<name>/SKILL.md
- *   3. Plugin skills:  ~/.claude/plugins/cache/.../<name>/SKILL.md
+ *   1. User skills:      ~/.claude/skills/<name>/SKILL.md
+ *   2. Project skills:   <cwd>/.claude/skills/<name>/SKILL.md
+ *   3. Plugin skills:    ~/.claude/plugins/cache/.../<name>/SKILL.md
+ *   4. User commands:    ~/.claude/commands/<name>.md  (legacy)
+ *   5. Project commands: <cwd>/.claude/commands/<name>.md  (legacy)
  *
  * User/project skills use their directory name directly (e.g. "quick-fix").
  * Plugin skills are prefixed with plugin name (e.g. "superpowers:brainstorming").
- * Later sources do NOT override earlier ones (user > project > plugin).
+ * Legacy commands use the .md filename without extension (e.g. "commit").
+ * Later sources do NOT override earlier ones (user > project > plugin > commands).
  */
 export function scanSkills(cwd?: string): SlashCommandInfo[] {
   const seen = new Set<string>()
@@ -43,6 +46,16 @@ export function scanSkills(cwd?: string): SlashCommandInfo[] {
 
   // 3. Plugin skills (~/.claude/plugins/cache/)
   add(scanPluginSkills())
+
+  // 4. User commands (~/.claude/commands/) — legacy format
+  const userCommandsDir = join(homedir(), '.claude', 'commands')
+  add(scanCommandsDir(userCommandsDir))
+
+  // 5. Project commands (<cwd>/.claude/commands/) — legacy format
+  if (cwd) {
+    const projectCommandsDir = join(cwd, '.claude', 'commands')
+    add(scanCommandsDir(projectCommandsDir))
+  }
 
   return skills
 }
@@ -76,6 +89,49 @@ function scanSkillsDir(basePath: string): SlashCommandInfo[] {
   } catch { /* skip unreadable dirs */ }
 
   return skills
+}
+
+/**
+ * Scan a legacy commands directory for .md files and SKILL.md in subdirectories.
+ * Supports two formats (matching Claude Code CLI):
+ *   - Single file:  <basePath>/<command-name>.md
+ *   - Subdirectory: <basePath>/<command-name>/SKILL.md
+ * Returns commands using the filename (without .md) or directory name.
+ */
+function scanCommandsDir(basePath: string): SlashCommandInfo[] {
+  if (!existsSync(basePath)) return []
+
+  const commands: SlashCommandInfo[] = []
+
+  try {
+    const entries = readdirSync(basePath, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        // Subdirectory format: <name>/SKILL.md
+        const skillMd = join(basePath, entry.name, 'SKILL.md')
+        if (existsSync(skillMd)) {
+          const info = parseSkillFrontmatter(skillMd)
+          if (info) {
+            commands.push({
+              name: info.name || entry.name,
+              description: info.description ?? '',
+            })
+          }
+        }
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        // Single file format: <name>.md (reuse same frontmatter parser)
+        const filePath = join(basePath, entry.name)
+        const cmdName = basename(entry.name, '.md')
+        const info = parseSkillFrontmatter(filePath)
+        commands.push({
+          name: info?.name || cmdName,
+          description: info?.description ?? '',
+        })
+      }
+    }
+  } catch { /* skip unreadable dirs */ }
+
+  return commands
 }
 
 /**

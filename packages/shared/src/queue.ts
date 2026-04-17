@@ -1,18 +1,9 @@
 /**
- * Message queue types — mirrors Claude Code's textInputTypes.ts queue types
- * and messageQueueManager.ts semantics.
+ * Priority for messages sent to Claude Code's internal stdin queue.
  *
- * Priority: 'now' > 'next' > 'later'
- *   - now:   Interrupt and send immediately (abort in-flight tool)
- *   - next:  Standard user input (default)
- *   - later: End-of-turn drain (task notifications, system messages)
- *
- * @see Claude Code src/types/textInputTypes.ts (QueuePriority, QueuedCommand)
- * @see Claude Code src/utils/messageQueueManager.ts
+ * This is still used when forwarding a prompt mid-turn, even though the web UI
+ * no longer exposes the CLI queue as shared state.
  */
-
-// ── Priority ──
-
 export type QueuePriority = 'now' | 'next' | 'later'
 
 export const PRIORITY_ORDER: Record<QueuePriority, number> = {
@@ -21,39 +12,18 @@ export const PRIORITY_ORDER: Record<QueuePriority, number> = {
   later: 2,
 }
 
-// ── Command Mode ──
+/**
+ * Local-only pending submission state for mid-turn injections.
+ *
+ * These items are visible only to the sending connection until Claude Code
+ * replays the corresponding user message UUID.
+ */
+export type LocalPendingStatus = 'pending' | 'failed'
 
-export type CommandMode = 'prompt' | 'bash' | 'slash' | 'task-notification'
-
-// ── QueuedCommand (server-side canonical type) ──
-
-export interface QueuedCommand {
+export interface LocalPendingItem {
   id: string
   value: string
-  mode: CommandMode
-  /** Defaults to 'next' when enqueued. */
-  priority: QueuePriority
-  /** false for task-notification; true for prompt/bash/slash */
-  editable: boolean
-  connectionId: string
+  status: LocalPendingStatus
   addedAt: number
-  images?: { data: string; mediaType: string }[]
-  options?: {
-    cwd?: string
-    thinkingMode?: string
-    effort?: string
-    permissionMode?: string
-  }
-}
-
-// ── Wire type for S2C queue-updated (subset — no connectionId/options) ──
-
-export interface QueueItemWire {
-  id: string
-  value: string
-  mode: CommandMode
-  priority: QueuePriority
-  editable: boolean
-  addedAt: number
-  images?: { data: string; mediaType: string }[]
+  errorMessage?: string
 }
