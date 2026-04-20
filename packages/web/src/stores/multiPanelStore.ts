@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SessionStatus } from '@claude-agent-ui/shared'
+import type { SessionStatus } from '@claude-cockpit/shared'
 
 export interface PanelSummary {
   sessionId: string

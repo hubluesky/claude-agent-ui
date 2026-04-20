@@ -8,7 +8,7 @@
  * - isBlockVisible: to hide tool_results that are already displayed by their tool_use
  */
 
-import type { AgentMessage } from '@claude-agent-ui/shared'
+import type { AgentMessage } from '@claude-cockpit/shared'
 import type { NormalizedMessage } from './normalizeMessages'
 
 // ─── Types ───────────────────────────────────────────────

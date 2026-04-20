@@ -1,5 +1,5 @@
 {
-  "name": "@claude-agent-ui/web",
+  "name": "@claude-cockpit/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@claude-agent-ui/shared": "workspace:*",
+    "@claude-cockpit/shared": "workspace:*",
     "highlight.js": "^11.11.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

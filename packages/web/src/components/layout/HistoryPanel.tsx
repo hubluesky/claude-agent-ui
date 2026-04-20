@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import { fetchSessions } from '../../lib/api'
 import { relativeTime, isVisibleSession } from '../../lib/time'
-import type { SessionSummary } from '@claude-agent-ui/shared'
+import type { SessionSummary } from '@claude-cockpit/shared'
 
 interface HistoryPanelProps {
   onSelect: (sessionId: string) => void

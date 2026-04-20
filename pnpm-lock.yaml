@@ -20,7 +20,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@claude-agent-ui/shared':
+      '@claude-cockpit/shared':
         specifier: workspace:*
         version: link:../shared
       '@fastify/cookie':
@@ -108,7 +108,7 @@ importers:
 
   packages/web:
     dependencies:
-      '@claude-agent-ui/shared':
+      '@claude-cockpit/shared':
         specifier: workspace:*
         version: link:../shared
       highlight.js:

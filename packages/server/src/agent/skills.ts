@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join, basename } from 'path'
 import { homedir } from 'os'
-import type { SlashCommandInfo } from '@claude-agent-ui/shared'
+import type { SlashCommandInfo } from '@claude-cockpit/shared'
 
 interface EnabledPlugins {
   [key: string]: boolean

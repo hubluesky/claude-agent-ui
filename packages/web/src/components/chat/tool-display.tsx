@@ -1,4 +1,4 @@
-import { getToolCategory, TOOL_COLORS, type ToolCategory } from '@claude-agent-ui/shared'
+import { getToolCategory, TOOL_COLORS, type ToolCategory } from '@claude-cockpit/shared'
 
 // ─── ToolIcon ────────────────────────────────────────────────────────────────
 export function ToolIcon({ category }: { category: ToolCategory }) {

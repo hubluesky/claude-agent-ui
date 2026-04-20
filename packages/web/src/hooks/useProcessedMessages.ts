@@ -12,7 +12,7 @@
  */
 
 import { useMemo } from 'react'
-import type { AgentMessage } from '@claude-agent-ui/shared'
+import type { AgentMessage } from '@claude-cockpit/shared'
 import { normalizeMessages, type NormalizedMessage } from '../utils/normalizeMessages'
 import { buildMessageLookups, buildAgentProgress, type MessageLookups } from '../utils/messageLookups'
 import { collapseReadSearch, type RenderableItem } from '../utils/collapseReadSearch'

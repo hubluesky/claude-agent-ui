@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
+import type { ProjectInfo, SessionSummary } from '@claude-cockpit/shared'
 import { fetchProjects, fetchSessions, findSessionByName, clearSessionTitle } from '../lib/api'
 import { useEmbedStore } from './embedStore'
 import { useMultiPanelStore } from './multiPanelStore'

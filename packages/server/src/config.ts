@@ -1,7 +1,7 @@
-import { homedir } from 'os'
 import { join, resolve, dirname } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { fileURLToPath } from 'url'
+import { configDir, configPath } from './paths.js'
 
 export interface AppConfig {
   port: number
@@ -12,9 +12,8 @@ export interface AppConfig {
   mode: 'dev' | 'prod'
 }
 
-/** 持久化用户配置到 ~/.claude-agent-ui/server-config.json */
-const CONFIG_DIR = join(homedir(), '.claude-agent-ui')
-const CONFIG_FILE = join(CONFIG_DIR, 'server-config.json')
+/** 持久化用户配置到 ~/.claude-cockpit/server-config.json */
+const CONFIG_FILE = configPath('server-config.json')
 
 interface PersistedConfig {
   mode?: 'dev' | 'prod'
@@ -33,7 +32,7 @@ function loadPersistedConfig(): PersistedConfig {
 export function savePersistedConfig(update: Partial<PersistedConfig>): void {
   const current = loadPersistedConfig()
   const merged = { ...current, ...update }
-  mkdirSync(CONFIG_DIR, { recursive: true })
+  mkdirSync(configDir(), { recursive: true })
   writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), 'utf-8')
 }
 
@@ -64,7 +63,7 @@ export function loadConfig(): AppConfig {
   return {
     port,
     host: process.env.HOST ?? '0.0.0.0',
-    dbPath: process.env.DB_PATH ?? join(homedir(), '.claude-agent-ui', 'settings.db'),
+    dbPath: process.env.DB_PATH ?? configPath('settings.db'),
     staticDir: findStaticDir(),
     corsOrigin: process.env.NODE_ENV === 'production' ? false : true,
     mode,

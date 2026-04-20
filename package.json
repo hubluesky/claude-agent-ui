@@ -1,5 +1,5 @@
 {
-  "name": "claude-agent-ui",
+  "name": "claude-cockpit",
   "private": true,
   "scripts": {
     "dev": "turbo run dev",

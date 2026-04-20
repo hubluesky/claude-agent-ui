@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SlashCommandInfo } from '@claude-agent-ui/shared'
+import type { SlashCommandInfo } from '@claude-cockpit/shared'
 
 export interface LocalSlashCommand extends SlashCommandInfo {
   /** 'local' = handled by web UI, 'agent' = sent as prompt to agent */

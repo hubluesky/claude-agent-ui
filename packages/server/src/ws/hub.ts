@@ -1,5 +1,5 @@
 import { WebSocket } from 'ws'
-import type { S2CMessage } from '@claude-agent-ui/shared'
+import type { S2CMessage } from '@claude-cockpit/shared'
 import { randomUUID } from 'crypto'
 
 export interface ClientInfo {

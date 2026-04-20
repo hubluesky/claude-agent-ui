@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import type { LocalPendingItem } from '@claude-agent-ui/shared'
+import type { LocalPendingItem } from '@claude-cockpit/shared'
 import { useShallow } from 'zustand/react/shallow'
 import { wsManager } from '../../lib/WebSocketManager'
 import { useSessionContainerStore } from '../../stores/sessionContainerStore'

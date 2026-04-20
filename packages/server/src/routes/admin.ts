@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import type { AuthManager } from '../auth.js'
-import type { AdminSetupRequest, AdminLoginRequest, AdminChangePasswordRequest } from '@claude-agent-ui/shared'
+import type { AdminSetupRequest, AdminLoginRequest, AdminChangePasswordRequest } from '@claude-cockpit/shared'
 
 const COOKIE_NAME = 'claude-admin-token'
 

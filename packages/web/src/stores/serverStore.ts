@@ -6,7 +6,7 @@ import type {
   ServerConfig,
   LogEntry,
   SdkUpdateProgress,
-} from '@claude-agent-ui/shared'
+} from '@claude-cockpit/shared'
 
 /** 持久化到 localStorage 的上次更新结果 */
 interface LastSdkUpdateResult {

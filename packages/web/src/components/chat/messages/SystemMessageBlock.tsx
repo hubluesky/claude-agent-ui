@@ -3,7 +3,7 @@
  * Extracted from MessageComponent.tsx L243-331.
  */
 import { memo } from 'react'
-import type { AgentMessage } from '@claude-agent-ui/shared'
+import type { AgentMessage } from '@claude-cockpit/shared'
 
 interface Props {
   message: AgentMessage

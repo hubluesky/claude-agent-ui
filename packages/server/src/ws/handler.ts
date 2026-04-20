@@ -5,7 +5,7 @@ import type {
   LocalPendingItem,
   PermissionMode,
   PlanApprovalDecision,
-} from '@claude-agent-ui/shared'
+} from '@claude-cockpit/shared'
 import type { WSHub } from './hub.js'
 import type { LockManager } from './lock.js'
 import type { SessionManager } from '../agent/manager.js'

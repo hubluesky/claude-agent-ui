@@ -4,8 +4,8 @@
  * Extracted from MessageComponent.tsx.
  */
 import { memo } from 'react'
-import type { AgentMessage } from '@claude-agent-ui/shared'
-import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
+import type { AgentMessage } from '@claude-cockpit/shared'
+import { getToolCategory, TOOL_COLORS } from '@claude-cockpit/shared'
 import { ToolIcon, formatToolSummary } from '../tool-display'
 
 interface Props {

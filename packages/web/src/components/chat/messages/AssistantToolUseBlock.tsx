@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react'
-import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
+import { getToolCategory, TOOL_COLORS } from '@claude-cockpit/shared'
 import { ToolIcon, formatToolSummary } from '../tool-display'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import type { MessageLookups } from '../../../utils/messageLookups'

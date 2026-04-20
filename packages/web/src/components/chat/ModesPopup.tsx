@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { PermissionMode, EffortLevel } from '@claude-agent-ui/shared'
+import type { PermissionMode, EffortLevel } from '@claude-cockpit/shared'
 
 interface ModesPopupProps {
   currentMode: PermissionMode

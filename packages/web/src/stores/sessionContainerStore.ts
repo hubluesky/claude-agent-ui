@@ -9,7 +9,7 @@ import type {
   ContextUsageCategory,
   McpServerStatusInfo,
   LocalPendingItem,
-} from '@claude-agent-ui/shared'
+} from '@claude-cockpit/shared'
 
 // ─── Types migrated from connectionStore ───
 

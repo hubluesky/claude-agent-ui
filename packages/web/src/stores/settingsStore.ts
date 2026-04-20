@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PermissionMode, EffortLevel } from '@claude-agent-ui/shared'
+import type { PermissionMode, EffortLevel } from '@claude-cockpit/shared'
 
 interface SettingsState {
   permissionMode: PermissionMode

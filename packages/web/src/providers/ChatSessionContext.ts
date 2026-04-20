@@ -12,7 +12,7 @@ import type {
   ContextUsageCategory,
   McpServerStatusInfo,
   LocalPendingItem,
-} from '@claude-agent-ui/shared'
+} from '@claude-cockpit/shared'
 
 export interface ResolvedPlanState {
   planContent: string

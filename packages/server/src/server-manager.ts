@@ -1,4 +1,4 @@
-import type { ServerStatus, ConnectionInfo } from '@claude-agent-ui/shared'
+import type { ServerStatus, ConnectionInfo } from '@claude-cockpit/shared'
 import type { WSHub } from './ws/hub.js'
 import type { LockManager } from './ws/lock.js'
 import type { SessionManager } from './agent/manager.js'

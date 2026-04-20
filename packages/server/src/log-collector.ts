@@ -1,4 +1,4 @@
-import type { LogEntry } from '@claude-agent-ui/shared'
+import type { LogEntry } from '@claude-cockpit/shared'
 
 type LogListener = (entry: LogEntry) => void
 

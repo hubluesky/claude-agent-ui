@@ -3,7 +3,7 @@ import { existsSync, readFileSync, mkdirSync, renameSync, rmSync, createWriteStr
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { pipeline } from 'stream/promises'
-import type { SdkUpdateProgress, SdkFeatureStatus } from '@claude-agent-ui/shared'
+import type { SdkUpdateProgress, SdkFeatureStatus } from '@claude-cockpit/shared'
 // SDK_FEATURES removed — no longer using Agent SDK
 import type { LogCollector } from './log-collector.js'
 
@@ -85,7 +85,7 @@ export class SdkUpdater {
     onProgress({ step: 'downloading', message: '正在执行 pnpm update...' })
 
     return new Promise((resolve, reject) => {
-      const child = spawn('pnpm', ['--filter', '@claude-agent-ui/server', 'update', '@anthropic-ai/claude-agent-sdk', '--latest'], {
+      const child = spawn('pnpm', ['--filter', '@claude-cockpit/server', 'update', '@anthropic-ai/claude-agent-sdk', '--latest'], {
         cwd: process.cwd(),
         shell: true,
         windowsHide: true,

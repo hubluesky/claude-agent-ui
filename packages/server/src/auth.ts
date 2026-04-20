@@ -1,18 +1,16 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { join } from 'path'
-import { homedir } from 'os'
 import type { FastifyRequest } from 'fastify'
+import { configDir, configPath } from './paths.js'
 
 const JWT_EXPIRES = '12h'
 const COOKIE_NAME = 'claude-admin-token'
 const BCRYPT_ROUNDS = 10
 
 function getAuthFilePath(): string {
-  const dir = join(homedir(), '.claude-agent-ui')
-  mkdirSync(dir, { recursive: true })
-  return join(dir, 'admin-auth.json')
+  mkdirSync(configDir(), { recursive: true })
+  return configPath('admin-auth.json')
 }
 
 interface AuthData {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AdminStatus } from '@claude-agent-ui/shared'
+import type { AdminStatus } from '@claude-cockpit/shared'
 
 interface AdminState {
   status: AdminStatus | null

@@ -7,7 +7,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { wsManager } from '../lib/WebSocketManager'
 import { fetchSessionMessages } from '../lib/api'
 import { useEmbedStore } from '../stores/embedStore'
-import type { AgentMessage } from '@claude-agent-ui/shared'
+import type { AgentMessage } from '@claude-cockpit/shared'
 
 interface ChatSessionProviderProps {
   sessionId: string | null

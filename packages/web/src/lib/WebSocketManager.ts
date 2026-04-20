@@ -19,7 +19,7 @@ import type {
   PlanApprovalDecisionType,
   AgentMessage,
   LocalPendingItem,
-} from '@claude-agent-ui/shared'
+} from '@claude-cockpit/shared'
 import { useSessionContainerStore } from '../stores/sessionContainerStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useMultiPanelStore } from '../stores/multiPanelStore'

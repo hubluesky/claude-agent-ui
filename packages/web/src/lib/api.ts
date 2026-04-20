@@ -1,4 +1,4 @@
-import type { ProjectInfo, SessionSummary } from '@claude-agent-ui/shared'
+import type { ProjectInfo, SessionSummary } from '@claude-cockpit/shared'
 
 const BASE = ''  // Vite proxy handles /api -> server
 

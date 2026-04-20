@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-claude-agent-ui — 基于 Claude Agent SDK 的多终端实时同步 Agent UI。一端输入，所有连接终端实时看到输出。直接调用 Agent SDK（非 CLI 包装），会话数据存储在 SDK 的 JSONL 文件中，与 Claude Code CLI 双向兼容。可作为桌面应用运行（systray + auto-launch），也可嵌入外部页面（embed widget）。
+claude-cockpit — 基于 Claude Code CLI 的多终端实时同步 Web UI。一端输入，所有连接终端实时看到输出。通过 `spawn('claude', ...)` 启动 CLI 子进程并使用 NDJSON 协议通信，会话数据复用 CLI 的 JSONL 文件，与 Claude Code CLI 双向兼容。可作为桌面应用运行（systray + auto-launch），也可嵌入外部页面（embed widget）。
 
 ## Commands
 
@@ -74,7 +74,7 @@ SQLite (better-sqlite3 + Drizzle ORM)，仅存用户设置和 UI 状态。Drizzl
 
 #### 其他服务端模块
 
-- `auth.ts` — AuthManager：bcrypt 密码哈希 + JWT 鉴权（12h 过期），持久化到 `~/.claude-agent-ui/admin-auth.json`
+- `auth.ts` — AuthManager：bcrypt 密码哈希 + JWT 鉴权（12h 过期），持久化到 `~/.claude-cockpit/admin-auth.json`
 - `config.ts` — 配置加载：支持 env 覆盖、CLI `--mode` 参数、持久化配置文件
 - `log-collector.ts` — 日志收集器（内存缓冲 + SSE 订阅）
 - `server-manager.ts` — 服务器状态查询（连接数、锁信息、运行时间）
@@ -164,7 +164,7 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 - Server 默认端口 4000（`PORT` 环境变量可覆盖）
 - Web dev server 端口 5173（Vite 默认，`/api` 和 `/ws` 代理到 4000）
 - 无 .env 文件，配置通过环境变量或 `packages/server/src/config.ts` 默认值
-- 持久化目录 `~/.claude-agent-ui/`：
+- 持久化目录 `~/.claude-cockpit/`（首次启动时若检测到旧的 `~/.claude-agent-ui/` 会自动 rename 迁移）：
   - `settings.db` — SQLite 数据库（用户设置 + UI 状态）
   - `server-config.json` — 服务器配置（端口、模式）
   - `admin-auth.json` — 管理员密码哈希 + JWT secret

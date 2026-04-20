@@ -1,4 +1,4 @@
-import type { ProjectInfo, SessionSummary, SlashCommandInfo } from '@claude-agent-ui/shared'
+import type { ProjectInfo, SessionSummary, SlashCommandInfo } from '@claude-cockpit/shared'
 import { CliSession } from './cli-session.js'
 import type { AgentSession } from './session.js'
 import { ProcessManager } from './process-manager.js'

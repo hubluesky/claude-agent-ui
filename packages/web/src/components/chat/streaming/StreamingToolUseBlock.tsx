@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { getToolCategory, TOOL_COLORS } from '@claude-agent-ui/shared'
+import { getToolCategory, TOOL_COLORS } from '@claude-cockpit/shared'
 import { ToolIcon } from '../tool-display'
 import type { StreamingToolUse } from '../../../stores/sessionContainerStore'
 

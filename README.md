@@ -1,16 +1,16 @@
-# Claude Agent UI
+# Claude Cockpit
 
-基于 [Claude Agent SDK](https://docs.anthropic.com/en/docs/claude-agent-sdk) 的多终端实时同步 Agent UI。
+基于 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 的多终端实时同步 Web UI — 一个集中式 cockpit，统一管理多个 Claude Code 会话。
 
-一端输入，所有连接终端实时看到输出。直接调用 Agent SDK（非 CLI 包装），会话数据存储在 SDK 的 JSONL 文件中，与 Claude Code CLI 双向兼容。
+一端输入，所有连接终端实时看到输出。通过 `spawn('claude', ...)` 启动 CLI 子进程并使用 NDJSON 协议通信，会话数据复用 CLI 的 JSONL 文件，与 Claude Code CLI 双向兼容。
 
 ## 特性
 
 - **多终端实时同步** — 多个浏览器窗口/设备连接同一会话，实时同步消息流
-- **原生 SDK 集成** — 直接调用 `@anthropic-ai/claude-agent-sdk` V1 query API，非 CLI 进程包装
-- **工具审批机制** — 通过 `canUseTool` hook 拦截工具请求，支持逐条审批或自动放行
+- **CLI wrapper 架构** — 直接包装 `claude` CLI 子进程，NDJSON stdin/stdout 协议，CLI 升级零改动
+- **工具审批机制** — 拦截工具请求，支持逐条审批或自动放行（匹配 CLI 权限模式语义）
 - **单写者并发控制** — LockManager 保证同一时间仅一个客户端可输入，其他客户端为只读观察者
-- **会话持久化** — 会话数据存储在 SDK 原生 JSONL 文件中，可与 Claude Code CLI 互通
+- **会话持久化** — 会话数据复用 Claude Code CLI 原生 JSONL 文件，可与 CLI 互通
 - **流式输出** — 实时流式展示 assistant 回复、thinking 过程、工具调用进度
 - **Markdown 渲染** — 支持 GFM、代码高亮、图片预览
 - **系统托盘** — 支持最小化到系统托盘后台运行
@@ -19,7 +19,7 @@
 
 | 层级 | 技术 |
 |------|------|
-| Agent SDK | `@anthropic-ai/claude-agent-sdk` (V1 query API) |
+| Agent 运行时 | `claude` CLI 子进程 (NDJSON 协议) |
 | 后端 | Fastify 5, @fastify/websocket, better-sqlite3 + Drizzle ORM |
 | 前端 | React 19, Vite 6, TailwindCSS 4, Zustand 5 |
 | 语言 | TypeScript 5.7 (strict mode, ES2022 target) |
@@ -129,10 +129,10 @@ pnpm lint                   # 全包 TypeScript 类型检查
 |------|--------|------|
 | `PORT` | `4000` | Server 监听端口 |
 | `HOST` | `0.0.0.0` | Server 监听地址 |
-| `DB_PATH` | `~/.claude-agent-ui/settings.db` | SQLite 数据库路径 |
+| `DB_PATH` | `~/.claude-cockpit/settings.db` | SQLite 数据库路径 |
 | `STATIC_DIR` | 自动检测 | 前端静态文件目录 |
 
-持久化配置存储在 `~/.claude-agent-ui/server-config.json`。
+持久化配置存储在 `~/.claude-cockpit/server-config.json`。
 
 ## 架构概览
 

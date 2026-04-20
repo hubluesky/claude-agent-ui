@@ -9,7 +9,7 @@
  * System/result/etc → pass through unchanged as NormalizedMessage with block=null.
  */
 
-import type { AgentMessage } from '@claude-agent-ui/shared'
+import type { AgentMessage } from '@claude-cockpit/shared'
 
 // ─── Types ───────────────────────────────────────────────
 

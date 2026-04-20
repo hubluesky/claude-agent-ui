@@ -4,8 +4,8 @@ import { homedir } from 'os'
 import { join } from 'path'
 import type { ProcessManager, CliProcess, SpawnOptions } from './process-manager.js'
 import { AgentSession } from './session.js'
-import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
-import type { ToolApprovalDecision, AskUserResponse, PlanApprovalDecision, SendOptions, SessionResult } from '@claude-agent-ui/shared'
+import type { SessionStatus, PermissionMode } from '@claude-cockpit/shared'
+import type { ToolApprovalDecision, AskUserResponse, PlanApprovalDecision, SendOptions, SessionResult } from '@claude-cockpit/shared'
 
 export class CliSession extends AgentSession {
   private _sessionId: string | null = null

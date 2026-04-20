@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
-import type { SessionStatus, PermissionMode } from '@claude-agent-ui/shared'
-import type { ToolApprovalRequest, ToolApprovalDecision, AskUserRequest, AskUserResponse, PlanApprovalRequest, PlanApprovalDecision, SendOptions, SessionResult, SlashCommandInfo } from '@claude-agent-ui/shared'
+import type { SessionStatus, PermissionMode } from '@claude-cockpit/shared'
+import type { ToolApprovalRequest, ToolApprovalDecision, AskUserRequest, AskUserResponse, PlanApprovalRequest, PlanApprovalDecision, SendOptions, SessionResult, SlashCommandInfo } from '@claude-cockpit/shared'
 
 export interface AgentSessionEvents {
   'message': (msg: unknown) => void
