@@ -37,8 +37,8 @@
 ### 安装
 
 ```bash
-git clone https://github.com/anthropics/claude-agent-ui.git
-cd claude-agent-ui
+git clone https://github.com/hubluesky/claude-cockpit.git
+cd claude-cockpit
 pnpm install
 ```
 
@@ -63,7 +63,7 @@ pnpm build
 构建完成后启动：
 
 ```bash
-pnpm --filter @claude-agent-ui/server start
+pnpm --filter @claude-cockpit/server start
 ```
 
 Server 会自动检测并托管 `packages/web/dist` 静态文件。
@@ -71,7 +71,7 @@ Server 会自动检测并托管 `packages/web/dist` 静态文件。
 ## 项目结构
 
 ```
-claude-agent-ui/
+claude-cockpit/
 ├── packages/
 │   ├── shared/          # 共享类型库
 │   │   └── src/
@@ -81,7 +81,7 @@ claude-agent-ui/
 │   │
 │   ├── server/          # 后端服务
 │   │   └── src/
-│   │       ├── agent/         # SessionManager + V1QuerySession
+│   │       ├── agent/         # SessionManager + CliSession（NDJSON 包装 claude CLI）
 │   │       ├── ws/            # WSHub 广播 + LockManager 并发控制
 │   │       ├── routes/        # REST API（health, sessions, settings）
 │   │       ├── db/            # SQLite + Drizzle ORM
@@ -111,8 +111,8 @@ claude-agent-ui/
 ```bash
 # 开发
 pnpm dev                    # 启动所有包的 dev 模式
-pnpm --filter @claude-agent-ui/server dev   # 仅启动 server
-pnpm --filter @claude-agent-ui/web dev      # 仅启动 web
+pnpm --filter @claude-cockpit/server dev   # 仅启动 server
+pnpm --filter @claude-cockpit/web dev      # 仅启动 web
 
 # 构建
 pnpm build                  # 构建所有包
@@ -137,8 +137,8 @@ pnpm lint                   # 全包 TypeScript 类型检查
 ## 架构概览
 
 ```
-浏览器 A ──┐                          ┌── Claude Agent SDK
-浏览器 B ──┤  WebSocket (C2S/S2C)     │   (V1 query API)
+浏览器 A ──┐                          ┌── claude CLI 子进程
+浏览器 B ──┤  WebSocket (C2S/S2C)     │   (NDJSON stdin/stdout)
 浏览器 C ──┼────────────────────┤ Server ├──────────────────┤ Anthropic API
            │                    │        │
            │  REST (/api/*)     │        └── SQLite (settings)
@@ -147,8 +147,8 @@ pnpm lint                   # 全包 TypeScript 类型检查
 
 - **WebSocket 协议** — 自定义 C2S（客户端→服务器）/ S2C（服务器→客户端）消息类型，按 session 广播
 - **锁机制** — LockManager 保证单写者语义，锁持有者可发送消息和审批工具请求，其他客户端只读
-- **Agent 会话** — V1QuerySession 封装 SDK `query()` 调用，通过 `canUseTool` hook 拦截工具请求实现审批流
-- **会话恢复** — 支持 `resumeSessionId` 恢复已有会话，数据从 SDK 的 JSONL 文件加载
+- **Agent 会话** — CliSession 通过 `spawn('claude', ...)` 启动 CLI 子进程，使用 NDJSON 协议双向通信，拦截工具请求实现审批流
+- **会话恢复** — 支持 `resumeSessionId` 恢复已有会话，数据从 Claude Code CLI 的 JSONL 文件加载，与 CLI 双向兼容
 
 ## License
 

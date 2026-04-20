@@ -15,12 +15,12 @@ pnpm build            # 构建所有包 (shared → server → web)
 pnpm lint             # 全包 TypeScript 类型检查
 
 # 单包操作
-pnpm --filter @claude-agent-ui/server dev    # tsx watch src/index.ts
-pnpm --filter @claude-agent-ui/server start  # node dist/index.js (生产模式)
-pnpm --filter @claude-agent-ui/web dev       # vite dev (5173)
-pnpm --filter @claude-agent-ui/web build     # vite build (产出 dist/ + embed.js)
-pnpm --filter @claude-agent-ui/web preview   # vite preview
-pnpm --filter @claude-agent-ui/shared build  # tsc
+pnpm --filter @claude-cockpit/server dev    # tsx watch src/index.ts
+pnpm --filter @claude-cockpit/server start  # node dist/index.js (生产模式)
+pnpm --filter @claude-cockpit/web dev       # vite dev (5173)
+pnpm --filter @claude-cockpit/web build     # vite build (产出 dist/ + embed.js)
+pnpm --filter @claude-cockpit/web preview   # vite preview
+pnpm --filter @claude-cockpit/shared build  # tsc
 ```
 
 No test framework is configured yet.
@@ -34,12 +34,12 @@ pnpm workspace monorepo + Turborepo，三个包：
 TypeScript 类型库，零运行时依赖，被 server 和 web 共同依赖。
 
 - `protocol.ts` — WebSocket 消息类型（C2S_* 客户端→服务器，S2C_* 服务器→客户端），discriminated union
-- `messages.ts` — AgentMessage 类型（映射 SDK 事件：assistant, user, result, tool_progress, stream_event, prompt_suggestion, auth_status, rate_limit_event 等）
+- `messages.ts` — AgentMessage 类型（映射 CLI NDJSON 事件：assistant, user, result, tool_progress, stream_event, prompt_suggestion, auth_status, rate_limit_event 等）
 - `session.ts` — ProjectInfo, SessionSummary, SendOptions, SessionResult
 - `tools.ts` — ToolApprovalRequest/Decision, AskUserQuestion/Request/Response, PlanApproval 类型
 - `constants.ts` — PermissionMode, EffortLevel, SessionStatus, LockStatus, TOOL_CATEGORIES, 工具分类与颜色
 - `management.ts` — ServerStatus, ConnectionInfo, SdkVersionInfo, LogEntry, AdminStatus
-- `sdk-features.ts` — SDK 功能检测
+- `queue.ts` — 消息队列/优先级调度相关类型
 
 ### packages/server
 
@@ -47,8 +47,12 @@ Fastify 5 + @fastify/websocket，核心模块：
 
 #### agent/
 
-- **SessionManager** (`manager.ts`) — 管理所有 agent 会话。`listProjects()` 按 cwd 聚合会话（30s 缓存），`createSession(cwd)` / `resumeSession(sessionId)` 创建/恢复会话，`getCommands()` 合并 SDK 命令 + 文件系统 skills
-- **V1QuerySession** (`v1-session.ts`) — 封装 SDK query() 调用。`canUseTool` hook 拦截工具请求做审批（按 permissionMode 分流：default 模式自动放行只读工具，其余需用户批准）。`warmUp()` 非阻塞后台初始化（MCP、模型、上下文）。支持图片多模态输入、会话恢复（resumeSessionId）、权限模式切换
+- **SessionManager** (`manager.ts`) — 管理所有 agent 会话。`listProjects()` 按 cwd 聚合会话（30s 缓存），`createSession(cwd)` / `resumeSession(sessionId)` 创建/恢复会话，`getCommands()` 合并 CLI 内置命令 + 文件系统 skills
+- **CliSession** (`cli-session.ts`) — 继承 `AgentSession`，通过 `spawn('claude', ...)` 启动 CLI 子进程并用 NDJSON 协议双向通信。拦截工具请求做审批（按 permissionMode 分流：default 模式自动放行只读工具，其余需用户批准）。支持图片多模态输入、会话恢复（resumeSessionId）、fork、权限模式切换
+- **ProcessManager** (`process-manager.ts`) — 管理 CLI 子进程生命周期（spawn/kill/超时保护），统一 stdin/stdout/stderr 流
+- **NDJSON** (`ndjson.ts`) — NDJSON 协议编解码器，处理换行分帧与 JSON 解析
+- **SessionStorage** (`session-storage.ts`) — 读取 Claude Code CLI 原生 JSONL 会话文件（`~/.claude/projects/<project>/<session>.jsonl`），与 CLI 双向兼容
+- **title-generator.ts** / **diff-context.ts** / **known-models.ts** — 会话标题生成、diff 上下文、已知模型元数据
 - **skills.ts** — `scanSkills()` 扫描已启用插件的 skill
 
 #### ws/
@@ -65,7 +69,8 @@ Fastify 5 + @fastify/websocket，核心模块：
 - `commands.ts` — GET /api/commands
 - `files.ts` — 文件上传/下载
 - `browse.ts` — GET /api/browse（目录列表，尊重 .gitignore）
-- `management.ts` — 服务器控制（状态、日志、重启、配置、SDK 更新）
+- `transcribe.ts` — 音频转写
+- `management.ts` — 服务器控制（状态、日志、重启、配置、CLI 更新）
 - `admin.ts` — 认证（登录、密码重置）
 
 #### db/
@@ -78,7 +83,9 @@ SQLite (better-sqlite3 + Drizzle ORM)，仅存用户设置和 UI 状态。Drizzl
 - `config.ts` — 配置加载：支持 env 覆盖、CLI `--mode` 参数、持久化配置文件
 - `log-collector.ts` — 日志收集器（内存缓冲 + SSE 订阅）
 - `server-manager.ts` — 服务器状态查询（连接数、锁信息、运行时间）
-- `sdk-updater.ts` — SDK 更新器（分步更新 + SSE 进度推送）
+- `sdk-updater.ts` — Claude Code CLI 更新器（分步更新 + SSE 进度推送，名称保留为 sdk-updater 但作用对象是 CLI）
+- `child-process-manager.ts` — 通用子进程生命周期管理工具
+- `paths.ts` — 统一路径管理（`~/.claude-cockpit/` 与旧 `~/.claude-agent-ui/` 自动迁移）
 - `tray.ts` — 系统托盘菜单（打开 UI、管理面板、重启、重置密码、退出）
 - `index.ts` — 主入口，Fastify 初始化、插件注册、SPA fallback、托盘创建
 
@@ -100,7 +107,7 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 #### 核心模块
 
 - **lib/WebSocketManager.ts**（单例）— 单连接多 session 订阅。指数退避重连（1s→30s max）。页面可见性感知：后台暂停心跳、前台快速重连。`joinSession()` / `subscribeSession()` / `unsubscribeSession()`。S2C 消息按 sessionId 路由到 sessionContainerStore。connectionId 持久化到 localStorage
-- **lib/api.ts** — REST 客户端：项目/会话 CRUD、消息获取、文件上传、目录浏览、服务器管理、SDK 更新
+- **lib/api.ts** — REST 客户端：项目/会话 CRUD、消息获取、文件上传、目录浏览、服务器管理、CLI 更新
 - **hooks/useContainer.ts** — 返回每 session 的 ChatSessionProvider 上下文
 - **hooks/useClaimLock.ts** — 锁获取包装
 - **hooks/useKeyboardShortcuts.ts** — Cmd/Ctrl+Enter 发送，Esc 中止
@@ -111,7 +118,6 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 - `components/layout/` — AppLayout（响应式移动端/桌面端）, HistoryPanel（会话历史侧边栏）
 - `components/settings/` — 主题、权限、预算控制
 - `components/admin/` — 认证、服务器管理、日志
-- `components/embed/` — 独立嵌入小部件
 
 #### 构建产物
 
@@ -128,27 +134,28 @@ React 19 + Vite 6 + TailwindCSS 4，关键模块：
 - **WebSocket 协议**：自定义 C2S/S2C 消息类型，按 session 发布-订阅（非全局广播）
 - **消息缓冲与重连**：WSHub 每 session 缓冲 500 条消息（30min TTL），带序列号（`_seq`）。重连时 gap 检测 + 消息重放 + 流式快照恢复
 - **锁机制**：LockManager 保证单写者语义。锁持有者收到可写审批请求，其他客户端为只读。断线宽限 60s，空闲超时 60s
-- **Agent 会话**：V1QuerySession 调用 SDK query()，通过 canUseTool hook 拦截工具请求。default 模式自动放行只读工具，其余需用户审批。支持 resume（resumeSessionId）
+- **Agent 会话**：CliSession 通过 `spawn('claude', ...)` 启动 CLI 子进程，用 NDJSON 协议双向通信，拦截工具请求做审批。default 模式自动放行只读工具，其余需用户审批。支持 resume（resumeSessionId）、fork
 - **Container-per-session**：前端架构以 sessionContainerStore 为单位管理每个会话的完整状态（消息、锁、流式内容等），取代早期的全局 messageStore
 - **Pending 请求恢复**：服务器重启后从会话历史检测未完成的 AskUserQuestion / ExitPlanMode 请求，重新投递给客户端
 - **Vite 代理**：dev 模式下 /api 和 /ws 代理到 localhost:4000
 - **优雅降级**：better-sqlite3 编译失败时自动跳过，设置 API 禁用但核心功能正常
 
-## SDK Integration
+## CLI Integration
 
-直接调用 `@anthropic-ai/claude-agent-sdk` V1 API：
+通过 `spawn('claude', ...)` 启动 Claude Code CLI 子进程，使用 NDJSON (newline-delimited JSON) 协议在 stdin/stdout 双向通信。CLI 版本升级无需改动本项目，只要协议字段兼容。
 
-- **会话管理**：`query()`, `listSessions()`, `getSessionInfo()`, `getSessionMessages()`, `forkSession()`, `getSubagentMessages()`, `renameSession()`, `tagSession()`
-- **工具审批 Hook**：`canUseTool(toolName, input, options)` → `Promise<{ behavior, updatedInput, message }>`，allow 路径必须包含 `updatedInput`
-- **query() 选项**：`cwd`, `resume`, `maxTurns`, `effort`, `thinking`(adaptive/enabled/disabled), `permissionMode`, `includePartialMessages`, `enableFileCheckpointing`, `agentProgressSummaries`, `maxBudgetUsd`
-- **SDK 事件**：system/init, assistant, user, result, tool_progress, stream_event, prompt_suggestion, auth_status, rate_limit_event
+- **进程模型**：每个 `CliSession` 独占一个 CLI 子进程，通过 `ProcessManager` 统一管理生命周期。stdin 发送 C2CLI 请求帧，stdout 解析 NDJSON 事件流，stderr 采集日志
+- **启动选项**：`cwd`, `resume`, `model`, `effort`, `thinking`(adaptive/enabled/disabled), `permissionMode`, `fork-session`
+- **工具审批**：CLI 通过 `can_use_tool` / `elicitation` 事件请求审批，服务端在 `canUseTool` 流程中转发给锁持有者，客户端响应后回注 stdin。allow 路径必须包含 `updatedInput`
+- **CLI 事件**：system/init, assistant, user, result, tool_progress, stream_event, prompt_suggestion, auth_status, rate_limit_event 等，经 `messages.ts` 映射为 `AgentMessage`
+- **会话存储**：复用 CLI 原生 JSONL 文件（`~/.claude/projects/<project>/<session>.jsonl`），由 `SessionStorage` 直接读取，实现与 CLI 双向兼容
 
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| Agent SDK | @anthropic-ai/claude-agent-sdk ^0.2.97 (V1 query API) |
-| Backend | Fastify 5, @fastify/websocket, @fastify/cors, @fastify/cookie, @fastify/static |
+| Agent 运行时 | Claude Code CLI 子进程 (NDJSON stdin/stdout 协议，本项目不依赖 @anthropic-ai/claude-agent-sdk) |
+| Backend | Fastify 5, @fastify/websocket, @fastify/cors, @fastify/cookie, @fastify/static, @fastify/multipart |
 | Database | better-sqlite3 + Drizzle ORM (optional, graceful degradation) |
 | Auth | bcryptjs + jsonwebtoken (JWT 12h expiry) |
 | Frontend | React 19, Vite 6, TailwindCSS 4, Zustand 5 |
