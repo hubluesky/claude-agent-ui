@@ -37,7 +37,7 @@
 ### 安装
 
 ```bash
-git clone https://github.com/hubluesky/claude-cockpit.git
+git clone git@github.com:hubluesky/claude-cockpit.git
 cd claude-cockpit
 pnpm install
 ```
